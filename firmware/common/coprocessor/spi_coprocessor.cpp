@@ -7,6 +7,10 @@
 #include "freertos/semphr.h"
 #endif
 
+#ifdef ON_TI
+#include <ti/drivers/dpl/HwiP.h>
+#endif
+
 #ifdef ON_PICO
 #include "hal.hh"
 #elif defined(ON_coprocessor)
@@ -261,7 +265,14 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char*
 #endif
     log_message.log_level = log_level;
     ObjectDictionary::FormatLogMessage(log_message, tag, format, args);
+#ifdef ON_TI
+    // The SPI callback reads this queue and can preempt the main loop while it overwrites the oldest message.
+    uintptr_t key = HwiP_disable();
+#endif
     bool ret = object_dictionary.log_message_queue.Enqueue(log_message);
+#ifdef ON_TI
+    HwiP_restore(key);
+#endif
 #ifdef ON_ESP32
     xSemaphoreGive(log_message_mutex);
 #endif

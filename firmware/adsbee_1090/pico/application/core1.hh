@@ -31,12 +31,32 @@ inline void main_core1() {
         RunPendingTestFunctionOnCore1();  // Lets hardware unit tests read core 1 state, e.g. its SysTick.
 #endif
         core_1_monitor.Tick();
+        adsbee.DemodulateCaptures();
         decoder.UpdateDecoderLoop();
     }
 }
 
+// Set by LaunchCore1(). Until then StopCore1() and StartCore1() do nothing: a flash write early in boot (a settings
+// migration) must not start core 1, whose DMA channels main() would then leak when it launches core 1 itself.
+inline bool core1_launched = false;
+
+inline void LaunchCore1() {
+    core1_launched = true;
+    multicore_reset_core1();
+    multicore_launch_core1(main_core1);
+}
+
 inline void StopCore1() {
+    if (!core1_launched) {
+        return;
+    }
     adsbee.DeInitISRs();  // Clean up DMA channels and other ISR resources before stopping core
     multicore_reset_core1();
 }
-inline void StartCore1() { multicore_launch_core1(main_core1); }
+
+inline void StartCore1() {
+    if (!core1_launched) {
+        return;
+    }
+    multicore_launch_core1(main_core1);
+}

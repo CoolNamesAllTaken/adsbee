@@ -2,6 +2,14 @@
 
 #include <stdint.h>
 
+#ifdef ON_PICO
+#include "pico.h"
+// Tables read for every bit live in RAM: a flash cache miss costs more than the lookup.
+#define MODE_S_SOFT_DEMOD_TABLE __not_in_flash("mode_s_soft_demod_tables")
+#else
+#define MODE_S_SOFT_DEMOD_TABLE
+#endif
+
 /**
  * Software Mode S demodulator for the 1090MHz comparator sampler (pulse_sampler in soft_capture.pio).
  *
@@ -25,6 +33,14 @@ static constexpr uint16_t kMinStartOffsetSamples = 2;
 static constexpr uint16_t kMaxStartOffsetSamples = 7;
 static constexpr uint16_t kNominalStartOffsetSamples = 5;
 static constexpr uint16_t kTimingSearchBits = 12;  // Bits used to pick the start offset.
+// Message timing for multilateration. Every data bit has an edge in its middle: falling for a 1, rising for a 0. A
+// stronger signal widens the comparator pulses, so rising edges come earlier and falling edges later, by about the
+// same amount. The mean position of both kinds stays put, and averaging over several bits resolves it finer than
+// one sample.
+static constexpr uint16_t kTimingEdgeBits = 24;  // Bits whose mid-bit edges are averaged (a multiple of 8).
+static constexpr uint16_t kCountsPerSample = 4;  // 48MHz counts per comparator sample.
+// Data start after the start offset when the first bits are all 0 or all 1 (typical for a pulse of nominal width).
+static constexpr int16_t kDataStartFallbackCounts = 3;
 static constexpr uint16_t kCaptureSamples = kMaxMessageBits * kSamplesPerBit + kMaxStartOffsetSamples;
 static constexpr uint16_t kCaptureWords = (kCaptureSamples + 31) / 32;  // 43
 static constexpr uint16_t kShortCaptureWords =
@@ -43,17 +59,18 @@ struct Result {
     uint32_t buffer[4] = {0};          // Message bits, left aligned, first bit in the MSB of buffer[0].
     uint16_t len_bits = 0;             // 56 or 112; 0 if no message was found.
     uint8_t start_offset_samples = 0;  // Chosen data start, relative to the first sample.
-    uint8_t num_flipped_bits = 0;      // Bits changed by the CRC guided fix.
-    uint8_t num_ties = 0;              // Bits with no pulse position information.
-    uint16_t confidence_sum = 0;       // Sum of the bit confidences (0 to 6 each).
+    // Start of the first data bit, in 48MHz counts (1/48 us) after the first sample. Follows the pulse centers, so
+    // it does not depend on the signal level the way start_offset_samples and the sampler start do.
+    int16_t data_start_48mhz_counts = 0;
+    uint8_t num_flipped_bits = 0;  // Bits changed by the CRC guided fix.
 };
 
 /**
  * Number of HI samples (0-6) in each 6 bit value.
  */
-static constexpr uint8_t kPopCount6[64] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3,
-                                           3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4,
-                                           3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6};
+MODE_S_SOFT_DEMOD_TABLE static constexpr uint8_t kPopCount6[64] = {
+    0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6};
 
 /**
  * Returns the 12 samples of one bit, first sample in bit 11.
@@ -71,17 +88,37 @@ static inline uint32_t BitSamples(const uint32_t* samples, uint32_t first_sample
 }
 
 /**
+ * CRC remainders of the values 0-15 shifted up by 24 bits, for taking the CRC 4 bits at a time.
+ */
+struct CRC24NibbleTable {
+    uint32_t remainder[16];
+    constexpr CRC24NibbleTable() : remainder() {
+        for (uint32_t value = 0; value < 16; value++) {
+            uint32_t r = value;
+            for (uint16_t i = 0; i < 24; i++) {
+                r <<= 1;
+                if (r & 0x1000000) {
+                    r ^= kCRC24Generator;
+                }
+            }
+            remainder[value] = r;
+        }
+    }
+};
+MODE_S_SOFT_DEMOD_TABLE static constexpr CRC24NibbleTable kCRC24NibbleTable = CRC24NibbleTable();
+
+/**
  * Remainder of the Mode S CRC over the first len_bits of a left aligned message (0 for an intact DF17).
+ * @param[in] buffer Message, first bit in the MSB of buffer[0].
+ * @param[in] len_bits Message length, a multiple of 4.
  */
 static inline uint32_t CRC24Remainder(const uint32_t* buffer, uint16_t len_bits) {
     uint32_t remainder = 0;
-    for (uint16_t i = 0; i < len_bits; i++) {
-        remainder = (remainder << 1) | ((buffer[i >> 5] >> (31 - (i & 31))) & 1);
-        if (remainder & 0x1000000) {
-            remainder ^= kCRC24Generator;
-        }
+    for (uint32_t i = 0; i < len_bits; i += 4) {
+        remainder = (remainder << 4) | ((buffer[i >> 5] >> (28 - (i & 31))) & 0xF);
+        remainder = (remainder & 0xFFFFFF) ^ kCRC24NibbleTable.remainder[remainder >> 24];
     }
-    return remainder & 0xFFFFFF;
+    return remainder;
 }
 
 /**
@@ -104,7 +141,7 @@ static constexpr BitSyndromeTable kBitSyndromes = BitSyndromeTable();
 
 /**
  * Demodulates one capture.
- * @param[in] samples kCaptureWords words from the sampler (one more readable word is not required).
+ * @param[in] samples kCaptureWords words from the sampler. Only the first num_words are read.
  * @param[in] num_words Number of valid words in samples (kCaptureWords, or kShortCaptureWords for a capture that
  * was cut short after a 56 bit message).
  * @param[out] result Demodulated message. len_bits is 0 if the capture does not look like a message.

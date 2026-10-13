@@ -9,30 +9,108 @@
 
 namespace mode_s_soft_demod {
 
-// One bit decision: returns confidence (0-6), sets bit.
-static inline uint8_t DecideBit(const uint32_t* samples, uint32_t first_sample, uint32_t& bit) {
-    uint32_t window = BitSamples(samples, first_sample);
-    int first_chip = kPopCount6[window >> kSamplesPerChip];
-    int second_chip = kPopCount6[window & ((1u << kSamplesPerChip) - 1)];
-    bit = first_chip > second_chip;
-    return static_cast<uint8_t>(first_chip > second_chip ? first_chip - second_chip : second_chip - first_chip);
+static constexpr uint32_t kBitsPerGroup = 8;  // 8 bits are 96 samples: exactly 3 capture words.
+static constexpr uint32_t kSamplesPerGroup = kBitsPerGroup * kSamplesPerBit;
+
+// The 96 samples of 8 consecutive bits, lined up with the word boundaries so every sample sits at a fixed position.
+// Reads 3 words from the word of first_sample on, and a fourth one unless first_sample is on a word boundary.
+static inline void AlignGroup(const uint32_t* samples, uint32_t first_sample, uint32_t& a, uint32_t& b, uint32_t& c) {
+    const uint32_t* words = samples + (first_sample >> 5);
+    uint32_t shift = first_sample & 31;
+    a = words[0];
+    b = words[1];
+    c = words[2];
+    if (shift != 0) {
+        a = (a << shift) | (b >> (32 - shift));
+        b = (b << shift) | (c >> (32 - shift));
+        c = (c << shift) | (words[3] >> (32 - shift));
+    }
 }
 
-bool SOFT_DEMOD_FUNC(Demodulate)(const uint32_t* samples, uint16_t num_words, Result& result) {
+// Bit margins of up to 8 consecutive bits: HI samples in the first chip of a bit minus those in its second chip.
+// Positive for a 1; the size is the confidence. Only the first 4 margins are written if num_bits is 4 or less.
+static inline void BitMargins(const uint32_t* samples, uint32_t first_sample, int margins[kBitsPerGroup],
+                              uint32_t num_bits = kBitsPerGroup) {
+    uint32_t a, b, c;
+    AlignGroup(samples, first_sample, a, b, c);
+    auto count = [](uint32_t chip) { return static_cast<int>(kPopCount6[chip & 0x3F]); };
+    margins[0] = count(a >> 26) - count(a >> 20);
+    margins[1] = count(a >> 14) - count(a >> 8);
+    margins[2] = count(a >> 2) - count((a << 4) | (b >> 28));
+    margins[3] = count(b >> 22) - count(b >> 16);
+    if (num_bits > 4) {
+        margins[4] = count(b >> 10) - count(b >> 4);
+        margins[5] = count((b << 2) | (c >> 30)) - count(c >> 24);
+        margins[6] = count(c >> 18) - count(c >> 12);
+        margins[7] = count(c >> 6) - count(c);
+    }
+}
+
+// HI samples among the middle 6 samples (3 to 8) of each of 8 consecutive bits. The mid-bit edge of a bit lies in
+// this window: a falling edge (1 bit) is at sample 3 + count, a rising edge (0 bit) at sample 9 - count.
+static inline void MidBitHiCounts(const uint32_t* samples, uint32_t first_sample, uint8_t counts[kBitsPerGroup]) {
+    uint32_t a, b, c;
+    AlignGroup(samples, first_sample, a, b, c);
+    auto count = [](uint32_t window) { return kPopCount6[window & 0x3F]; };
+    counts[0] = count(a >> 23);
+    counts[1] = count(a >> 11);
+    counts[2] = count((a << 1) | (b >> 31));
+    counts[3] = count(b >> 19);
+    counts[4] = count(b >> 7);
+    counts[5] = count((b << 5) | (c >> 27));
+    counts[6] = count(c >> 15);
+    counts[7] = count(c >> 3);
+}
+
+// Start of the first data bit in 48MHz counts after the first sample, from the mid-bit edges of the first
+// kTimingEdgeBits bits of a demodulated message. The middle of a bit is at 6 + (mean falling edge count - mean
+// rising edge count) / 2 samples after the start offset.
+static int16_t SOFT_DEMOD_FUNC(DataStart48MHzCounts)(const uint32_t* samples, const Result& result) {
+    int32_t fall_sum = 0, fall_bits = 0, rise_sum = 0, rise_bits = 0;
+    uint8_t counts[kBitsPerGroup];
+    for (uint32_t bits_done = 0; bits_done < kTimingEdgeBits; bits_done += kBitsPerGroup) {
+        MidBitHiCounts(samples, result.start_offset_samples + bits_done * kSamplesPerBit, counts);
+        uint32_t byte = result.buffer[0] >> (24 - bits_done);
+        for (uint32_t i = 0; i < kBitsPerGroup; i++) {
+            if (byte & (0x80 >> i)) {
+                fall_sum += counts[i];
+                fall_bits++;
+            } else {
+                rise_sum += counts[i];
+                rise_bits++;
+            }
+        }
+    }
+    int32_t offset_counts = result.start_offset_samples * kCountsPerSample;
+    if (fall_bits == 0 || rise_bits == 0) {
+        return static_cast<int16_t>(offset_counts + kDataStartFallbackCounts);
+    }
+    // (fall mean - rise mean) / 2 samples, in counts, rounded to nearest.
+    int32_t numerator = (kCountsPerSample / 2) * (fall_sum * rise_bits - rise_sum * fall_bits);
+    int32_t denominator = fall_bits * rise_bits;
+    numerator += numerator >= 0 ? denominator / 2 : -(denominator / 2);
+    return static_cast<int16_t>(offset_counts + numerator / denominator);
+}
+
+static bool SOFT_DEMOD_FUNC(DemodulateBits)(const uint32_t* samples, uint16_t num_words, Result& result) {
     result = Result();
+    int margins[kBitsPerGroup];
 
     // Timing: keep the start offset whose first bits are the most confident.
-    uint16_t best_offset = kNominalStartOffsetSamples;
-    uint16_t best_confidence = 0;
-    uint16_t best_ties = kTimingSearchBits;
-    for (uint16_t offset = kMinStartOffsetSamples; offset <= kMaxStartOffsetSamples; offset++) {
-        uint16_t confidence = 0;
-        uint16_t ties = 0;
-        for (uint16_t i = 0; i < kTimingSearchBits; i++) {
-            uint32_t bit;
-            uint8_t bit_confidence = DecideBit(samples, offset + i * kSamplesPerBit, bit);
-            confidence += bit_confidence;
-            ties += bit_confidence == 0;
+    uint32_t best_offset = kNominalStartOffsetSamples;
+    uint32_t best_confidence = 0;
+    uint32_t best_ties = kTimingSearchBits;
+    for (uint32_t offset = kMinStartOffsetSamples; offset <= kMaxStartOffsetSamples; offset++) {
+        uint32_t confidence = 0;
+        uint32_t ties = 0;
+        for (uint32_t bits_done = 0; bits_done < kTimingSearchBits; bits_done += kBitsPerGroup) {
+            uint32_t bits_in_group =
+                kTimingSearchBits - bits_done < kBitsPerGroup ? kTimingSearchBits - bits_done : kBitsPerGroup;
+            BitMargins(samples, offset + bits_done * kSamplesPerBit, margins, bits_in_group);
+            for (uint32_t i = 0; i < bits_in_group; i++) {
+                confidence += static_cast<uint32_t>(margins[i] < 0 ? -margins[i] : margins[i]);
+                ties += margins[i] == 0;
+            }
         }
         if (confidence > best_confidence) {
             best_confidence = confidence;
@@ -44,24 +122,29 @@ bool SOFT_DEMOD_FUNC(Demodulate)(const uint32_t* samples, uint16_t num_words, Re
         return false;  // Noise or the tail of another message.
     }
 
-    // Bit decisions. The first bit of the downlink format tells the length: DF16 and up are 112 bits.
-    static uint8_t confidences[kMaxMessageBits];  // Static: called from one interrupt context, small stack.
-    uint16_t len_bits = kMaxMessageBits;
-    uint16_t available_bits = (num_words * 32 - best_offset) / kSamplesPerBit;
-    for (uint16_t i = 0; i < len_bits; i++) {
-        uint32_t bit;
-        confidences[i] = DecideBit(samples, best_offset + i * kSamplesPerBit, bit);
-        result.buffer[i >> 5] |= bit << (31 - (i & 31));
-        result.confidence_sum += confidences[i];
-        result.num_ties += confidences[i] == 0;
-        if (i == 0) {
-            len_bits = bit ? kMaxMessageBits : kShortMessageBits;
-            if (len_bits > available_bits) {
+    // Bit decisions, one message byte at a time. The first bit of the downlink format tells the length: DF16 and up
+    // are 112 bits.
+    uint32_t len_bits = kMaxMessageBits;
+    uint32_t available_samples = num_words * 32 - best_offset;
+    uint32_t first_sample = best_offset;
+    for (uint32_t bits_done = 0; bits_done < len_bits; bits_done += kBitsPerGroup, first_sample += kSamplesPerGroup) {
+        BitMargins(samples, first_sample, margins);
+        uint32_t byte = 0;
+        for (uint32_t i = 0; i < kBitsPerGroup; i++) {
+            byte = (byte << 1) | (margins[i] > 0);
+        }
+        result.buffer[bits_done >> 5] |= byte << (24 - (bits_done & 31));
+        if (bits_done == 0) {
+            if (!(byte & 0x80)) {
+                len_bits = kShortMessageBits;
+            }
+            if (len_bits * kSamplesPerBit > available_samples) {
+                result.buffer[0] = 0;
                 return false;  // Capture was cut short but the message is long.
             }
         }
     }
-    result.len_bits = len_bits;
+    result.len_bits = static_cast<uint16_t>(len_bits);
     result.start_offset_samples = static_cast<uint8_t>(best_offset);
 
     // CRC guided fix for formats whose parity covers the message alone.
@@ -73,11 +156,19 @@ bool SOFT_DEMOD_FUNC(Demodulate)(const uint32_t* samples, uint16_t num_words, Re
     if (remainder == 0 || (downlink_format == 11 && remainder < 0x80)) {
         return true;  // Intact (DF11 replies carry an interrogator code in the low 7 bits).
     }
-    // Collect the least confident bits.
+    // The CRC failed: go over the message again for the confidence of every bit and collect the least confident.
+    static uint8_t confidences[kMaxMessageBits];  // Static: called from one context, small stack.
+    first_sample = best_offset;
+    for (uint32_t bits_done = 0; bits_done < len_bits; bits_done += kBitsPerGroup, first_sample += kSamplesPerGroup) {
+        BitMargins(samples, first_sample, margins);
+        for (uint32_t i = 0; i < kBitsPerGroup; i++) {
+            confidences[bits_done + i] = static_cast<uint8_t>(margins[i] < 0 ? -margins[i] : margins[i]);
+        }
+    }
     uint16_t weak_bits[kMaxWeakBits];
     uint16_t num_weak_bits = 0;
-    for (uint8_t level = 0; level <= kWeakBitMaxConfidence && num_weak_bits < kMaxWeakBits; level++) {
-        for (uint16_t i = 0; i < len_bits && num_weak_bits < kMaxWeakBits; i++) {
+    for (uint32_t level = 0; level <= kWeakBitMaxConfidence && num_weak_bits < kMaxWeakBits; level++) {
+        for (uint32_t i = 0; i < len_bits && num_weak_bits < kMaxWeakBits; i++) {
             if (confidences[i] == level) {
                 weak_bits[num_weak_bits++] = i;
             }
@@ -105,6 +196,14 @@ bool SOFT_DEMOD_FUNC(Demodulate)(const uint32_t* samples, uint16_t num_words, Re
         }
     }
     return true;  // Not fixable here: the decoder decides what to do with it.
+}
+
+bool SOFT_DEMOD_FUNC(Demodulate)(const uint32_t* samples, uint16_t num_words, Result& result) {
+    if (!DemodulateBits(samples, num_words, result)) {
+        return false;
+    }
+    result.data_start_48mhz_counts = DataStart48MHzCounts(samples, result);
+    return true;
 }
 
 }  // namespace mode_s_soft_demod

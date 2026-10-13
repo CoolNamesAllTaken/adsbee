@@ -27,7 +27,7 @@
 #include "comms.hh"           // For debug prints.
 #include "gnss_interface.hh"  // For the gnss receiver instance.
 
-// Uncomment to measure the capture demodulation time in FinishCapture() and print avg/max once per second.
+// Uncomment to measure the demodulation time in DemodulateCaptures() and print avg/max once per second.
 // #define DEBUG_ISR_TIMING
 
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
@@ -51,9 +51,16 @@ constexpr uint32_t kMidCheckFirstSample =
     mode_s_soft_demod::kNominalStartOffsetSamples - 1;  // First sample of the first data bit, leaning early.
 constexpr int kShortCaptureMinConfidence = 3;           // HI sample margin (of 6) for calling the first bit a 0.
 constexpr uint32_t kShortCaptureAlarmDelayUs = 17;  // From the mid-message interrupt (~43us) to past 56 bits (59us).
-// The sampler starts about half a microsecond before the data block. Timestamps keep referring to the start of the
-// data block, as with the earlier demodulator.
-constexpr uint32_t kSamplerLead48MHzCounts = (mode_s_soft_demod::kNominalStartOffsetSamples + 1) * 4;
+// MLAT timestamp of a Mode S message: the end of bit 56, which is 64us after the start of the first preamble pulse,
+// for 56 bit and 112 bit messages alike. dump1090 and readsb timestamp this instant (demod_2400.c: "we report the
+// timestamp at the end of bit 56 (even if the frame is a 112-bit frame)") and mlat-client subtracts 64us from Beast
+// timestamps of both lengths, so feeds look like those of other receivers. The start of the data block is taken from
+// the pulses the demodulator sampled (mode_s_soft_demod::Result::data_start_48mhz_counts): unlike the preamble match
+// and the sampler start, it does not move with the signal level. RawModeSPacket::mlat_48mhz_64bit_counts holds the
+// instant at 48MHz resolution; the Beast output divides it down to 12MHz.
+constexpr int32_t kTimestampAfterDataStart48MHzCounts = 56 * 48;
+// The sampler takes its first sample one PIO cycle after the FIFO pull that latches the timestamp.
+constexpr int32_t kFirstSampleDelay48MHzCounts = 1;
 
 constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
@@ -79,7 +86,7 @@ void __time_critical_func(on_demod_mid)() { isr_access->OnDemodMid(); }
 
 void __time_critical_func(on_capture_complete)() { isr_access->OnCaptureComplete(); }
 
-void __time_critical_func(on_short_capture_alarm)(uint alarm_num) { isr_access->OnShortCaptureAlarm(); }
+void __time_critical_func(on_short_capture_alarm)() { isr_access->OnShortCaptureAlarm(); }
 
 /** End pass-through functions for public access **/
 
@@ -206,7 +213,8 @@ bool ADSBee::DeInitISRs() {
         }
     }
     if (short_capture_alarm_num_ >= 0) {
-        hardware_alarm_cancel(short_capture_alarm_num_);
+        irq_set_enabled(TIMER_IRQ_0 + short_capture_alarm_num_, false);
+        timer_hw->armed = 1u << short_capture_alarm_num_;  // Writing 1 disarms.
     }
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         gpio_set_irq_enabled(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, false);
@@ -227,6 +235,11 @@ bool ADSBee::Update() {
     if (r1090_packet_queue_overflowed_) {
         CONSOLE_ERROR("ADSBee::Update", "Mode S decoder input queue overflowed.");
         r1090_packet_queue_overflowed_ = false;
+    }
+
+    if (r1090_capture_queue_overflowed_) {
+        CONSOLE_ERROR("ADSBee::Update", "Mode S capture queue overflowed.");
+        r1090_capture_queue_overflowed_ = false;
     }
 
     if (decoder.decoded_mode_s_packet_out_queue_overflowed_) {
@@ -509,10 +522,7 @@ void __time_critical_func(ADSBee::OnDemodMid)() {
             capture_is_short_[sm_index] = true;
             if (short_capture_sm_index_ < 0) {
                 short_capture_sm_index_ = sm_index;
-                if (hardware_alarm_set_target(short_capture_alarm_num_,
-                                              make_timeout_time_us(kShortCaptureAlarmDelayUs))) {
-                    short_capture_sm_index_ = -1;  // Target already passed: no callback will come.
-                }
+                timer_hw->alarm[short_capture_alarm_num_] = timer_hw->timerawl + kShortCaptureAlarmDelayUs;
             }
         }
     }
@@ -531,6 +541,7 @@ void __time_critical_func(ADSBee::OnCaptureComplete)() {
 }
 
 void __time_critical_func(ADSBee::OnShortCaptureAlarm)() {
+    timer_hw->intr = 1u << short_capture_alarm_num_;
     int8_t sm_index = short_capture_sm_index_;
     short_capture_sm_index_ = -1;
     if (sm_index < 0) {
@@ -585,34 +596,49 @@ void __time_critical_func(ADSBee::AbortCapture)(uint16_t sm_index) {
 }
 
 void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num_words) {
-    {
-        if (short_capture_sm_index_ == static_cast<int8_t>(sm_index)) {
-            short_capture_sm_index_ = -1;  // Full capture finished first: the alarm has nothing left to do.
-        }
-        // Take the samples and the timestamp jitter count, then free the sampler and its matcher before the (slower)
-        // demodulation so they can take the next message.
-        for (uint16_t i = 0; i <= mode_s_soft_demod::kCaptureWords; i++) {
-            demod_samples_[i] = i < num_words ? sample_buf_[sm_index][i] : 0;
+    if (short_capture_sm_index_ == static_cast<int8_t>(sm_index)) {
+        short_capture_sm_index_ = -1;  // Full capture finished first: the alarm has nothing left to do.
+    }
+    // Copy the capture out before the sampler is re-armed: its buffer is the DMA target of the next capture.
+    Capture* capture_slot = capture_queue_.Back();
+    if (capture_slot != nullptr) {
+        Capture& capture = *capture_slot;
+        for (uint16_t i = 0; i < num_words; i++) {
+            capture.samples[i] = sample_buf_[sm_index][i];
         }
         uint16_t jitter_sys_clk_counts =
             mlat_jitter_counts_on_demod_begin_[sm_index] - mlat_jitter_counts_on_fifo_pull_[sm_index];
-        uint64_t mlat_48mhz_64bit_counts = rx_packet_[sm_index].mlat_48mhz_64bit_counts -
-                                           MLATJitterCountsTo48MHzCounts(jitter_sys_clk_counts) +
-                                           kSamplerLead48MHzCounts;
-        int rssi_mv = sample_rssi_mv_[sm_index];
+        // Time of the sampler start. The message timestamp is derived from it once the data is demodulated.
+        capture.mlat_48mhz_64bit_counts =
+            rx_packet_[sm_index].mlat_48mhz_64bit_counts - MLATJitterCountsTo48MHzCounts(jitter_sys_clk_counts);
+        capture.rssi_mv = static_cast<int16_t>(sample_rssi_mv_[sm_index]);
+        capture.num_words = static_cast<uint8_t>(num_words);
+        capture.source = static_cast<uint8_t>(sm_index);
+    }
 
-        // Release the preamble matcher (it drops the demod pin), then park the sampler for the next message.
-        pio_interrupt_clear(config_.preamble_matcher_pio, sm_index);
-        hw_set_bits(&config_.preamble_matcher_pio->inte0, 1u << (PIO_INTR_SM0_LSB + sm_index));
-        RearmSampler(sm_index);
-        capture_active_[sm_index] = false;
+    // Release the preamble matcher (it drops the demod pin), then park the sampler for the next message.
+    pio_interrupt_clear(config_.preamble_matcher_pio, sm_index);
+    hw_set_bits(&config_.preamble_matcher_pio->inte0, 1u << (PIO_INTR_SM0_LSB + sm_index));
+    RearmSampler(sm_index);
+    capture_active_[sm_index] = false;
 
+    if (capture_slot != nullptr) {
+        capture_queue_.Push();
+    } else {
+        r1090_capture_queue_overflowed_ = true;
+    }
+}
+
+void __time_critical_func(ADSBee::DemodulateCaptures)() {
+    while (const Capture* capture_slot = capture_queue_.Front()) {
+        const Capture& capture = *capture_slot;
+        uint16_t sm_index = capture.source;
         aircraft_dictionary.Record1090Demod(sm_index);
 #ifdef DEBUG_ISR_TIMING
         uint16_t demod_start_counts = GetMLATJitterPWMSliceCounts();
 #endif
         mode_s_soft_demod::Result result;
-        bool found = mode_s_soft_demod::Demodulate(demod_samples_, num_words, result);
+        bool found = mode_s_soft_demod::Demodulate(capture.samples, capture.num_words, result);
 #ifdef DEBUG_ISR_TIMING
         // 16-bit counter at 125MHz wraps every ~524us, longer than a demodulation.
         uint16_t demod_duration_counts = GetMLATJitterPWMSliceCounts() - demod_start_counts;
@@ -628,10 +654,11 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
                 packet.buffer[i] = result.buffer[i];
             }
             packet.buffer_len_bytes = result.len_bits / kBitsPerByte;
-            packet.sigs_dbm = r1090_rssi::PacketMilliVoltsTodBm(rssi_mv, noise_floor_mv_);
+            packet.sigs_dbm = r1090_rssi::PacketMilliVoltsTodBm(capture.rssi_mv, noise_floor_mv_);
             packet.sigq_db = packet.sigs_dbm - GetNoiseFloordBm();
             packet.source = sm_index;
-            packet.mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;
+            packet.mlat_48mhz_64bit_counts = capture.mlat_48mhz_64bit_counts + kFirstSampleDelay48MHzCounts +
+                                             result.data_start_48mhz_counts + kTimestampAfterDataStart48MHzCounts;
             if (result.len_bits == RawModeSPacket::kSquitterPacketLenBits) {
                 aircraft_dictionary.Record1090RawSquitterFrame(sm_index);
             } else {
@@ -641,6 +668,7 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
                 r1090_packet_queue_overflowed_ = true;
             }
         }
+        capture_queue_.Pop();
     }
 }
 
@@ -900,14 +928,19 @@ void ADSBee::PIOInit() {
         short_capture_alarm_num_ = hardware_alarm_claim_unused(true);
     }
     short_capture_sm_index_ = -1;
-    hardware_alarm_set_callback(short_capture_alarm_num_, on_short_capture_alarm);
-    irq_set_priority(TIMER_IRQ_0 + short_capture_alarm_num_, kCaptureDemodInterruptPriority);
+    // The alarm is driven directly: the SDK alarm functions take a spin lock, which this core must never hold when
+    // the other core resets it for a flash write, and they only enable the interrupt on the first core that asks.
+    uint short_capture_alarm_irq = TIMER_IRQ_0 + short_capture_alarm_num_;
+    hw_set_bits(&timer_hw->inte, 1u << short_capture_alarm_num_);
+    irq_set_exclusive_handler(short_capture_alarm_irq, on_short_capture_alarm);
+    irq_set_priority(short_capture_alarm_irq, kCaptureCompleteInterruptPriority);
+    irq_set_enabled(short_capture_alarm_irq, true);
     irq_set_exclusive_handler(DMA_IRQ_1, on_capture_complete);
-    irq_set_priority(DMA_IRQ_1, kCaptureDemodInterruptPriority);
+    irq_set_priority(DMA_IRQ_1, kCaptureCompleteInterruptPriority);
     irq_set_enabled(DMA_IRQ_1, true);
 
     // The message begin interrupt (demod pin rising edge) shares the priority of the mid-message interrupt: both
-    // must preempt the demodulation of an earlier capture.
+    // must preempt the end of an earlier capture.
     irq_set_priority(config_.demod_pin_irq, kCaptureEventInterruptPriority);
 }
 

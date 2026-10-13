@@ -7,9 +7,9 @@
 #include "object_dictionary.hh"
 #include "pico.hh"
 
-// The raw UAT queues are filled from the RF callback and the decoded queues are emptied from the SPI callback (both
-// interrupt context), and PFBQueue is not interrupt-safe, so mask interrupts around each queue operation here. Don't
-// use PFBQueue's is_thread_safe flag: its blocking mutex would deadlock in interrupt context.
+// The raw UAT queues are written by the RF callback and the object dictionary queues are read by the SPI callback (both
+// software interrupts). The ADS-B queues overwrite when full, which is not interrupt safe, so mask interrupts around
+// every queue call made here. Don't use PFBQueue's is_thread_safe flag: its lock is not usable in interrupt context.
 bool UATPacketDecoder::Update() {
     DecodeADSBPackets();
     DecodeUplinkPacket();
