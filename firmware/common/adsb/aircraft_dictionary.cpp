@@ -448,12 +448,23 @@ bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet, u
         // We should have been able to recover a position, but position decode failed. This happens if our position
         // filter algorithm rejects the decoded position result.
 #ifdef ADSB_VERBOSE_PACKET_WARNINGS
-        CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
+        CONSOLE_WARNING("AircraftDictionary::ApplySurfacePositionMessage",
                         "Had valid packets, but aircraft position decode failed for ICAO 0x%lx.", icao_address);
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
-        return false;
     }
 
+    return true;
+}
+
+bool ModeSAircraft::ApplyNoPositionMessage(const ModeSADSBPacket& packet) {
+    // ME[8-19] - Barometric altitude, all zeros when not available. The position subfields carry no information.
+    int32_t altitude_ft = AC12ToAltitudeFt(static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8)));
+    if (altitude_ft > kAltitudeDecodeErrorInvalid) {
+        baro_altitude_ft = altitude_ft;
+        altitude_source = ADSBTypes::kAltitudeSourceBaro;
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
+    }
     return true;
 }
 
@@ -760,8 +771,8 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
             CONSOLE_ERROR("AircraftDictionary::ApplyAirborneVelocitiesMessage",
                           "Encountered invalid airborne velocities message subtype %d (valid values are 1-4).",
                           subtype);
-#endif                     // ADSB_VERBOSE_PACKET_WARNINGS
-            return false;  // Don't attempt vertical rate decode if message type is invalid.
+#endif                    // ADSB_VERBOSE_PACKET_WARNINGS
+            return true;  // Reserved subtype (0, 5-7): nothing to apply.
     }
     // ME[11-13] - NACv (NUCr in version 0, same values), the only source of airborne NACv. DO-260C 2.2.3.2.6.1.5,
     // N.2.3.8, Table N-26. TIS-B velocity messages carry NACp here instead (DO-260C 2.2.17.3.4.4).
@@ -1960,6 +1971,9 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
     bool ret = false;
     uint16_t type_code = packet.type_code;
     switch (type_code) {
+        case ModeSADSBPacket::kTypeCodeNoPosition:  // TC = 0 (No Position Information)
+            ret = aircraft_ptr->ApplyNoPositionMessage(packet);
+            break;
         case ModeSADSBPacket::kTypeCodeAircraftID:      // TC = 1 (Aircraft Identification)
         case ModeSADSBPacket::kTypeCodeAircraftID + 1:  // TC = 2 (Aircraft Identification)
         case ModeSADSBPacket::kTypeCodeAircraftID + 2:  // TC = 3 (Aircraft Identification)
@@ -2014,8 +2028,8 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
             CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
                             "Received ADSB message with unsupported type code %d for ICAO 0x%lx.", type_code,
                             packet.icao_address);
-#endif                    // ADSB_VERBOSE_PACKET_WARNINGS
-            ret = false;  // kTypeCodeInvalid, etc.
+#endif                   // ADSB_VERBOSE_PACKET_WARNINGS
+            ret = true;  // TC = 30 (Reserved): silently ignore.
     }
     if (ret) {
         aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.

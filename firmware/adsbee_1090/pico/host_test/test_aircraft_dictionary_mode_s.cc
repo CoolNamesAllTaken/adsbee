@@ -755,6 +755,41 @@ TEST(AircraftDictionary, IngestAltitudeReplyAltitudeNotAvailable) {
     EXPECT_GT(aircraft_ptr->baro_altitude_ft, kAltitudeDecodeErrorInvalid);  // Error code was not written.
 }
 
+// Valid extended squitters with nothing to apply are ingested: the ESP32 logs an error for every forwarded packet that
+// fails to ingest.
+TEST(AircraftDictionary, IngestValidADSBPacketsWithNothingToApply) {
+    AircraftDictionary dictionary = AircraftDictionary();
+    const uint32_t icao = 0xADF000;
+
+    // TC=0 (no position information) with barometric altitude 850ft.
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8DADF0000009A00000000084E8CD");
+    ASSERT_TRUE(packet.is_valid);
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    ModeSAircraft* aircraft =
+        dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(icao, Aircraft::kAircraftTypeModeS));
+    ASSERT_TRUE(aircraft);
+    EXPECT_TRUE(aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid));
+    EXPECT_EQ(aircraft->baro_altitude_ft, 850);
+    EXPECT_FALSE(aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
+    EXPECT_FALSE(aircraft->CanDecodePosition());  // The all-zero position subfields are not a CPR frame.
+
+    // TC=0 without altitude keeps the last altitude.
+    packet = DecodedModeSPacket((char*)"8DADF000000000000000003CE4A2");
+    ASSERT_TRUE(packet.is_valid);
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    EXPECT_TRUE(aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid));
+    EXPECT_EQ(aircraft->baro_altitude_ft, 850);
+
+    // TC=19 with reserved subtypes 0 and 5, then TC=30 (reserved).
+    for (const char* hex :
+         {"8DADF00098000000000000D86905", "8DADF0009D0000000000008A103C", "8DADF000F0000000000000ABF05A"}) {
+        packet = DecodedModeSPacket(hex);
+        ASSERT_TRUE(packet.is_valid);
+        EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    }
+    EXPECT_EQ(aircraft->num_frames_received, 5);
+}
+
 TEST(AircraftDictionary, IngestAirAirSurveillanceAndCommBReplies) {
     AircraftDictionary dictionary = AircraftDictionary();
 

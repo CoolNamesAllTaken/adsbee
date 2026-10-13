@@ -214,6 +214,7 @@ class ModeSADSBPacket : public DecodedModeSPacket {
     // (Bits 33-37 [5]): Type code (TC)
     enum TypeCode : uint8_t {
         kTypeCodeInvalid = 0,
+        kTypeCodeNoPosition = 0,                 // 0       No position information (altitude only)
         kTypeCodeAircraftID = 1,                 // 1–4     Aircraft identification
         kTypeCodeSurfacePosition = 5,            // 5–8     Surface position
         kTypeCodeAirbornePositionBaroAlt = 9,    // 9–18	Airborne position (w/Baro Altitude)
