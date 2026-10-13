@@ -608,6 +608,38 @@ body {
     padding: 0;
 }
 
+/* Info symbol with a tooltip on hover or focus. */
+.info-tip {
+    position: relative;
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid var(--text-secondary);
+    border-radius: 50%;
+    color: var(--text-secondary);
+    font: italic bold 0.72rem/1rem Georgia, serif;
+    text-align: center;
+    cursor: help;
+    user-select: none;
+}
+
+.info-tip:hover::after,
+.info-tip:focus::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: 1.5rem;
+    left: -4rem;
+    z-index: 1000;
+    width: 15rem;
+    padding: 6px 9px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    font: 0.78rem/1.35 Arial, sans-serif;
+    text-align: left;
+}
+
 .feed-slot-badge {
     font-size: 0.68rem;
     color: var(--text-secondary);
