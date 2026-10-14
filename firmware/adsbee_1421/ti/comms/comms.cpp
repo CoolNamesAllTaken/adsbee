@@ -307,14 +307,20 @@ bool CommsManager::ReportsRawPackets() const {
 }
 
 void CommsManager::ReportQueuedRawPackets() {
+    const uint64_t start_us = get_time_since_boot_us();
+    while (ReportQueuedRawPacketsChunk() && get_time_since_boot_us() - start_us < kRawReportBudgetUs) {
+    }
+}
+
+bool CommsManager::ReportQueuedRawPacketsChunk() {
     if (mode_s_packet_reporting_queue.Length() == 0 && uat_adsb_packet_reporting_queue.Length() == 0 &&
         uat_uplink_packet_reporting_queue.Length() == 0) {
-        return;
+        return false;
     }
     if (ReportsRawPackets() && TxRingFreeBytes() < kRawReportChunkMaxTxBytes) {
         // The link is behind. Leave packets queued instead of waiting for ring space: full queues drop reports
         // (report_q_ovf, uat_report_q_ovf) but never stall the receiver.
-        return;
+        return false;
     }
 
     uint16_t max_uat_uplink_packets = kRawReportMaxUATUplinkPacketsPerUpdate;
@@ -324,11 +330,10 @@ void CommsManager::ReportQueuedRawPackets() {
         // Uplink lines yield to aircraft lines: uplinks stay queued and a full queue drops new ones (uat_report_q_ovf).
         max_uat_uplink_packets = 0;
         if (mode_s_packet_reporting_queue.Length() == 0 && uat_adsb_packet_reporting_queue.Length() == 0) {
-            return;
+            return false;
         }
     }
 
-    // Format at most one chunk per main loop iteration. The rest stays queued for the following iterations.
     alignas(4) uint8_t chunk_buf[kRawReportChunkBufBytes];
     CompositeArray::RawPackets chunk = CompositeArray::PackRawPacketsBuffer(
         chunk_buf, sizeof(chunk_buf), &mode_s_packet_reporting_queue, &uat_adsb_packet_reporting_queue,
@@ -337,6 +342,7 @@ void CommsManager::ReportQueuedRawPackets() {
                                    max_uat_uplink_packets));
     UpdateReporting(kReportingSinks, settings_manager.settings.reporting_protocols, kNumReportingSinks, &chunk,
                     false);
+    return true;
 }
 
 int CommsManager::console_printf(const char* format, ...) {
