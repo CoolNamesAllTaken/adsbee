@@ -883,11 +883,23 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
 
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
-        "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>\r\n\tSet details for a "
-        "network feed.\r\n\tindex = [0-%d], uri = ip address or URL, feed_port = [0-65535], "
-        "active = [0 1], protocol = [BEAST BEAST_RAW].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
+        "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>[,<transport>]\r\n\tSet details for a "
+        "network feed. Empty arguments keep their value.\r\n\tindex = [0-%d], uri = IP address or hostname (\"-\" "
+        "clears it), port = [0-65535], active = [0 1], protocol = [BEAST RAW AIRCRAFT_JSON ...], transport = [TCP UDP "
+        "MQTT] (default TCP).\r\n\tUDP sends whole frames per datagram to a host, broadcast or multicast address. "
+        "MQTT publishes to a broker, see AT+FEED_MQTT.\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
         "feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]\r\n",
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
+}
+
+static void PrintFeed(uint16_t index) {
+    const SettingsManager::Settings& s = settings_manager.settings;
+    char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
+    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
+    CPP_AT_CMD_PRINTF("=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID),%s(TRANSPORT)", index,
+                      s.feed_uris[index], s.feed_ports[index], s.feed_is_active[index],
+                      SettingsManager::kReportingProtocolStrs[s.feed_protocols[index]], receiver_id_str,
+                      SettingsManager::kFeedTransportStrs[s.feed_transports[index]]);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
@@ -901,30 +913,16 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
                                  SettingsManager::Settings::kMaxNumFeeds - 1, index);
                 }
-                char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
-                SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
-                CPP_AT_CMD_PRINTF(
-                    "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", index,
-                    settings_manager.settings.feed_uris[index], settings_manager.settings.feed_ports[index],
-                    settings_manager.settings.feed_is_active[index],
-                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]],
-                    receiver_id_str);
+                PrintFeed(index);
             } else {
                 // Querying info about all feeds.
                 for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-                    char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
-                    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[i], receiver_id_str);
-                    CPP_AT_CMD_PRINTF(
-                        "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", i,
-                        settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
-                        settings_manager.settings.feed_is_active[i],
-                        SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[i]],
-                        receiver_id_str);
+                    PrintFeed(i);
                 }
             }
             CPP_AT_SILENT_SUCCESS();
             break;
-        case '=':
+        case '=': {
             // Setting feed information for a specific feed.
             uint16_t index = UINT16_MAX;
             if (!CPP_AT_HAS_ARG(0)) {
@@ -934,6 +932,31 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             if (index >= SettingsManager::Settings::kMaxNumFeeds) {
                 CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
                              SettingsManager::Settings::kMaxNumFeeds - 1, index);
+            }
+            // Check the names before changing anything.
+            SettingsManager::ReportingProtocol feed_protocol = settings_manager.settings.feed_protocols[index];
+            if (CPP_AT_HAS_ARG(4)) {
+                uint16_t i = 0;
+                while (i < SettingsManager::ReportingProtocol::kNumProtocols &&
+                       args[4].compare(SettingsManager::kReportingProtocolStrs[i]) != 0) {
+                    i++;
+                }
+                if (i == SettingsManager::ReportingProtocol::kNumProtocols) {
+                    CPP_AT_ERROR("Unknown protocol '%.*s'.", (int)args[4].length(), args[4].data());
+                }
+                feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
+            }
+            SettingsManager::FeedTransport feed_transport = settings_manager.settings.feed_transports[index];
+            if (CPP_AT_HAS_ARG(5)) {
+                char transport_str[SettingsManager::kFeedTransportStrMaxLen] = {0};
+                if (args[5].length() >= sizeof(transport_str)) {
+                    CPP_AT_ERROR("Unknown transport '%.*s'. Use TCP, UDP or MQTT.", (int)args[5].length(),
+                                 args[5].data());
+                }
+                memcpy(transport_str, args[5].data(), args[5].length());
+                if (!SettingsManager::FeedTransportFromStr(transport_str, feed_transport)) {
+                    CPP_AT_ERROR("Unknown transport '%s'. Use TCP, UDP or MQTT.", transport_str);
+                }
             }
             // Set FEED_URI. A single "-" is a sentinel meaning "clear the URI to empty".
             if (CPP_AT_HAS_ARG(1)) {
@@ -951,22 +974,99 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             }
             // Set ACTIVE
             if (CPP_AT_HAS_ARG(3)) {
-                uint8_t is_active;
                 CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[index]);
             }
-            // Set PROTOCOL
-            if (CPP_AT_HAS_ARG(4)) {
-                SettingsManager::ReportingProtocol feed_protocol;
-                for (uint16_t i = 0; i < SettingsManager::ReportingProtocol::kNumProtocols; i++) {
-                    if (args[4].compare(SettingsManager::kReportingProtocolStrs[i]) == 0) {
-                        feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
-                    }
-                }
-                settings_manager.settings.feed_protocols[index] = feed_protocol;
-            }
+            settings_manager.settings.feed_protocols[index] = feed_protocol;
+            settings_manager.settings.feed_transports[index] = feed_transport;
             settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+// Copies an AT argument into a settings string: "-" clears it, an empty argument keeps it.
+static bool SetFeedMQTTString(std::string_view arg, char* dest, uint16_t max_len) {
+    if (arg.empty()) {
+        return true;
+    }
+    if (arg == "-") {
+        dest[0] = '\0';
+        return true;
+    }
+    if (arg.length() > max_len) {
+        return false;
+    }
+    memset(dest, '\0', max_len + 1);
+    memcpy(dest, arg.data(), arg.length());
+    return true;
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFeedMQTTCallback) {
+    switch (op) {
+        case '?': {
+            uint16_t first = 0, last = SettingsManager::Settings::kMaxNumFeeds - 1;
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, first);
+                if (first >= SettingsManager::Settings::kMaxNumFeeds) {
+                    CPP_AT_ERROR("Feed index must be between 0-%d.", SettingsManager::Settings::kMaxNumFeeds - 1);
+                }
+                last = first;
+            }
+            for (uint16_t i = first; i <= last; i++) {
+                SettingsManager::Settings::FeedMQTT& mqtt = settings_manager.settings.feed_mqtt[i];
+                char redacted_password[SettingsManager::Settings::kFeedMQTTPasswordMaxLen + 1];
+                SettingsManager::RedactPassword(mqtt.password, redacted_password,
+                                                SettingsManager::Settings::kFeedMQTTPasswordMaxLen);
+                CPP_AT_CMD_PRINTF("=%d(INDEX),%s(TOPIC_PREFIX),%s(USERNAME),%s(PASSWORD),%d(TLS),%u(QOS)", i,
+                                  mqtt.topic_prefix, mqtt.username, redacted_password, mqtt.tls, mqtt.qos);
+            }
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+        case '=': {
+            uint16_t index = UINT16_MAX;
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Feed index is required.");
+            }
+            CPP_AT_TRY_ARG2NUM(0, index);
+            if (index >= SettingsManager::Settings::kMaxNumFeeds) {
+                CPP_AT_ERROR("Feed index must be between 0-%d.", SettingsManager::Settings::kMaxNumFeeds - 1);
+            }
+            SettingsManager::Settings::FeedMQTT mqtt = settings_manager.settings.feed_mqtt[index];
+            if (num_args > 1 && !SetFeedMQTTString(args[1], mqtt.topic_prefix,
+                                                   SettingsManager::Settings::kFeedMQTTTopicPrefixMaxLen)) {
+                CPP_AT_ERROR("Topic prefix must be %d characters or fewer.",
+                             SettingsManager::Settings::kFeedMQTTTopicPrefixMaxLen);
+            }
+            if (num_args > 2 &&
+                !SetFeedMQTTString(args[2], mqtt.username, SettingsManager::Settings::kFeedMQTTUsernameMaxLen)) {
+                CPP_AT_ERROR("Username must be %d characters or fewer.",
+                             SettingsManager::Settings::kFeedMQTTUsernameMaxLen);
+            }
+            if (num_args > 3 &&
+                !SetFeedMQTTString(args[3], mqtt.password, SettingsManager::Settings::kFeedMQTTPasswordMaxLen)) {
+                CPP_AT_ERROR("Password must be %d characters or fewer.",
+                             SettingsManager::Settings::kFeedMQTTPasswordMaxLen);
+            }
+            if (CPP_AT_HAS_ARG(4)) {
+                CPP_AT_TRY_ARG2NUM(4, mqtt.tls);
+            }
+            if (CPP_AT_HAS_ARG(5)) {
+                CPP_AT_TRY_ARG2NUM(5, mqtt.qos);
+                if (mqtt.qos > SettingsManager::Settings::kFeedMQTTMaxQoS) {
+                    CPP_AT_ERROR("QoS must be 0, 1 or 2.");
+                }
+            }
+            if (strpbrk(mqtt.topic_prefix, "+#") != nullptr) {
+                CPP_AT_ERROR("Topic prefix can't contain the MQTT wildcards + or #.");
+            }
+            settings_manager.settings.feed_mqtt[index] = mqtt;
+            settings_manager.SyncToCoprocessors();
+            CPP_AT_SUCCESS();
+            break;
+        }
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
@@ -2068,7 +2168,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
 #endif
     {.command = "FEED",
      .min_args = 0,
-     .max_args = 5,
+     .max_args = 6,
      .help_callback = ATFeedHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
     {.command = "FEED_ENABLE",
@@ -2078,6 +2178,15 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "all feeds, or 1 to allow feeds marked active. Does not change per-feed active flags set with "
                     "AT+FEED.\r\n\tAT+FEED_ENABLE?\r\n\tQuery whether outbound feeds are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedEnableCallback, comms_manager)},
+    {.command = "FEED_MQTT",
+     .min_args = 0,
+     .max_args = 6,
+     .help_string = "AT+FEED_MQTT=<index>,<topic_prefix>,<username>,<password>,<tls>,<qos>\r\n\tSet the broker "
+                    "options of a feed with the MQTT transport. Empty arguments keep their value, \"-\" clears a "
+                    "string.\r\n\ttopic_prefix = up to 31 characters (empty: adsbee), username and password = "
+                    "optional, tls = [0 1], qos = [0 1 2].\r\n\tTopics are <topic_prefix>/<receiver ID>/<protocol> "
+                    "plus status.\r\n\tAT+FEED_MQTT?[index]\r\n\tPrint the broker options (password redacted).",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedMQTTCallback, comms_manager)},
     {.command = "GNSS",
      .min_args = 0,
      .max_args = 3,
