@@ -103,8 +103,12 @@ def main():
         eng._poll()
         wall = time.perf_counter() - wall_start
         out.update(workers=args.workers, front_cpu_s=round(t_engine, 2), wall_s=round(wall, 2),
-                   realtime_factor=round(duration / wall, 2), worker_stats=eng.stats)
+                   realtime_factor=round(duration / wall, 2), mean_group_size=round(len(frames) / max(eng.stats["groups"], 1), 1),
+                   tdoa_updates_per_s=round(eng.stats["tdoa_updates"] / duration))
         print(json.dumps(out, indent=1))
+        if args.json:
+            with open(args.json, "w") as f:
+                json.dump(out, f, indent=1)
         return
     s = eng.stats
     out.update(engine_cpu_s=round(t_engine, 2), engine_realtime_load=round(t_engine / duration, 3),

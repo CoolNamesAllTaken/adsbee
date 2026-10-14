@@ -126,7 +126,7 @@ class Track:
 class Aircraft:
     __slots__ = ("icao", "callsign", "squawk", "alt_ft", "alt_t", "geo_minus_baro_ft", "gmb_t", "gs_kt", "track_deg",
                  "vr_fpm", "vel_t", "cpr", "adsb_lat", "adsb_lon", "adsb_t", "adsb_nuc", "track", "last_seen",
-                 "trusted_t", "messages", "mlat_fixes", "adsb_fixes")
+                 "trusted_t", "messages", "mlat_fixes", "adsb_fixes", "init_blocked_until")
 
     def __init__(self, icao):
         self.icao = icao
@@ -143,6 +143,7 @@ class Aircraft:
         self.messages = 0
         self.mlat_fixes = 0
         self.adsb_fixes = 0
+        self.init_blocked_until = 0.0
 
     def apply(self, d, t):
         """Applies decoded fields at Unix time t. Returns (lat, lon) if this message gave a new ADS-B position."""
@@ -206,8 +207,30 @@ class Aircraft:
         return h, sigma
 
 
+AMBIGUITY_STARTS_KM = (30.0, 80.0, 150.0, 250.0)
+AMBIGUITY_SEPARATION_M = 2000.0
+
+
+def _unique_exact_fix(rx_ecef, times, sigmas, alt, fix):
+    """An exactly determined fix (three receivers and altitude) often has a mirror solution. Solves again from
+    starting points around the receivers and returns False if another solution fits as well."""
+    lat, lon, _ = geo.ecef_to_llh(rx_ecef.mean(axis=0))
+    for r_km in AMBIGUITY_STARTS_KM:
+        for k in range(12):
+            brg = math.radians(30.0 * k)
+            dlat = r_km * 1e3 * math.cos(brg) / 111_320.0
+            dlon = r_km * 1e3 * math.sin(brg) / (111_320.0 * math.cos(math.radians(lat)))
+            g = geo.llh_to_ecef(lat + dlat, lon + dlon, alt[0] if alt is not None else 9000.0)
+            other = solver.solve(rx_ecef, times, sigmas, alt, g)
+            if other is None or other.chi2 > 1.0:
+                continue
+            if np.linalg.norm(other.ecef - fix.ecef) > AMBIGUITY_SEPARATION_M:
+                return False
+    return True
+
+
 def init_track(rx_ecef, times, sigmas, alt, t_unix, guess=None):
-    """Least squares fix to start a track. Returns (Track, Fix) or (None, None)."""
+    """Least squares fix to start a track. Returns (Track, Fix), (None, None) or (None, "ambiguous")."""
     fix = solver.solve(rx_ecef, times, sigmas, alt, guess)
     if fix is None:
         return None, None
@@ -215,4 +238,6 @@ def init_track(rx_ecef, times, sigmas, alt, t_unix, guess=None):
         return None, None
     if fix.horizontal_error_m() > 20e3:
         return None, None
+    if fix.dof == 0 and guess is None and not _unique_exact_fix(rx_ecef, times, sigmas, alt, fix):
+        return None, "ambiguous"
     return Track(fix.ecef, fix.cov, t_unix), fix

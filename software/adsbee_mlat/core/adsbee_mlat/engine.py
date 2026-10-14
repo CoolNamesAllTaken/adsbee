@@ -19,6 +19,7 @@ ADSB_SUPPRESSES_MLAT_S = 5.0
 SYNC_POS_SIGMA_M = {None: 50.0}  # Reference aircraft position error by NUC, default.
 UNTRUSTED_MIN_RECEIVERS = 3
 MAX_RECEIVERS = 12  # Per MLAT update.
+AMBIGUOUS_RETRY_S = 2.0  # After a fix with a mirror solution, wait before trying again.
 EXCLUDE_JITTER_S = 500e-9  # Receivers whose clocks are noisier than this are left out of MLAT.
 MAX_SYNC_RECEIVERS = 12  # Per reference message; a random subset of larger groups.
 # Share of messages of aircraft with a live ADS-B position that update their MLAT track (keeps it ready for gaps).
@@ -53,7 +54,7 @@ class Engine:
         self.on_mlat = on_mlat  # Optional on_mlat(aircraft, track, extra) for every accepted MLAT update.
         self.clock = clock
         self.stats = dict(frames=0, unstamped=0, groups=0, bad_parity=0, sync_events=0, solves=0, solve_ok=0,
-                          tdoa_updates=0, tdoa_rejects=0, mlat_fixes=0, adsb_fixes=0, no_sync=0)
+                          tdoa_updates=0, tdoa_rejects=0, ambiguous=0, mlat_fixes=0, adsb_fixes=0, no_sync=0)
         self.latencies = deque(maxlen=5000)
         self.residuals = deque(maxlen=5000)
         self._last_housekeeping = None
@@ -313,11 +314,14 @@ class Engine:
             tr = ac.track = None
         if tr is None:
             n_meas = len(rxs) + (alt is not None)
-            if n_meas < 4 or len(rxs) < 3:
+            if n_meas < 4 or len(rxs) < 3 or t_unix < ac.init_blocked_until:
                 return
             self.stats["solves"] += 1
             tr, fix = tracker.init_track(rx_ecef, times, sigmas, alt, t_unix)
             if tr is None:
+                if fix == "ambiguous":
+                    ac.init_blocked_until = t_unix + AMBIGUOUS_RETRY_S
+                    self.stats["ambiguous"] += 1
                 return
             # Again with the atmosphere's delay for the first solution.
             times_c = times - geo.tropo_excess_m(rx_ecef, rx_surface, fix.ecef) / C

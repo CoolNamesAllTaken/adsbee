@@ -58,5 +58,10 @@ clock_hz = 12000000
 ```bash
 pip install -e ../sim          # Simulator for the end-to-end tests.
 pytest -q
-python bench/bench.py --receivers 50 --aircraft 400 --duration 10
+python bench/bench.py --receivers 50 --aircraft 400 --duration 10   # Throughput (--workers N to shard).
+python bench/validate.py out/ --socket 120                          # Accuracy scenarios on simulated traffic.
+python bench/report.py out/ --bench b.json --out report.html        # HTML report (needs matplotlib).
 ```
+
+For large networks set `workers` (or `MLAT_WORKERS`) above 1: aircraft are then shared out by address over worker
+processes, each with its own clock synchronization.
