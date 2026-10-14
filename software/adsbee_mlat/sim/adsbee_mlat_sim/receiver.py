@@ -2,8 +2,6 @@
 
 from dataclasses import dataclass, field
 
-import numpy as np
-
 from .clock import Clock
 from .geodesy import enu_to_ecef, ecef_to_lla, lla_to_ecef
 

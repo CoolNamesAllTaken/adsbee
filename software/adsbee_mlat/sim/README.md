@@ -47,3 +47,16 @@ for frame in sc.frames(duration_s=60):
   phase steps and counter resets.
 - Propagation: straight-line delay plus the excess delay of an exponential troposphere; free-space path loss with
   per-frame fading decides which receivers decode a frame.
+
+## Timestamp study
+
+`study/` compares receiver clock rates (12 vs 48 MHz) for MLAT accuracy.
+
+- `crlb.py`: Cramer-Rao bound of a time-of-arrival fix, with an optional altitude measurement.
+- `mc.py`: Monte Carlo of the full chain: clock sync from ADS-B reference aircraft, then a batched solver.
+- `run_study.py [results.json]`: runs every scenario and the bound maps (about 2 minutes on 6 cores).
+
+```bash
+pip install -e 'software/adsbee_mlat/sim[study]'
+cd software/adsbee_mlat/sim/study && python run_study.py results.json
+```
