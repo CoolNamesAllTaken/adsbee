@@ -57,6 +57,20 @@ class Pico : public SPICoprocessorMasterInterface {
     bool SPIProcessTransaction();
     void SPIResetTransaction();
 
+    /**
+     * Processes a transaction the SPI callback received. Call often from the main loop: the RP2040 waits on the
+     * handshake line for the reply, and the next request can't arrive before it.
+     */
+    inline void ProcessPendingTransaction() {
+        if (transaction_pending_) {
+            transaction_pending_ = false;
+            SPIProcessTransaction();
+        }
+    }
+    // Set by the SPI callback. Parsing and packing a reply (up to 2 kB plus its CRC) takes up to ~700 us, which in the
+    // non-preemptive software interrupt would delay the RF callback's CMD_PROP_SET_LEN and end UAT packets in error.
+    volatile bool transaction_pending_ = false;
+
 #ifndef ON_TI
     /**
      * Function called from the task spawned during Init().

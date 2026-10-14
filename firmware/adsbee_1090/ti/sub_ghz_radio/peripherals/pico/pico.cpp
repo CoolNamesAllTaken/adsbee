@@ -16,7 +16,7 @@ void spi_transfer_complete_callback(SPI_Handle handle, SPI_Transaction* transact
         !pico_ll.SPIIsUsingHandshakePin();  // Don't parse garbage sent by the RP2040 when it's reading our reply.
     pico_ll.SPIEndTransaction();
     if (parse_message) {
-        pico_ll.SPIProcessTransaction();  // Parse message and reset the transaction.
+        pico_ll.transaction_pending_ = true;  // The main loop parses it and re-arms the transfer.
     } else {
         pico_ll.SPIResetTransaction();  // Reset the transaction if we're not parsing the message.
     }
