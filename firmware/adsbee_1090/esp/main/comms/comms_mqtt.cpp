@@ -44,8 +44,8 @@ bool CommsManager::ConnectFeedMQTT(uint16_t feed_index) {
     SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[feed_index], receiver_id);
     // Unique per feed: a broker drops the older of two connections with the same client ID. MQTT 3.1.1 brokers must
     // accept client IDs of up to 23 characters, so this takes the last 12 hex digits of the receiver ID.
-    char client_id[24];
-    snprintf(client_id, sizeof(client_id), "adsbee-%s-%u", receiver_id + 4, feed_index);
+    char client_id[32];
+    snprintf(client_id, sizeof(client_id), "adsbee-%.12s-%u", receiver_id + 4, feed_index);
     char status_topic[kMQTTTopicMaxLen + 1];
     FeedMQTTTopic(feed_index, "status", status_topic, sizeof(status_topic));
 
