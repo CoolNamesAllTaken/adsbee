@@ -892,7 +892,7 @@ void ATFeedHelpCallback() {
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
 }
 
-static void PrintFeed(uint16_t index) {
+static void PrintFeed(const CppAT::ATCommandDef_t& def, uint16_t index) {
     const SettingsManager::Settings& s = settings_manager.settings;
     char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
     SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
@@ -913,11 +913,11 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
                                  SettingsManager::Settings::kMaxNumFeeds - 1, index);
                 }
-                PrintFeed(index);
+                PrintFeed(def, index);
             } else {
                 // Querying info about all feeds.
                 for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-                    PrintFeed(i);
+                    PrintFeed(def, i);
                 }
             }
             CPP_AT_SILENT_SUCCESS();
