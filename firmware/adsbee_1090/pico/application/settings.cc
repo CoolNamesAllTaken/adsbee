@@ -150,9 +150,7 @@ bool SettingsManager::Load() {
     return true;
 }
 
-bool SettingsManager::Save() {
-    settings.core_network_settings.UpdateCRC32();
-
+void SettingsManager::CollectLiveSettings() {
     settings.r1090_rx_enabled = adsbee.Receiver1090IsEnabled();
     settings.tl_offset_mv = adsbee.GetTLOffsetMilliVolts();
     settings.r1090_bias_tee_enabled = adsbee.BiasTeeIsEnabled();
@@ -177,6 +175,11 @@ bool SettingsManager::Save() {
     }
 
     settings.subg_enabled = adsbee.subg_radio_ll.IsEnabledState();
+}
+
+bool SettingsManager::Save() {
+    settings.core_network_settings.UpdateCRC32();
+    CollectLiveSettings();
 
     // Sync settings from RP2040 -> ESP32.
     SyncToCoprocessors();

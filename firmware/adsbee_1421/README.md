@@ -30,6 +30,16 @@ The console runs at its saved baud rate: 9600 to 3,000,000, default 1,000,000
 - Send a NUL before each break: the CC1314 misses a break that directly follows another.
 - Firmware 0.3.11-rc3 and earlier doesn't send `UU`.
 
+## Checking a module's configuration
+
+`AT+CONFIG_HASH?` prints hashes of the settings, the CCFG and the firmware image, so a module can be compared
+with a reference module in one line. See
+[Check a Unit's Configuration](../../docs/guides/check-configuration.md).
+
+- `python3 ../scripts/firmware_hashes.py adsbee_1421 --hex <file.hex>` prints the `CCFG_CC1314` and `FIRMWARE`
+  lines a module running that hex reports. Releases carry them as `adsbee_1421-<version>.hashes.txt`.
+- `AT+BOOTLOADER_PIN=0` changes `CCFG_CC1314`.
+
 ## Reflashing over UART: the SYNC bootloader backdoor
 
 The m1421 can be reflashed over its console UART with no debugger or buttons. Every release build

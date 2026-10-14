@@ -142,7 +142,7 @@ bool SettingsManager::Load() {
     return true;
 }
 
-bool SettingsManager::Save() {
+void SettingsManager::CollectLiveSettings() {
     // Save reporting protocols. Via a local: Settings is packed, so its members cannot bind to the
     // non-const reference GetReportingProtocol() takes.
     ReportingProtocol console_reporting_protocol;
@@ -163,7 +163,10 @@ bool SettingsManager::Save() {
     settings.rx_position = adsbee.rx_position;
     // Live console baud — AT+BAUD_RATE only changes the running rate; SAVE is what persists it.
     settings.baud_rates[SerialInterface::kConsole] = comms_manager.GetBaudRate();
+}
 
+bool SettingsManager::Save() {
+    CollectLiveSettings();
     return WriteSettingsToFlash(settings);
 }
 

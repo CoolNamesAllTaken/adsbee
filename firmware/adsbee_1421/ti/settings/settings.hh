@@ -356,6 +356,12 @@ class SettingsManager {
     bool Save();
 
     /**
+     * Copies settings that other objects hold while running (receiver enables, baud rate, receiver position) into
+     * the settings struct. Save() does this before writing.
+     */
+    void CollectLiveSettings();
+
+    /**
      * Restores settings to factory default values.
      */
     void ResetToDefaults();

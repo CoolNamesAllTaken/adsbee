@@ -82,6 +82,7 @@ class CommsManager {
 
     CPP_AT_CALLBACK(ATBaudRateCallback);
     CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
+    CPP_AT_CALLBACK(ATConfigHashCallback);
     CPP_AT_CALLBACK(ATDeviceInfoCallback);
     CPP_AT_CALLBACK(ATESP32EnableCallback);
     CPP_AT_CALLBACK(ATESP32FlashCallback);

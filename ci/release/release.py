@@ -94,11 +94,13 @@ def asset_names(product, version):
         return [
             "adsbee_1090-{}.ota".format(version),
             "adsbee_1090-{}.uf2".format(version),
+            "adsbee_1090-{}.hashes.txt".format(version),
         ]
     return [
         "adsbee_1421-{}.hex".format(version),
         "adsbee_1421-{}.elf".format(version),
         "adsbee_1421_programmer-fw{}.uf2".format(version),
+        "adsbee_1421-{}.hashes.txt".format(version),
     ]
 
 

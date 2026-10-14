@@ -33,6 +33,20 @@ files, `firmware/common/` or `firmware/modules/` changed.
   notes belong in code comments.
 - Use American spelling. Avoid "it's not X, it's Y" phrasing.
 
+## Datasheets
+
+Every change to a `word/datasheet_*.docx` gets an entry in its Revision History (the dated list after the table of
+contents), and the footer's `Document Version` must match the newest revision name.
+
+- Revision names are the date, `YYYYMMDD`.
+- One revision per stable release: everything changed since the latest stable tag goes under a single newest revision.
+- Find the product's latest stable tag (no `-rc` tags): `git fetch --tags && git tag --list '<product>-*' --sort=-creatordate | grep -v -- -rc | head -1`.
+  Then check whether that tag's datasheet already has the newest revision:
+  `d=$(mktemp -d) && git show <tag>:word/datasheet_<name>.docx > $d/d.docx && unzip -p $d/d.docx word/document.xml | grep -c '<newest revision>'; rm -r $d`.
+- Present (released): add a new revision named today's date and list the change under it.
+- Absent (unreleased): rename the newest revision to today's date and append the change to its list.
+- Update the footer either way. Follow the wording of the existing entries.
+
 ## Project Summary
 
 ADSBee 1090 is an ADS-B/UAT aviation transponder receiver with a 3-processor heterogeneous firmware:
@@ -75,7 +89,8 @@ bash build.sh [-d] [target]
 **Build order matters**: ESP32 must build before RP2040 (RP2040 embeds the other binaries).
 
 **Primary output**: `pico/build/Release/application/combined.uf2`, plus version-stamped copies
-`adsbee_1090-<version>.uf2` and `adsbee_1090-<version>.ota` (the release assets)
+`adsbee_1090-<version>.uf2`, `adsbee_1090-<version>.ota` and `adsbee_1090-<version>.hashes.txt` (the release assets; the last lists
+what `AT+CONFIG_HASH?` reports, see `scripts/firmware_hashes.py`)
 
 ---
 

@@ -48,6 +48,7 @@ target_sources(host_test PRIVATE
     test_lr2021_status_tracker.cc
     test_packet_decoder.cc
     test_settings.cc
+    test_settings_hash.cc
     test_uplink_tx_budget.cc
 )
 

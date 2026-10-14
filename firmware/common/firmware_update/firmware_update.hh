@@ -32,6 +32,8 @@ class FirmwareUpdateManager {
     static const uint32_t kFlashHeaderStartAddrs[kNumPartitions];
     static const uint32_t kFlashAppStartAddrs[kNumPartitions];
 
+    static constexpr uint32_t kUF2BlockLenBytes = 256;  // Payload of one .uf2 block.
+
     static constexpr uint32_t kFlashHeaderMagicWord = 0xAD5BEEE;
     static constexpr uint32_t kFlashHeaderVersion = 0;
 
@@ -430,6 +432,32 @@ class FirmwareUpdateManager {
                 return false;
             }
         }
+        return true;
+    }
+
+    /**
+     * Calculates the CRC32 of the application image in the partition this firmware runs from (AT+CONFIG_HASH).
+     * @param[out] crc CRC32 of the image.
+     * @param[out] len_bytes Number of Bytes the CRC32 covers.
+     * @retval False if the partition header gives no usable length.
+     */
+    static inline bool CalculateOwnImageCRC32(uint32_t &crc, uint32_t &len_bytes) {
+        uint16_t partition = GetOwnFlashPartition();
+#ifdef COMBINED_IMAGE
+        // The .uf2 image differs from app0.bin, which the header describes. A .uf2 is written in 256 Byte blocks.
+        extern char __flash_binary_end;
+        len_bytes = (uint32_t)(uintptr_t)&__flash_binary_end - kFlashAppStartAddrs[partition];
+        len_bytes = (len_bytes + kUF2BlockLenBytes - 1) / kUF2BlockLenBytes * kUF2BlockLenBytes;
+#else
+        if (flash_partition_headers[partition]->magic_word != kFlashHeaderMagicWord) {
+            return false;
+        }
+        len_bytes = flash_partition_headers[partition]->app_size_bytes;
+#endif
+        if (len_bytes == 0 || len_bytes > kFlashAppLenBytes) {
+            return false;
+        }
+        crc = CalculateCRC32(flash_partition_apps[partition], len_bytes);
         return true;
     }
 

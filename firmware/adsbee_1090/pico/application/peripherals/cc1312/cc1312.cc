@@ -161,6 +161,16 @@ bool CC1312::ApplicationIsUpToDate() {
         CONSOLE_ERROR("CC1312::ApplicationIsUpToDate", "Failed to calculate CRC32 of the application binary.");
         return false;
     }
+    // Keep what the CC1312's flash holds for AT+CONFIG_HASH.
+    flash_crcs_valid_ = false;
+    uint32_t ccfg_crc = 0;
+    if (BootloaderCommandCRC32(ccfg_crc, kFlashAddrCCFG, kCCFGLenBytes)) {
+        application_crc_ = device_crc;
+        ccfg_crc_ = ccfg_crc;
+        flash_crcs_valid_ = true;
+    } else {
+        CONSOLE_WARNING("CC1312::ApplicationIsUpToDate", "Failed to calculate CRC32 of the CCFG.");
+    }
     if (table_crc != device_crc) {
         CONSOLE_ERROR("CC1312::ApplicationIsUpToDate",
                       "CRC32 mismatch after flashing application binary. Expected 0x%x, got 0x%x.", table_crc,

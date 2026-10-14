@@ -126,7 +126,9 @@ bash firmware/adsbee_1090/build.sh test AircraftJSON  # run filtered tests
 | CC1312 | `firmware/adsbee_1090/ti/sub_ghz_radio/build/sub_ghz_radio.bin` |
 
 The `combined.uf2` embeds all three binaries. The build also writes version-stamped copies next to it,
-`adsbee_1090-<version>.uf2` and `adsbee_1090-<version>.ota`, which CI publishes. See [Developers_Guide.md](adsbee_1090/Developers_Guide.md) for flashing instructions.
+`adsbee_1090-<version>.uf2` and `adsbee_1090-<version>.ota`, which CI publishes, and
+`adsbee_1090-<version>.hashes.txt`, the firmware hashes a device running them reports to `AT+CONFIG_HASH?`
+(see [Check a Unit's Configuration](../docs/guides/check-configuration.md)). See [Developers_Guide.md](adsbee_1090/Developers_Guide.md) for flashing instructions.
 
 ---
 
@@ -203,11 +205,13 @@ Releases are drafted by CI from release tags (`.github/workflows/release.yml`):
 
    | Product | Release name | Assets |
    |---|---|---|
-   | adsbee_1090 | `ADSBee 1090 Firmware 0.9.1 Release Candidate 4` | `adsbee_1090-<version>.ota`, `adsbee_1090-<version>.uf2` |
-   | adsbee_1421 | `ADSBee 1421 Firmware Version 0.3.11 Release Candidate 3` | `adsbee_1421-<version>.hex`, `adsbee_1421-<version>.elf`, `adsbee_1421_programmer-fw<version>.uf2` |
+   | adsbee_1090 | `ADSBee 1090 Firmware 0.9.1 Release Candidate 4` | `adsbee_1090-<version>.ota`, `adsbee_1090-<version>.uf2`, `adsbee_1090-<version>.hashes.txt` |
+   | adsbee_1421 | `ADSBee 1421 Firmware Version 0.3.11 Release Candidate 3` | `adsbee_1421-<version>.hex`, `adsbee_1421-<version>.elf`, `adsbee_1421_programmer-fw<version>.uf2`, `adsbee_1421-<version>.hashes.txt` |
 
    Stable releases drop "Release Candidate N". The body has release-notes placeholders and a CI block
    (run link, commit, asset SHA-256s). The 1421 ELF keeps debug info for decoding crash addresses.
+   The `.hashes.txt` file lists what `AT+CONFIG_HASH?` reports for the release
+   (`scripts/firmware_hashes.py`).
    ADSBee 1090 releases up to 0.9.1-rc6 name their assets `adsbee_1090.ota` and `combined.uf2`.
 3. Write the release notes in the draft on GitHub and publish it.
 

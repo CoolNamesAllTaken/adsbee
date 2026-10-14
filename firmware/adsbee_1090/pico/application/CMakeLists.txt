@@ -208,8 +208,14 @@ if (ON_EMBEDDED_DEVICE)
     add_custom_command(TARGET combined POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy combined.uf2 ${ARTIFACT_BASE}.uf2
         COMMAND ${CMAKE_COMMAND} -E copy adsbee_1090.ota ${ARTIFACT_BASE}.ota
+        # Hashes AT+CONFIG_HASH? reports for a device running these images.
+        COMMAND ${Python3_EXECUTABLE} ${ADSBEE_COMMON_DIR}/../scripts/firmware_hashes.py adsbee_1090
+                --uf2 combined.uf2 --ota adsbee_1090.ota
+                --esp32 ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/adsbee_esp.bin
+                --cc1312 ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/sub_ghz_radio.bin
+                -o ${ARTIFACT_BASE}.hashes.txt
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Creating version-stamped copies (${ARTIFACT_BASE})"
+        COMMENT "Creating version-stamped copies and firmware hashes (${ARTIFACT_BASE})"
     )
 
 else()

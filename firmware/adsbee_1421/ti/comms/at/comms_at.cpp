@@ -9,7 +9,9 @@
 #include "comms.hh"
 #include "object_dictionary.hh"
 #include "packet_decoder.hh"
+#include "flash_utils.hh"
 #include "settings.hh"
+#include "settings_hash.hh"
 #include "sub_ghz_radio.hh"
 
 /* clang-format off */
@@ -583,6 +585,41 @@ CPP_AT_CALLBACK(CommsManager::ATBootloaderPinCallback) {
                     "JTAG).\r\n");
             }
             CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATConfigHashCallback) {
+    switch (op) {
+        case '?': {
+            settings_manager.CollectLiveSettings();
+            uint32_t settings_fleet = SettingsHash::Compute(settings_manager.settings, SettingsHash::kScopeFleet);
+            uint32_t settings_full = SettingsHash::Compute(settings_manager.settings, SettingsHash::kScopeFull);
+            uint32_t ccfg_crc = CcfgBootloader::ReadCcfgCrc32();
+
+            // The running image can't change, so its CRC32 is calculated once.
+            static bool firmware_crc_valid = false;
+            static uint32_t firmware_crc = 0;
+            static uint32_t firmware_len_bytes = 0;
+            if (!firmware_crc_valid) {
+                firmware_crc = FlashUtils::ImageCRC32(firmware_len_bytes);
+                firmware_crc_valid = true;
+            }
+            uint32_t firmware = ConfigHasher::Combine(&firmware_crc, 1);
+            uint32_t config_hashes[] = {settings_fleet, ccfg_crc, firmware};
+
+            CPP_AT_CMD_PRINTF("=0x%08lX", (unsigned long)ConfigHasher::Combine(config_hashes, 3));
+            CPP_AT_PRINTF("SETTINGS_FLEET=0x%08lX (settings version %lu, %u Bytes)\r\n", (unsigned long)settings_fleet,
+                          (unsigned long)settings_manager.settings.settings_version,
+                          (unsigned)sizeof(SettingsManager::Settings));
+            CPP_AT_PRINTF("SETTINGS_FULL=0x%08lX\r\n", (unsigned long)settings_full);
+            CPP_AT_PRINTF("CCFG_CC1314=0x%08lX\r\n", (unsigned long)ccfg_crc);
+            CPP_AT_PRINTF("FIRMWARE=0x%08lX\r\n", (unsigned long)firmware);
+            CPP_AT_PRINTF("FIRMWARE_CC1314=0x%08lX (%lu Bytes)\r\n", (unsigned long)firmware_crc,
+                          (unsigned long)firmware_len_bytes);
+            CPP_AT_SILENT_SUCCESS();
             break;
         }
     }
@@ -1292,6 +1329,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
          "flash.\r\n\tAT+BOOTLOADER_PIN?\r\n\tQuery the live CCFG setting (no password; also in "
          "AT+SETTINGS?JSON).\r\n\tBOOTLOADER_PIN=<enabled>",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBootloaderPinCallback, comms_manager)},
+    {.command = "CONFIG_HASH",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string =
+         "AT+CONFIG_HASH?\r\n\tPrint hashes of the settings, the CCFG and the firmware, to check that a unit "
+         "matches another one.\r\n\tCONFIG_HASH=<hash of SETTINGS_FLEET, CCFG_CC1314 and FIRMWARE>\r\n\t"
+         "SETTINGS_FLEET leaves out per-unit settings (receiver position); SETTINGS_FULL covers all settings. "
+         "FIRMWARE is the hash of the FIRMWARE_<processor> lines. Settings are hashed as running, saved or not. "
+         "Expected firmware and CCFG values: the .hashes.txt file of a release, or "
+         "firmware/scripts/firmware_hashes.py.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConfigHashCallback, comms_manager)},
     {.command = "DEVICE_INFO",
      .min_args = 0,
      .max_args = 5,  // TODO: check this value.
