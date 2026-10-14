@@ -702,10 +702,10 @@ bool ADSBee::UpdateLR2021() {
         GPIO_enableInt(bsp.kLR2021IrqPin);
     }
 
-    // Async RX drain: kick one off when idle, then advance it as far as the DMA/BUSY state allows.
-    // Each call does at most one phase's worth of parsing plus posting the next DMA frame -- the long
-    // SPI clocking (up to 258 B) happens in the background while the rest of the loop runs.
-    if (lr2021.DrainIdle() && lr2021.StartRxDrain()) {
+    // Async RX drain: kick one off when idle and the sweep interval has passed, then advance it as far as the
+    // DMA/BUSY state allows. Each call does at most one phase's worth of parsing plus posting the next DMA
+    // frame -- the long SPI clocking (up to 258 B) happens in the background while the rest of the loop runs.
+    if (lr2021.DrainIdle() && start_us - lr2021_drain_start_us_ >= kLR2021SweepIntervalUs && lr2021.StartRxDrain()) {
         lr2021_drain_start_us_ = start_us;
     }
 
