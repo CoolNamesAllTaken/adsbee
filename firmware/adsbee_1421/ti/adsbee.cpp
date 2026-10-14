@@ -130,16 +130,8 @@ bool ADSBee::SetLR2021Enabled(bool enabled) {
     return success;
 }
 
-bool ADSBee::SetMLATEnabled(bool enabled) {
-    if (enabled == mlat_enabled_) {
-        return true;
-    }
-    mlat_enabled_ = enabled;
-    return ApplyReceiverConfig();  // From a reset chip, so disabling leaves no LR2021 setting behind.
-}
-
 void ADSBee::StartMlat() {
-    if (!mlat_enabled_ || LR2021::IsOokDF17PreambleMode(r1090_preamble_mode_)) {
+    if (LR2021::IsOokDF17PreambleMode(r1090_preamble_mode_)) {
         return;
     }
     if (!lr2021.ConfigMlatSources(true)) {
@@ -763,7 +755,7 @@ bool ADSBee::UpdateLR2021() {
             lr2021_fifo_full_count++;
         }
         BreakMlat(lr2021.drain_level() / LR2021::kOokFifoPacketLenBytes);
-        ParseLR2021RxFifo(lr2021.drain_payload(), lr2021.drain_level(), CoarseCounts(start_us), mlat_enabled_);
+        ParseLR2021RxFifo(lr2021.drain_payload(), lr2021.drain_level(), CoarseCounts(start_us), true);
         lr2021.ReleaseKeptRead();
         chain_read_parsed = true;
     }
@@ -774,7 +766,7 @@ bool ADSBee::UpdateLR2021() {
     LR2021::IrqDrainSlot* slot;
     while ((slot = lr2021.NextFilledSlot()) != nullptr) {
         BreakMlat(slot->len / LR2021::kOokFifoPacketLenBytes);
-        ParseLR2021RxFifo(slot->buf + 2, slot->len, CoarseCounts(slot->timestamp_us), mlat_enabled_);
+        ParseLR2021RxFifo(slot->buf + 2, slot->len, CoarseCounts(slot->timestamp_us), true);
         lr2021.ReleaseSlot();
         chain_read_parsed = true;
     }
@@ -839,7 +831,7 @@ bool ADSBee::UpdateLR2021() {
                 mlat_active_ ? PairMlatSweep(lr2021.drain_level() / LR2021::kOokFifoPacketLenBytes, stamps, stamped)
                              : 0;
             ParseLR2021RxFifo(lr2021.drain_payload(), lr2021.drain_level(), CoarseCounts(get_time_since_boot_us()),
-                              mlat_enabled_, num_stamped > 0 ? stamps : nullptr, num_stamped > 0 ? stamped : nullptr);
+                              true, num_stamped > 0 ? stamps : nullptr, num_stamped > 0 ? stamped : nullptr);
             lr2021.FinishRxDrain();
             break;
         }

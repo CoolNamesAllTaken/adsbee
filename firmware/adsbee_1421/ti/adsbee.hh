@@ -42,11 +42,8 @@ class ADSBee {
     bool SetLR2021Enabled(bool enabled);
     bool LR2021IsEnabled() const { return lr2021_enabled_; }
 
-    // MLAT timestamps (AT+MLAT). On: a 1090 packet whose sync event is known for certain carries the 48 MHz time
-    // of that event; every other packet is marked RawModeSPacket::no_mlat_timestamp and carries a coarse receive
-    // time. Off: every packet carries the time its FIFO read was parsed, unmarked. Reconfigures the receiver.
-    bool SetMLATEnabled(bool enabled);
-    bool MLATIsEnabled() const { return mlat_enabled_; }
+    // MLAT timestamps, always on: a 1090 packet whose sync event is known for certain carries the 48 MHz time of
+    // that event; every other packet is marked RawModeSPacket::no_mlat_timestamp and carries a coarse receive time.
     // Reported and reset via AT+RX_STATS.
     const MlatPairer::Counters& mlat_counters() const { return mlat_pairer_.counters(); }
     uint32_t mlat_capture_overruns = 0;  // Capture ring overflows: edges lost, nothing stamped across them.
@@ -191,9 +188,8 @@ class ADSBee {
     bool lr2021_enabled_ = true;
 
     // MLAT timestamps. mlat_active_: the capture timer and the uDMA clear run, and the loop drain sweep is paired.
-    // Enabled but not active: receiver down, or DF17 preamble mode (its sync event is not at a fixed place in the
-    // frame); every packet is then marked no_mlat_timestamp.
-    bool mlat_enabled_ = false;
+    // Not active: receiver down, or DF17 preamble mode (its sync event is not at a fixed place in the frame); every
+    // packet is then marked no_mlat_timestamp.
     bool mlat_active_ = false;
     // Shortest time between sweep starts while MLAT is active. Edges that arrive while a sweep holds the bus wait
     // for their clear, and a sync event in that wait makes a packet without an edge, which leaves its read

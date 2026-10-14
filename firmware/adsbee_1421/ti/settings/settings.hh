@@ -15,7 +15,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 6;
+static constexpr uint32_t kSettingsVersion = 5;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -150,8 +150,6 @@ class SettingsManager {
         // AT+LR_ENABLE: false = LR2021 held in reset with the CC1314-side bus pins parked hi-Z
         // (NSS pull-up; RESET/SCLK/PICO pull-down) so an external host can drive the shared bus.
         bool lr2021_enabled = true;
-        // AT+MLAT: per-packet MLAT timestamps for 1090 MHz packets (see ADSBee::SetMLATEnabled).
-        bool r1090_mlat_enabled = false;
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kWarnings;

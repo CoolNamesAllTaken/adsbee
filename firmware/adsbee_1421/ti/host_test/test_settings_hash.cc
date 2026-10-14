@@ -15,8 +15,8 @@ TEST(SettingsHash, SameSettingsSameHash) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Changes only with the Settings struct or its defaults.
     SM::Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x48D905D6u);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x48D905D6u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x7215D7D8u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x7215D7D8u);
 }
 
 TEST(SettingsHash, MagicAndStoredCRCDoNotCount) {
@@ -46,7 +46,6 @@ TEST(SettingsHash, EverySettingChangesBothHashes) {
     ExpectChangesBoth("r1090_gain", [](SM::Settings& s) { s.r1090_gain = 13; });
     ExpectChangesBoth("r1090_rx_boost", [](SM::Settings& s) { s.r1090_rx_boost = 7; });
     ExpectChangesBoth("lr2021_enabled", [](SM::Settings& s) { s.lr2021_enabled = false; });
-    ExpectChangesBoth("r1090_mlat_enabled", [](SM::Settings& s) { s.r1090_mlat_enabled = true; });
     ExpectChangesBoth("log_level", [](SM::Settings& s) { s.log_level = SM::kInfo; });
     ExpectChangesBoth("reporting_protocols", [](SM::Settings& s) { s.reporting_protocols[0] = SM::kMAVLINK2; });
     ExpectChangesBoth("baud_rates", [](SM::Settings& s) { s.baud_rates[0] = 115200; });

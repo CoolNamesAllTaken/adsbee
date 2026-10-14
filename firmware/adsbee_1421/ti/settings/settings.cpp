@@ -88,7 +88,6 @@ bool SettingsManager::Apply() {
     adsbee.SetR1090PreambleMode(settings.r1090_preamble_mode);
     adsbee.SetR1090Gain(settings.r1090_gain);
     adsbee.SetR1090RxBoost(settings.r1090_rx_boost);
-    success &= adsbee.SetMLATEnabled(settings.r1090_mlat_enabled);
     adsbee.rx_position = settings.rx_position;
 
     // Apply reporting protocols.
@@ -161,7 +160,6 @@ void SettingsManager::CollectLiveSettings() {
     settings.r1090_preamble_mode = adsbee.GetR1090PreambleMode();
     settings.r1090_gain = adsbee.GetR1090Gain();
     settings.r1090_rx_boost = adsbee.GetR1090RxBoost();
-    settings.r1090_mlat_enabled = adsbee.MLATIsEnabled();
     settings.rx_position = adsbee.rx_position;
     // Live console baud — AT+BAUD_RATE only changes the running rate; SAVE is what persists it.
     settings.baud_rates[SerialInterface::kConsole] = comms_manager.GetBaudRate();
@@ -232,7 +230,6 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\t1090 Preamble Mode: %s\r\n", kR1090PreambleModeStrs[adsbee.GetR1090PreambleMode()]);
     CONSOLE_PRINTF("\t1090 Gain: %u (0 = auto AGC)\r\n", adsbee.GetR1090Gain());
     CONSOLE_PRINTF("\t1090 RX Boost: %u (0 = off, 7 = max)\r\n", adsbee.GetR1090RxBoost());
-    CONSOLE_PRINTF("\t1090 MLAT Timestamps: %s\r\n", adsbee.MLATIsEnabled() ? "ENABLED" : "DISABLED");
 
     // CommunicationsManager settings
     CONSOLE_PRINTF("\tLog Level: %s\r\n", kConsoleLogLevelStrs[settings.log_level]);
@@ -280,9 +277,6 @@ void SettingsManager::PrintAT() {
 
     // AT+MAVLINK_ID
     CONSOLE_PRINTF("AT+MAVLINK_ID=%u,%u\r\n", settings.mavlink_system_id, settings.mavlink_component_id);
-
-    // AT+MLAT
-    CONSOLE_PRINTF("AT+MLAT=%d\r\n", adsbee.MLATIsEnabled());
 
     // AT+PROTOCOL_OUT
     for (uint16_t i = 0; i < SerialInterface::kNumSerialInterfaces; i++) {

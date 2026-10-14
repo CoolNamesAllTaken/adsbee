@@ -185,7 +185,7 @@ LR2021 before the `Resume()` calls.
 
 ## MLAT timestamps
 
-`AT+MLAT=1` (off by default) timestamps 1090 MHz packets; see [`ti/mlat/mlat_pairing.hh`](ti/mlat/mlat_pairing.hh) for the
+1090 MHz packets get MLAT timestamps (always on); see [`ti/mlat/mlat_pairing.hh`](ti/mlat/mlat_pairing.hh) for the
 rule, [`ti/mlat/mlat_clear_dma.cpp`](ti/mlat/mlat_clear_dma.cpp) for the latch clear and
 [`ti/mlat/mlat_capture.cpp`](ti/mlat/mlat_capture.cpp) for the timer.
 
@@ -203,13 +203,12 @@ rule, [`ti/mlat/mlat_clear_dma.cpp`](ti/mlat/mlat_clear_dma.cpp) for the latch c
   sweep runs such a pending clear ahead of its command frames, never between a command and its response frame.
 - The SPI driver keeps SPI0 enabled while idle with its RX DMA off: the chain pops its own RX bytes and `Disarm()`
   flushes the RX FIFO, or the next transfer would shift.
-- While MLAT is on, the sweep waits for its short SPI frames in place (one main-loop pass per sweep), starts every
+- While MLAT is active, the sweep waits for its short SPI frames in place (one main-loop pass per sweep), starts every
   500 us, and holds back while a sync edge is younger than 145 us.
 - The 64-bit count starts at the system time and then follows the 48 MHz crystal. It restarts after SYNC sleep
   (the timer stops in STANDBY) and after a main-loop stall of more than 2 s. `PollMlat` reads the capture ring
   before the counter, so every capture is older than the value it is extended against.
 - Nothing is stamped in the DF17 preamble mode: its sync event is not at a fixed place in the frame.
-- Off, no LR2021 command, timer, uDMA channel or pin is touched.
 
 ## Repo ↔ container layout
 
