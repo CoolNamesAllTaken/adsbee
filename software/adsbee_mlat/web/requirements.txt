@@ -1,0 +1,5 @@
+Django~=5.2.0
+channels~=4.3.0
+uvicorn[standard]~=0.35.0
+redis~=5.3.0
+whitenoise~=6.12.0

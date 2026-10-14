@@ -1,0 +1,65 @@
+# ADSBee MLAT server: Redis, the MLAT core and the web map.
+#   cp .env.example .env    (then edit it)
+#   docker compose up -d
+# Without the core, `docker compose --profile demo up -d redis web fake` runs the map on synthetic traffic.
+
+name: adsbee-mlat
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  core:
+    build: ./core
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MLAT_FEED_PORT: 31090
+      MLAT_SBS_PORT: 31003
+    ports:
+      - "${MLAT_FEED_PORT:-31090}:31090/tcp"
+      - "${MLAT_FEED_PORT:-31090}:31090/udp"
+      - "${MLAT_SBS_PORT:-31003}:31003"
+    volumes:
+      - ./config:/config:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "${HTTP_PORT:-8080}:8000"
+    volumes:
+      - web-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Synthetic traffic in place of the core, for trying out the map.
+  fake:
+    build: ./web
+    profiles: ["demo"]
+    restart: unless-stopped
+    entrypoint: ["python", "tools/fake_publisher.py", "--redis", "redis://redis:6379/0"]
+    command: ["--aircraft", "150"]
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  web-data:

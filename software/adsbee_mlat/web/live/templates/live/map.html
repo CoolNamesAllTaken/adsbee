@@ -1,0 +1,121 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ADSBee MLAT</title>
+    <link rel="icon" type="image/png" href="{% static 'live/favicon.png' %}">
+    <link rel="stylesheet" href="{% static 'live/vendor/leaflet/leaflet.css' %}">
+    <link rel="stylesheet" href="{% static 'live/map.css' %}">
+    <script src="{% static 'live/vendor/leaflet/leaflet.js' %}"></script>
+    <script id="mlat-config" type="application/json">{{ config|safe }}</script>
+</head>
+<body>
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+        <symbol id="i-plane" viewBox="0 0 24 24"><path d="M12 2l3 9 7 4v2l-7-2-1 5 2 2v1l-4-1-4 1v-1l2-2-1-5-7 2v-2l7-4z" fill="currentColor"/></symbol>
+        <symbol id="i-solve" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+        <symbol id="i-rx" viewBox="0 0 24 24"><path d="M12 13v9M8 22h8" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="11" r="2.5" fill="currentColor"/><path d="M7 6a7 7 0 0 0 0 10M17 6a7 7 0 0 1 0 10M4 3a11 11 0 0 0 0 16M20 3a11 11 0 0 1 0 16" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+        <symbol id="i-fps" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 15l4-4 3 3 5-5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+        <symbol id="i-trail" viewBox="0 0 24 24"><path d="M3 20c4-1 4-7 8-8s5-6 10-8" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/></symbol>
+        <symbol id="i-vector" viewBox="0 0 24 24"><path d="M4 20L18 6M11 6h7v7" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+        <symbol id="i-ellipse" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></symbol>
+        <symbol id="i-link" viewBox="0 0 24 24"><circle cx="5" cy="17" r="3" fill="currentColor"/><circle cx="19" cy="7" r="3" fill="currentColor"/><path d="M7.5 15.5l9-7" stroke="currentColor" stroke-width="2"/></symbol>
+        <symbol id="i-label" viewBox="0 0 24 24"><path d="M4 6h16M12 6v13" stroke="currentColor" stroke-width="2.5"/></symbol>
+        <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.4 5l1.6 1.2-2 3.4-1.9-.7a8 8 0 0 1-2 1.2L15.8 21h-4l-.3-2a8 8 0 0 1-2-1.2l-1.9.7-2-3.4 1.6-1.3a8 8 0 0 1 0-2.3L5.6 10.3l2-3.4 1.9.7a8 8 0 0 1 2-1.2l.3-2.4h4l.3 2.4a8 8 0 0 1 2 1.2l1.9-.7 2 3.4-1.6 1.2a8 8 0 0 1 0 2.1z" fill="currentColor"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="2"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11z" fill="currentColor"/></symbol>
+    </svg>
+
+    <div id="map"></div>
+
+    <header class="topbar">
+        <span class="logo">ADSBee</span><span class="logo-sub">MLAT</span>
+        <span id="conn" class="conn" data-tip="Connecting"></span>
+        <span class="spacer"></span>
+        <button id="theme" class="icon-btn" data-tip="Light / dark"><svg><use href="#i-moon"/></svg></button>
+        <a class="icon-btn" href="admin/" data-tip="Admin"><svg><use href="#i-gear"/></svg></a>
+    </header>
+
+    <section id="stats" class="card stats">
+        <div class="stat" id="st-ac">
+            <svg class="ico"><use href="#i-plane"/></svg>
+            <span class="big" id="st-ac-n">0</span>
+            <span class="chip adsb" id="st-ac-adsb" data-tip="ADS-B positions">0</span>
+            <span class="chip mlat" id="st-ac-mlat" data-tip="MLAT positions">0</span>
+        </div>
+        <div class="stat" id="st-solve">
+            <svg class="ico"><use href="#i-solve"/></svg>
+            <span class="big" id="st-solve-n">–</span><span class="unit">/s</span>
+            <svg class="spark" id="st-solve-spark" viewBox="0 0 60 18" preserveAspectRatio="none"><path/></svg>
+        </div>
+        <div class="stat" id="st-lat">
+            <svg class="ico"><use href="#i-clock"/></svg>
+            <span class="big" id="st-lat-n">–</span><span class="unit">ms</span>
+            <svg class="spark" id="st-lat-spark" viewBox="0 0 60 18" preserveAspectRatio="none"><path/></svg>
+        </div>
+        <div class="stat" id="st-rx">
+            <svg class="ico"><use href="#i-rx"/></svg>
+            <span class="big" id="st-rx-n">–</span>
+            <span class="dots" id="st-rx-dots"></span>
+        </div>
+        <div class="stat small" id="st-fps">
+            <svg class="ico"><use href="#i-fps"/></svg>
+            <span id="st-fps-n">–</span><span class="unit">fps</span>
+        </div>
+    </section>
+
+    <nav id="layers" class="card layers">
+        <button data-layer="trails" data-tip="Trails for all aircraft"><svg><use href="#i-trail"/></svg></button>
+        <button data-layer="vectors" data-tip="Velocity vectors"><svg><use href="#i-vector"/></svg></button>
+        <button data-layer="errors" data-tip="MLAT error circles (1 σ)"><svg><use href="#i-ellipse"/></svg></button>
+        <button data-layer="receivers" data-tip="Receivers"><svg><use href="#i-rx"/></svg></button>
+        <button data-layer="links" data-tip="Clock sync links"><svg><use href="#i-link"/></svg></button>
+        <button data-layer="labels" data-tip="Labels"><svg><use href="#i-label"/></svg></button>
+        <span class="sep"></span>
+        <button data-layer="adsb" class="src-btn" data-tip="Show ADS-B aircraft"><canvas class="src-icon" data-src="0" width="24" height="24"></canvas></button>
+        <button data-layer="mlat" class="src-btn" data-tip="Show MLAT aircraft"><canvas class="src-icon" data-src="1" width="24" height="24"></canvas></button>
+    </nav>
+
+    <aside id="detail" class="card detail" hidden>
+        <div class="d-head">
+            <canvas id="d-icon" width="40" height="40"></canvas>
+            <div>
+                <div id="d-call" class="d-call"></div>
+                <div class="d-sub"><span id="d-icao" class="mono"></span> <span id="d-src" class="chip"></span></div>
+            </div>
+            <button id="d-close" class="icon-btn close" data-tip="Close">×</button>
+        </div>
+        <div class="d-grid">
+            <div data-tip="Altitude (ft)"><span class="k">⇡</span><span id="d-alt"></span></div>
+            <div data-tip="Vertical rate (ft/min)"><span class="k">⇅</span><span id="d-vr"></span></div>
+            <div data-tip="Ground speed (kt)"><span class="k">»</span><span id="d-gs"></span></div>
+            <div data-tip="Track"><span class="k"><svg id="d-trk-arrow" viewBox="0 0 16 16"><path d="M8 1l4 13-4-3-4 3z" fill="currentColor"/></svg></span><span id="d-trk"></span></div>
+            <div data-tip="Squawk"><span class="k">#</span><span id="d-sq" class="mono"></span></div>
+            <div data-tip="Fix rate (Hz)"><span class="k">∿</span><span id="d-rate"></span></div>
+            <div class="mlat-only" data-tip="MLAT horizontal error, 1 σ (m)"><span class="k">±</span><span id="d-err"></span></div>
+            <div class="mlat-only" data-tip="Receivers in the solution"><span class="k"><svg viewBox="0 0 24 24"><use href="#i-rx"/></svg></span><span id="d-nrecv"></span></div>
+            <div class="mlat-only" data-tip="Geometric dilution of precision"><span class="k">◬</span><span id="d-gdop"></span></div>
+            <div data-tip="Age of the last fix (s)"><span class="k"><svg viewBox="0 0 24 24"><use href="#i-clock"/></svg></span><span id="d-age"></span></div>
+        </div>
+        <div class="d-pos mono" id="d-pos" data-tip="Last fix position"></div>
+        <svg id="d-prof" class="d-prof" viewBox="0 0 200 40" preserveAspectRatio="none" data-tip="Altitude profile"></svg>
+    </aside>
+
+    <section id="legend" class="card legend">
+        <div class="alt-bar" data-tip="Altitude color (ft)"><div class="grad"></div>
+            <div class="ticks"><span>0</span><span>10k</span><span>20k</span><span>30k</span><span>40k</span></div></div>
+        <div class="leg-row">
+            <span data-tip="ADS-B position"><canvas class="src-icon" data-src="0" width="24" height="24"></canvas></span>
+            <span data-tip="MLAT position"><canvas class="src-icon" data-src="1" width="24" height="24"></canvas></span>
+            <span data-tip="MLAT error circle (1 σ)" class="leg-err"></span>
+            <span data-tip="Receiver in sync" class="leg-rx ok"></span>
+            <span data-tip="Receiver out of sync" class="leg-rx bad"></span>
+        </div>
+    </section>
+
+    <div id="tip" class="tip" hidden></div>
+
+    <script src="{% static 'live/map.js' %}"></script>
+</body>
+</html>
