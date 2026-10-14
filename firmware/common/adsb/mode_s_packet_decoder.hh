@@ -8,9 +8,9 @@
 class ModeSPacketDecoder {
    public:
     static constexpr uint16_t kPacketQueueLen = 100;
-    // The main loop on core 0 drains the output queue. It can be busy for ~25 ms (an ESP32 write waiting for its ack
-    // plus a CC1312 read), which is 250 packets at 10,000 packets/s.
-    static constexpr uint16_t kDecodedPacketQueueLen = 256;
+    // The main loop on core 0 drains the output queue. Under heavy Mode S + UAT traffic one pass can take ~60 ms
+    // (several ESP32 writes waiting for their acks plus CC1312 reads), which is 360 packets at 6,000 packets/s.
+    static constexpr uint16_t kDecodedPacketQueueLen = 512;
     static constexpr uint16_t kDebugMessageQueueLen = 20;
     // Two demodulator state machines can occasionally catch the same transmission. Packets with identical contents
     // whose timestamps fall within this window are treated as duplicates. Distinct transmissions with identical
