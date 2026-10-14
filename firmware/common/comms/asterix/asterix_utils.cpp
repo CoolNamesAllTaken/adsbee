@@ -330,7 +330,7 @@ bool ASTERIXReporter::BuildCAT021Report(CAT021TargetReport& report, const ModeSA
 
     if (CallsignIsSet(aircraft.callsign)) {
         report.has_callsign = true;
-        strncpy(report.callsign, aircraft.callsign, sizeof(report.callsign) - 1);
+        memcpy(report.callsign, aircraft.callsign, sizeof(report.callsign) - 1);  // Writer stops at a NUL.
     }
     if (aircraft.emitter_category != ADSBTypes::kEmitterCategoryInvalid) {
         report.has_emitter_category = true;
@@ -440,7 +440,7 @@ bool ASTERIXReporter::BuildCAT021Report(CAT021TargetReport& report, const UATAir
 
     if (CallsignIsSet(aircraft.callsign)) {
         report.has_callsign = true;
-        strncpy(report.callsign, aircraft.callsign, sizeof(report.callsign) - 1);
+        memcpy(report.callsign, aircraft.callsign, sizeof(report.callsign) - 1);  // Writer stops at a NUL.
     }
     if (aircraft.emitter_category != ADSBTypes::kEmitterCategoryInvalid) {
         report.has_emitter_category = true;
