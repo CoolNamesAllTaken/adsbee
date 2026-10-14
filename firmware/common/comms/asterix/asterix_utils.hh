@@ -221,7 +221,8 @@ class ASTERIXReporter {
 
     /**
      * Writes a CAT023 Ground Station Status record (report type 1).
-     * @param[in] time_of_day I023/070, written only if clock_valid is set.
+     * @param[in] time_of_day I023/070.
+     * @param[in] clock_valid False sets NOGO and TSV (time source invalid).
      * @param[in] track_numbering_restarted RN bit, for the first report after boot.
      * @param[in] period_s Reporting period (GSSP), 1 to 127 s.
      * @retval Bytes written, or 0 if buf is too small.

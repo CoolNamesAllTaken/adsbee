@@ -464,9 +464,10 @@ TEST(ASTERIXUtils, CAT023GroundStationStatus) {
     EXPECT_EQ(std::vector<uint8_t>(buf, buf + len),
               (std::vector<uint8_t>{0xD8, 0x00, 0x01, 0x01, 0x58, 0x78, 0x65, 0x01, 0x02}));
 
-    // No UTC: no time of day, NOGO and TSV set; track numbering restarted.
-    len = ASTERIXReporter::WriteCAT023GroundStationStatusRecord(buf, sizeof(buf), 0, 1, 0, false, true, 1);
-    EXPECT_EQ(std::vector<uint8_t>(buf, buf + len), (std::vector<uint8_t>{0xC8, 0x00, 0x01, 0x01, 0x8B, 0x02}));
+    // No UTC: time since boot, NOGO and TSV set; track numbering restarted.
+    len = ASTERIXReporter::WriteCAT023GroundStationStatusRecord(buf, sizeof(buf), 0, 1, 384, false, true, 1);
+    EXPECT_EQ(std::vector<uint8_t>(buf, buf + len),
+              (std::vector<uint8_t>{0xD8, 0x00, 0x01, 0x01, 0x00, 0x01, 0x80, 0x8B, 0x02}));
 }
 
 TEST(ASTERIXUtils, CAT023ServiceStatus) {

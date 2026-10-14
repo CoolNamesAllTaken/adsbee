@@ -51,8 +51,7 @@ ASTERIX times are seconds since midnight UTC. ADSBee takes UTC from a GNSS recei
 accuracy of its NMEA time messages. Without GNSS time:
 
 - Times count from boot, modulo 24 h.
-- CAT023 reports TSV (time source invalid) and NOGO (data must not be used operationally), and leaves out
-  I023/070.
+- CAT023 reports TSV (time source invalid) and NOGO (data must not be used operationally).
 - Every CAT021 record sets the I021/040 NOGO bit.
 
 The ADSBee 1421 has no GNSS input, so its output always carries NOGO.

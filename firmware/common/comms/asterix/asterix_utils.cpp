@@ -617,17 +617,17 @@ uint16_t ASTERIXReporter::WriteCAT023GroundStationStatusRecord(uint8_t* buf, uin
                                                                uint8_t sic, uint32_t time_of_day, bool clock_valid,
                                                                bool track_numbering_restarted, uint8_t period_s) {
     FSPEC fspec;
-    fspec.Set(1);                   // I023/010 Data Source Identifier.
-    fspec.Set(2);                   // I023/000 Report Type.
-    if (clock_valid) fspec.Set(4);  // I023/070 Time of Day.
-    fspec.Set(5);                   // I023/100 Ground Station Status.
+    fspec.Set(1);  // I023/010 Data Source Identifier.
+    fspec.Set(2);  // I023/000 Report Type.
+    fspec.Set(4);  // I023/070 Time of Day.
+    fspec.Set(5);  // I023/100 Ground Station Status.
 
     ByteWriter w(buf, buf_len);
     fspec.Write(w);
     w.U8(sac);
     w.U8(sic);
     w.U8(1);  // Ground station status report.
-    if (clock_valid) w.U24(time_of_day);
+    w.U24(time_of_day);
     // NOGO and TSV (time source invalid) go together; GSSP extension always follows.
     w.U8((clock_valid ? 0 : 0x80 | 0x08) | (track_numbering_restarted ? 0x02 : 0) | 0x01);
     w.U8((period_s & 0x7F) << 1);
