@@ -87,3 +87,15 @@ def test_publish_and_receiver_config():
     assert rx["a"]["pos_src"] == "fixed" and rx["a"]["clock_hz"] == 48_000_000
     assert "aircraft" in msgs["mlat:stats"][-1]
     assert snap["aircraft"][0]["icao"] == "40621d" and 0 < ttl <= 30
+
+
+def test_receiver_override_and_restore():
+    server = Server(_cfg(receivers=[config.ReceiverConfig("c", 10.0, 20.0, 30.0)]))
+    rx = server.engine.receivers["c"]
+    server.apply_receiver_config({"receivers": {"c": {"enabled": True, "fixed": {"lat": 1.0, "lon": 2.0,
+                                                                                    "alt_m": None}}}})
+    assert (rx.lat, rx.lon, rx.alt, rx.pos_src) == (1.0, 2.0, 30.0, "fixed")
+    rx.apply_info({"id": "c", "lat": 11.0, "lon": 21.0, "alt": 31.0, "src": "gnss"})
+    assert (rx.lat, rx.lon) == (1.0, 2.0)  # The override wins over reported positions.
+    server.apply_receiver_config({"receivers": {"c": {"enabled": False, "fixed": None}}})
+    assert (rx.lat, rx.lon, rx.alt, rx.pos_src) == (11.0, 21.0, 31.0, "gnss") and not rx.enabled
