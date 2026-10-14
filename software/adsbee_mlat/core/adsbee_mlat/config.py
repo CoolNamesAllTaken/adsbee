@@ -29,6 +29,7 @@ class Config:
     redis_url: str | None = "redis://localhost:6379/0"
     group_window_s: float = 0.3
     publish_mlat_for_adsb: bool = False
+    workers: int = 1  # Processes for decoding, clock sync and tracking; more than 1 shards aircraft by address.
     aircraft_interval_s: float = 0.1
     status_interval_s: float = 1.0
     receivers: list = field(default_factory=list)
@@ -56,6 +57,7 @@ def load(path=None, env=os.environ):
     cfg.redis_url = server.get("redis_url", cfg.redis_url)
     cfg.group_window_s = float(server.get("group_window_s", cfg.group_window_s))
     cfg.publish_mlat_for_adsb = bool(server.get("publish_mlat_for_adsb", cfg.publish_mlat_for_adsb))
+    cfg.workers = int(server.get("workers", cfg.workers))
     for r in data.get("receiver", []):
         match = r.get("match", {})
         cfg.receivers.append(ReceiverConfig(
@@ -66,6 +68,8 @@ def load(path=None, env=os.environ):
         cfg.redis_url = env["REDIS_URL"] or None
     if "MLAT_FEED_PORT" in env:
         cfg.listen_port = int(env["MLAT_FEED_PORT"])
+    if "MLAT_WORKERS" in env:
+        cfg.workers = int(env["MLAT_WORKERS"])
     if "MLAT_SBS_PORT" in env:
         cfg.sbs_port = int(env["MLAT_SBS_PORT"]) or None
     return cfg

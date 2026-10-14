@@ -14,14 +14,16 @@ from adsbee_mlat.server import Publisher, Server  # noqa: E402
 DURATION_S = 25.0
 
 
-async def _run(udp):
+async def _run(udp, workers=1):
     sc = sim.example_scenario(n_receivers=5, baseline_m=30e3, n_aircraft=25, radius_m=100e3, clock_hz=48e6, seed=3)
-    cfg = Config(listen_host="127.0.0.1", listen_port=0, sbs_port=0, redis_url=None, group_window_s=0.2)
+    cfg = Config(listen_host="127.0.0.1", listen_port=0, sbs_port=0, redis_url=None, group_window_s=0.2,
+                 workers=workers)
     pub = Publisher()
     pub.keep_sent = True
     server = Server(cfg, publisher=pub)
     col = validation.TruthCollector(sc)
-    server.engine.on_mlat = col.on_mlat
+    if workers == 1:
+        server.engine.on_mlat = col.on_mlat
     await server.start()
     sbs_reader, sbs_writer = await asyncio.open_connection("127.0.0.1", server.sbs_port)
     sc.t0_unix = time.time() + 1.0
@@ -63,3 +65,13 @@ def test_end_to_end(udp):
     stats = [p for c, p in pub.sent if c == "mlat:stats"]
     assert any("latency_ms_p50" in p for p in stats)
     assert sbs.startswith(b"MSG,3,")
+
+
+def test_end_to_end_sharded():
+    sc, server, pub, col, sbs = asyncio.run(_run(False, workers=2))
+    assert all(r["sync_ok"] for r in server.engine.receivers_status())
+    col.published = [a for c, p in pub.sent if c == "mlat:aircraft" for a in p["aircraft"]]
+    s = validation.summarize(col.published_errors("mlat", settle_s=10.0))
+    assert s["n"] > 100 and s["h_p50"] < 150.0, s
+    stats = [p for c, p in pub.sent if c == "mlat:stats"]
+    assert stats[-1]["aircraft"] > 0 and stats[-1]["sync_pairs"] > 0

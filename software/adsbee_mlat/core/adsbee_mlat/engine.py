@@ -48,6 +48,7 @@ class Engine:
         self.group_window_s = group_window_s
         self.publish_mlat_for_adsb = publish_mlat_for_adsb
         self.max_receivers = max_receivers
+        self.dispatch = None  # If set, dispatch(groups, now) receives closed groups instead of processing them here.
         self.on_fix = on_fix
         self.on_mlat = on_mlat  # Optional on_mlat(aircraft, track, extra) for every accepted MLAT update.
         self.clock = clock
@@ -121,13 +122,19 @@ class Engine:
             now = self.clock()
         cutoff = now - self.group_window_s
         groups = self.groups
+        closed = [] if self.dispatch is not None else None
         while groups:
             msg = next(iter(groups))
             g = groups[msg]
             if g[0] > cutoff:
                 break
             del groups[msg]
-            self._process_group(msg, g[1], now)
+            if closed is None:
+                self._process_group(msg, g[1], now)
+            else:
+                closed.append((msg, g[1]))
+        if closed:
+            self.dispatch(closed, now)
         if self._last_housekeeping is None or now - self._last_housekeeping >= 1.0:
             self._housekeeping(now)
             self._last_housekeeping = now
@@ -376,6 +383,12 @@ class Engine:
                  vr_fpm=round(vu / geo.FT * 60), t=round(t, 3), err_m=round(err, 1), nrecv=tr.last_nrecv,
                  gdop=_r(tr.last_gdop, 2))
         self.on_fix(e)
+
+    def aircraft_count(self):
+        return len(self.aircraft)
+
+    def valid_pair_count(self):
+        return sum(1 for p in self.sync.pairs.values() if p.valid)
 
     def receivers_status(self):
         out = []

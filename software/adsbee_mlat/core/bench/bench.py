@@ -45,6 +45,7 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--cache")
     ap.add_argument("--json")
+    ap.add_argument("--workers", type=int, default=1, help="Worker processes (sharded engine)")
     ap.add_argument("--adsb-mlat-fraction", type=float, default=0.1,
                     help="1.0: MLAT every message of every aircraft (worst case)")
     args = ap.parse_args()
@@ -68,7 +69,13 @@ def main():
     out["parse_msgs_per_s"] = round(n / dt)
 
     # Engine: reads of 20 ms per receiver, ticks every 20 ms, simulated wall clock.
-    eng = Engine(group_window_s=0.3, adsb_mlat_fraction=args.adsb_mlat_fraction)
+    if args.workers > 1:
+        from adsbee_mlat.parallel import ShardedEngine
+
+        eng = ShardedEngine(args.workers, group_window_s=0.3, adsb_mlat_fraction=args.adsb_mlat_fraction)
+    else:
+        eng = Engine(group_window_s=0.3, adsb_mlat_fraction=args.adsb_mlat_fraction)
+    wall_start = time.perf_counter()
     for info in infos:
         eng.apply_info(info)
     chunk = 0.02
@@ -89,6 +96,16 @@ def main():
             pending.clear()
             next_flush += chunk
         pending[rid].append((ticks % (1 << 48), 0x80, msg))
+    if args.workers > 1:
+        for k in range(40):
+            eng.tick(t0 + next_flush + 0.05 + k * chunk)
+        eng.close()
+        eng._poll()
+        wall = time.perf_counter() - wall_start
+        out.update(workers=args.workers, front_cpu_s=round(t_engine, 2), wall_s=round(wall, 2),
+                   realtime_factor=round(duration / wall, 2), worker_stats=eng.stats)
+        print(json.dumps(out, indent=1))
+        return
     s = eng.stats
     out.update(engine_cpu_s=round(t_engine, 2), engine_realtime_load=round(t_engine / duration, 3),
                ingest_cpu_s=round(t_ingest, 2), engine_msgs_per_s=round(len(frames) / t_engine),

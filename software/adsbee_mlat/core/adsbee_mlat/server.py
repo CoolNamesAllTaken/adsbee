@@ -116,8 +116,15 @@ class Server:
         self.clock = clock
         self.publisher = publisher or Publisher(cfg.redis_url)
         self.sbs = SBSOutput()
-        self.engine = Engine(group_window_s=cfg.group_window_s, publish_mlat_for_adsb=cfg.publish_mlat_for_adsb,
-                             on_fix=self._on_fix, clock=clock)
+        if cfg.workers > 1:
+            from .parallel import ShardedEngine
+
+            self.engine = ShardedEngine(cfg.workers, group_window_s=cfg.group_window_s,
+                                        publish_mlat_for_adsb=cfg.publish_mlat_for_adsb, on_fix=self._on_fix,
+                                        clock=clock)
+        else:
+            self.engine = Engine(group_window_s=cfg.group_window_s, publish_mlat_for_adsb=cfg.publish_mlat_for_adsb,
+                                 on_fix=self._on_fix, clock=clock)
         self._by_uuid = {}
         self._by_peer = {}
         for rc in cfg.receivers:
@@ -257,8 +264,8 @@ class Server:
         prev = self._stat_prev
         self._stat_prev = (now, dict(s), self.process_time)
         out = {"receivers": sum(1 for r in self.engine.by_index if r.connected),
-               "aircraft": len(self.engine.aircraft),
-               "sync_pairs": sum(1 for p in self.engine.sync.pairs.values() if p.valid)}
+               "aircraft": self.engine.aircraft_count(),
+               "sync_pairs": self.engine.valid_pair_count()}
         if prev is not None and now > prev[0]:
             dt = now - prev[0]
             for k, name in (("frames", "msgs_per_s"), ("groups", "groups_per_s"),
@@ -312,6 +319,8 @@ class Server:
             s.close()
         if getattr(self, "_udp", None):
             self._udp.close()
+        if hasattr(self.engine, "close"):
+            self.engine.close()
 
     async def run_forever(self):
         await self.start()

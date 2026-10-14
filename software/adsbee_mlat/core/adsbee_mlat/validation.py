@@ -37,6 +37,23 @@ class TruthCollector:
     def shift(self):
         return float(np.median(self.time_shift)) if self.time_shift else 0.0
 
+    def published_errors(self, src="mlat", settle_s=0.0):
+        """Errors of published fixes (entries of mlat:aircraft) of one source: rows like errors()."""
+        out = []
+        for e in self.published:
+            if e["src"] != src:
+                continue
+            out.append((int(e["icao"], 16), e["t"], e["lat"], e["lon"], e.get("_h"), e["err_m"], e["nrecv"], False))
+        rows = []
+        for icao, t, lat, lon, _, err, nrecv, adsb in out:
+            a = self.by_icao.get(icao)
+            ts = t - self.sc.t0_unix - self.shift
+            if a is None or ts < settle_s:
+                continue
+            tlat, tlon, _ = a.position(ts)
+            rows.append((icao, ts, geo.distance_m(lat, lon, float(tlat), float(tlon)), 0.0, err or 0.0, nrecv, adsb))
+        return rows
+
     def errors(self, settle_s=0.0):
         """Per update: horizontal and vertical error against the true position at emission [m]."""
         rows = []
