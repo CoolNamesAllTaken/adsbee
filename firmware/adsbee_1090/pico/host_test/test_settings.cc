@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 
 #include "gtest/gtest.h"
@@ -54,7 +55,10 @@ TEST(SettingsMigration, LayoutLockedSizes) {
     EXPECT_EQ(sizeof(settings_v13::RxPosition), sizeof(SettingsManager::RxPosition));
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
-    EXPECT_EQ(sizeof(settings_v17::Settings), sizeof(SettingsManager::Settings));
+    EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1372u);
+    EXPECT_EQ(offsetof(settings_v18::Settings, auto_update_enabled),
+              offsetof(SettingsManager::Settings, auto_update_enabled));
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -517,16 +521,136 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t wifi = dump.find("AT+WIFI_STA=");
     size_t ip_mode = dump.find("AT+IP_MODE=");
     size_t auto_update = dump.find("AT+AUTO_UPDATE=1");
+    size_t antenna_position = dump.find("AT+ANTENNA_POSITION=NONE,,,,,,0");
     ASSERT_NE(wifi, std::string::npos);
     ASSERT_NE(ip_mode, std::string::npos);
     ASSERT_NE(auto_update, std::string::npos);
+    ASSERT_NE(antenna_position, std::string::npos);
     EXPECT_LT(wifi, ip_mode);
     EXPECT_LT(ip_mode, auto_update);
-    EXPECT_EQ(dump.find("AT+", auto_update + 1), std::string::npos);
+    EXPECT_LT(auto_update, antenna_position);
+    EXPECT_EQ(dump.find("AT+", antenna_position + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);
     EXPECT_TRUE(manager.Sanitize());
+}
+
+TEST(SettingsMigration, V18ToV19KeepsAutoUpdateAndLeavesAntennaPositionUnset) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    // 0xFF past the v18 struct, as erased EEPROM: it must not become an antenna position.
+    uint8_t blob[sizeof(SettingsManager::Settings)];
+    memset(blob, 0xFF, sizeof(blob));
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv6;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
+    v18.auto_update_enabled = true;
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.antenna_position.source = ReceiverPosition::kSourceFixed;
+    out.antenna_position.moving = true;
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.antenna_position.source, ReceiverPosition::kSourceNone);
+    EXPECT_FALSE(out.antenna_position.moving);
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+
+    // A v18 blob too short to hold the struct is rejected.
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
+}
+
+TEST(Settings, AntennaPositionATArgs) {
+    ReceiverPosition position;
+    const char* error = nullptr;
+    const char* fixed[] = {"FIXED", "37.4219983", "-122.0840575", "31.42", "2.5", "", "1"};
+    ASSERT_TRUE(ReceiverPosition::ApplyATArgs(fixed, 7, position, error));
+    EXPECT_EQ(position.source, ReceiverPosition::kSourceFixed);
+    EXPECT_DOUBLE_EQ(position.latitude_deg, 37.4219983);
+    EXPECT_DOUBLE_EQ(position.longitude_deg, -122.0840575);
+    EXPECT_FLOAT_EQ(position.height_m, 31.42f);
+    EXPECT_FLOAT_EQ(position.horizontal_accuracy_m, 2.5f);
+    EXPECT_FLOAT_EQ(position.vertical_accuracy_m, 0.0f);
+    EXPECT_TRUE(position.moving);
+
+    char buf[96];
+    ReceiverPosition::PrintATArgs(buf, sizeof(buf), position);
+    EXPECT_STREQ(buf, "FIXED,37.4219983,-122.0840575,31.42,2.50,0.00,1");
+
+    // Rejected arguments leave the position unchanged.
+    const char* bad_lat[] = {"FIXED", "91", "0", "0"};
+    EXPECT_FALSE(ReceiverPosition::ApplyATArgs(bad_lat, 4, position, error));
+    const char* missing_height[] = {"FIXED", "10", "20"};
+    EXPECT_FALSE(ReceiverPosition::ApplyATArgs(missing_height, 3, position, error));
+    const char* not_a_number[] = {"FIXED", "10x", "20", "5"};
+    EXPECT_FALSE(ReceiverPosition::ApplyATArgs(not_a_number, 4, position, error));
+    const char* bad_accuracy[] = {"FIXED", "10", "20", "5", "-1"};
+    EXPECT_FALSE(ReceiverPosition::ApplyATArgs(bad_accuracy, 5, position, error));
+    const char* bad_moving[] = {"NONE", "", "", "", "", "", "2"};
+    EXPECT_FALSE(ReceiverPosition::ApplyATArgs(bad_moving, 7, position, error));
+    const char* bad_source[] = {"GNSS"};
+    EXPECT_FALSE(ReceiverPosition::ApplyATArgs(bad_source, 1, position, error));
+    EXPECT_EQ(position.source, ReceiverPosition::kSourceFixed);
+    EXPECT_DOUBLE_EQ(position.latitude_deg, 37.4219983);
+
+    // NONE clears the coordinates and keeps the moving flag unless given.
+    const char* none[] = {"NONE"};
+    ASSERT_TRUE(ReceiverPosition::ApplyATArgs(none, 1, position, error));
+    EXPECT_EQ(position.source, ReceiverPosition::kSourceNone);
+    EXPECT_TRUE(position.moving);
+    ReceiverPosition::PrintATArgs(buf, sizeof(buf), position);
+    EXPECT_STREQ(buf, "NONE,,,,,,1");
+    const char* only_moving[] = {"", "", "", "", "", "", "0"};
+    ASSERT_TRUE(ReceiverPosition::ApplyATArgs(only_moving, 7, position, error));
+    EXPECT_FALSE(position.moving);
+}
+
+TEST(Settings, AntennaPositionSanitizeAndResolve) {
+    SettingsManager manager;
+    EXPECT_EQ(manager.settings.antenna_position.source, ReceiverPosition::kSourceNone);
+    EXPECT_FALSE(manager.Sanitize());
+
+    // A GNSS source or out of range coordinates can't be a stored fixed position.
+    manager.settings.antenna_position.source = ReceiverPosition::kSourceGNSS;
+    manager.settings.antenna_position.moving = true;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.antenna_position.source, ReceiverPosition::kSourceNone);
+    EXPECT_TRUE(manager.settings.antenna_position.moving);
+    manager.settings.antenna_position.source = ReceiverPosition::kSourceFixed;
+    manager.settings.antenna_position.latitude_deg = NAN;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.antenna_position.source, ReceiverPosition::kSourceNone);
+    uint8_t raw = 0x7F;
+    memcpy(&manager.settings.antenna_position.moving, &raw, 1);
+    EXPECT_TRUE(manager.Sanitize());
+    memcpy(&raw, &manager.settings.antenna_position.moving, 1);
+    EXPECT_EQ(raw, 1);
+
+    // Live GNSS wins, then the fixed position; the moving setting applies to both.
+    ReceiverPosition fixed;
+    EXPECT_FALSE(ReceiverPosition::Resolve(fixed, nullptr).IsValid());
+    fixed.source = ReceiverPosition::kSourceFixed;
+    fixed.latitude_deg = 1.0;
+    fixed.moving = true;
+    ReceiverPosition gnss;
+    gnss.source = ReceiverPosition::kSourceGNSS;
+    gnss.latitude_deg = 2.0;
+    ReceiverPosition resolved = ReceiverPosition::Resolve(fixed, &gnss);
+    EXPECT_EQ(resolved.source, ReceiverPosition::kSourceGNSS);
+    EXPECT_DOUBLE_EQ(resolved.latitude_deg, 2.0);
+    EXPECT_TRUE(resolved.moving);
+    resolved = ReceiverPosition::Resolve(fixed, nullptr);
+    EXPECT_EQ(resolved.source, ReceiverPosition::kSourceFixed);
+    EXPECT_DOUBLE_EQ(resolved.latitude_deg, 1.0);
 }
 
 TEST(SettingsMigration, V15ToV16PreservesAllFieldsAndDefaultsIPMode) {

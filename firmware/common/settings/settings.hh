@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "receiver_position.hh"
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
 #include "string.h"  // for memset
@@ -15,7 +16,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 18;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 19;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -45,6 +46,7 @@ class SettingsManager {
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
+        kMLAT,  // Beast Mode S with 48 MHz timestamps and receiver info frames (software/adsbee_mlat/PROTOCOL.md).
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -314,6 +316,10 @@ class SettingsManager {
 
         // Opt-in: the ESP32 checks adsbee.aero for firmware and installs what it recommends. Off by default.
         bool auto_update_enabled = false;
+
+        // Antenna position entered by the operator (source kSourceFixed, or kSourceNone if not set). A valid GNSS fix
+        // takes precedence. `moving` applies to both.
+        ReceiverPosition antenna_position;
 
         /**
          * Default constructor.
@@ -731,9 +737,9 @@ extern SettingsManager settings_manager;
 //      settings_migration.cpp (see the recipe at the top of settings_versions.hh).
 //   3. Update the version and the numbers below to the new layout.
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
-static_assert(kSettingsVersion == 18,
+static_assert(kSettingsVersion == 19,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 1340,
+static_assert(sizeof(SettingsManager::Settings) == 1372,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -755,5 +761,6 @@ static_assert(offsetof(SettingsManager::Settings, rx_position) == 1112, "Setting
 static_assert(offsetof(SettingsManager::Settings, ip_mode) == 1141, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, wifi_sta_extra_networks) == 1142, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, auto_update_enabled) == 1338, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, antenna_position) == 1339, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

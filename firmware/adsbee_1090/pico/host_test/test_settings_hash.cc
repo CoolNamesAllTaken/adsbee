@@ -69,8 +69,8 @@ TEST(SettingsHash, SameSettingsSameHashWhateverThePadding) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Host defaults (no device info, access point channel 1). Changes only with the Settings struct or its defaults.
     Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x9140FC1Eu);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xACA3E2C5u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0xCF61043Bu);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xF1F4EF53u);
 }
 
 TEST(SettingsHash, StoredCRCDoesNotCount) {
@@ -149,6 +149,8 @@ TEST(SettingsHash, EverySharedSettingChangesBothHashes) {
     EXPECT_CHANGES_BOTH(strcpy(s.wifi_sta_extra_networks[1].ssid, "net"));
     EXPECT_CHANGES_BOTH(strcpy(s.wifi_sta_extra_networks[1].password, "secret"));
     EXPECT_CHANGES_BOTH(s.auto_update_enabled = true);
+    EXPECT_CHANGES_BOTH(s.antenna_position.source = ReceiverPosition::kSourceFixed);
+    EXPECT_CHANGES_BOTH(s.antenna_position.moving = true);
 }
 
 TEST(SettingsHash, FeedSlotsAreNotInterchangeable) {
@@ -164,6 +166,14 @@ TEST(SettingsHash, PerUnitSettingsChangeOnlyTheFullHash) {
     EXPECT_CHANGES_FULL_ONLY(s.core_network_settings.wifi_ap_channel = 11);
     EXPECT_CHANGES_FULL_ONLY(s.feed_receiver_ids[9][7] = 0x42);
     EXPECT_CHANGES_FULL_ONLY(strcpy(s.remote_id_tx_uas_id, "SERIAL123"));
+}
+
+TEST(SettingsHash, AntennaCoordinatesChangeOnlyTheFullHash) {
+    Settings a, b;
+    a.antenna_position.source = b.antenna_position.source = ReceiverPosition::kSourceFixed;
+    b.antenna_position.latitude_deg = 47.5;
+    EXPECT_EQ(SettingsHash::Compute(a, kScopeFleet), SettingsHash::Compute(b, kScopeFleet));
+    EXPECT_NE(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 }
 
 TEST(SettingsHash, ReceiverPositionCountsOnlyWhenItIsASetting) {

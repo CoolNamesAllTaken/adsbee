@@ -123,6 +123,11 @@ bool SettingsManager::Sanitize() {
         }
     }
 
+    if (ReceiverPosition::SanitizeStoredFixed(settings.antenna_position)) {
+        CONSOLE_ERROR("SettingsManager::Sanitize", "antenna_position is invalid, clearing it.");
+        changed = true;
+    }
+
     if (settings.subg_mode >= kNumSubGHzRadioModes) {
         CONSOLE_ERROR("SettingsManager::Sanitize", "subg_mode %u out of range, resetting to kSubGHzRadioModeUATRx.",
                       settings.subg_mode);
@@ -210,6 +215,14 @@ void SettingsManager::Print() {
                               "\tAutomatic Updates: %s\r\n", settings.auto_update_enabled ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("%s", print_buf);
     print_buf_len = 0;
+    const ReceiverPosition& antenna = settings.antenna_position;
+    if (antenna.source == ReceiverPosition::kSourceFixed) {
+        CONSOLE_PRINTF("\tAntenna Position: %.7f deg, %.7f deg, %.2f m (accuracy %.2f m, %.2f m)%s\r\n",
+                       antenna.latitude_deg, antenna.longitude_deg, antenna.height_m, antenna.horizontal_accuracy_m,
+                       antenna.vertical_accuracy_m, antenna.moving ? ", moving" : "");
+    } else {
+        CONSOLE_PRINTF("\tAntenna Position: NOT SET%s\r\n", antenna.moving ? ", moving" : "");
+    }
 
 #ifdef ON_PICO
     // Only print serial reporting protocols on master, where we aren't constrained by log message size.
@@ -386,4 +399,9 @@ void SettingsManager::PrintAT() {
 
     // AT+AUTO_UPDATE
     CONSOLE_PRINTF("AT+AUTO_UPDATE=%d\r\n", settings.auto_update_enabled);
+
+    // AT+ANTENNA_POSITION
+    char antenna_args[96];
+    ReceiverPosition::PrintATArgs(antenna_args, sizeof(antenna_args), settings.antenna_position);
+    CONSOLE_PRINTF("AT+ANTENNA_POSITION=%s\r\n", antenna_args);
 }
