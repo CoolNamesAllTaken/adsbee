@@ -12,7 +12,11 @@ import numpy as np
 from . import cpr, geo, solver
 
 C = geo.C
-ACCEL_NOISE = 3.0  # White acceleration spectral density [m^2/s^3].
+ACCEL_NOISE = 1.0  # White acceleration spectral density [m^2/s^3].
+# The filter treats timing errors as independent between messages. Per receiver and aircraft biases (multipath,
+# signal level) and clock sync errors are not, so the reported error is the filter's estimate scaled by this factor,
+# calibrated in simulation so that about 65 % of fixes fall within it.
+ERROR_SCALE = 2.0
 INIT_VEL_SIGMA = 150.0  # [m/s]
 GATE_PER_DOF = 9.0
 GATE_OFFSET = 16.0
@@ -108,10 +112,11 @@ class Track:
         return geo.ecef_to_llh(self.x[:3])
 
     def horizontal_error_m(self):
+        """Estimated one sigma horizontal error (root of the summed east and north variances) [m]."""
         lat, lon, _ = self.llh()
         e = geo.enu_basis(lat, lon)
         c = e @ self.p[:3, :3] @ e.T
-        return math.sqrt(max(c[0, 0] + c[1, 1], 0.0))
+        return ERROR_SCALE * math.sqrt(max(c[0, 0] + c[1, 1], 0.0))
 
     def velocity_enu(self):
         lat, lon, _ = self.llh()

@@ -14,7 +14,8 @@ from .engine import Engine
 log = logging.getLogger("adsbee_mlat")
 
 TICK_S = 0.02
-SNAPSHOT_TTL_S = 60.0
+SNAPSHOT_TTL_S = 60.0  # Aircraft older than this leave the snapshot.
+SNAPSHOT_KEY_TTL_S = 30  # The snapshot key expires if the server stops updating it.
 READ_SIZE = 65536
 
 
@@ -70,7 +71,7 @@ class Publisher:
             self.sent.append(("mlat:snapshot", snap))
         if self.redis is not None:
             try:
-                await self.redis.set("mlat:snapshot", json.dumps(snap, separators=(",", ":")))
+                await self.redis.set("mlat:snapshot", json.dumps(snap, separators=(",", ":")), ex=SNAPSHOT_KEY_TTL_S)
             except Exception:
                 pass
 
@@ -133,6 +134,39 @@ class Server:
         self._stat_prev = None
         self.process_time = 0.0
 
+    def apply_receiver_config(self, doc):
+        """Applies the web admin's receiver settings: {"receivers": {id: {"enabled": bool, "fixed": {...}|null}}}."""
+        for rid, rc in (doc.get("receivers") or {}).items():
+            rx = self.engine.receiver(rid)
+            rx.enabled = rc.get("enabled", True) is not False
+            if rc.get("name"):
+                rx.name = rc["name"]
+            fixed = rc.get("fixed")
+            if fixed:
+                rx.fixed_override = (float(fixed["lat"]), float(fixed["lon"]), float(fixed.get("alt_m", 0.0)))
+                rx.set_position(*rx.fixed_override, "fixed")
+            else:
+                rx.fixed_override = None
+
+    async def _watch_receiver_config(self):
+        redis = self.publisher.redis
+        try:
+            raw = await redis.get("mlat:receiver_config")
+            if raw:
+                self.apply_receiver_config(json.loads(raw))
+            pubsub = redis.pubsub()
+            await pubsub.subscribe("mlat:config")
+            async for m in pubsub.listen():
+                if m.get("type") == "message":
+                    try:
+                        self.apply_receiver_config(json.loads(m["data"]))
+                    except (ValueError, KeyError, TypeError) as e:
+                        log.warning("bad receiver config: %s", e)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("receiver config watch stopped: %s", e)
+
     def _on_fix(self, e):
         self.publisher.add_fix(e)
         self.sbs.send(e)
@@ -155,7 +189,7 @@ class Server:
         if rx is None:
             rx = self._by_peer.get(peer)
             state["rx"] = rx
-        if rx is not None and frames:
+        if rx is not None and frames and rx.enabled:
             self.engine.add_frames(rx, frames, wall)
         self.process_time += time.perf_counter() - t0
         return rx
@@ -227,20 +261,25 @@ class Server:
                "sync_pairs": sum(1 for p in self.engine.sync.pairs.values() if p.valid)}
         if prev is not None and now > prev[0]:
             dt = now - prev[0]
-            for k, name in (("frames", "msgs_per_s"), ("groups", "groups_per_s"), ("solves", "solves_per_s"),
+            for k, name in (("frames", "msgs_per_s"), ("groups", "groups_per_s"),
                             ("tdoa_updates", "tdoa_updates_per_s"), ("mlat_fixes", "mlat_fixes_per_s"),
                             ("adsb_fixes", "adsb_fixes_per_s"), ("sync_events", "sync_events_per_s")):
                 out[name] = round((s[k] - prev[1][k]) / dt, 1)
             out["cpu_load"] = round((self.process_time - prev[2]) / dt, 3)
+            out["solves_per_s"] = round((s["tdoa_updates"] + s["solve_ok"] - prev[1]["tdoa_updates"]
+                                         - prev[1]["solve_ok"]) / dt, 1)
+            out["init_solves_per_s"] = round((s["solves"] - prev[1]["solves"]) / dt, 1)
         lat = self.engine.latencies
         if lat:
             a = np.fromiter(lat, float)
-            out["latency_ms_p50"] = round(float(np.percentile(a, 50)) * 1e3, 1)
+            out["latency_ms"] = out["latency_ms_p50"] = round(float(np.percentile(a, 50)) * 1e3, 1)
             out["latency_ms_p95"] = round(float(np.percentile(a, 95)) * 1e3, 1)
             lat.clear()
         res = self.engine.residuals
         if res:
-            out["residual_ns_rms"] = round(float(np.sqrt(np.mean(np.square(np.fromiter(res, float))))) * 1e9, 1)
+            rms = float(np.sqrt(np.mean(np.square(np.fromiter(res, float)))))
+            out["residual_ns_rms"] = round(rms * 1e9, 1)
+            out["residual_m"] = round(rms * 299_792_458.0, 1)
             res.clear()
         return out
 
@@ -262,6 +301,8 @@ class Server:
             if rc.connect:
                 self._tasks.append(asyncio.create_task(self._connector(rc)))
         self._tasks.append(asyncio.create_task(self._ticker()))
+        if self.publisher.redis is not None:
+            self._tasks.append(asyncio.create_task(self._watch_receiver_config()))
         log.info("listening on %s:%d (TCP%s)", self.cfg.listen_host, self.port, "+UDP" if self.cfg.udp else "")
 
     async def stop(self):

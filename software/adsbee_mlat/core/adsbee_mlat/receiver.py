@@ -9,7 +9,7 @@ from . import geo
 TIMESTAMP_MODULUS = 1 << 48
 _HALF_MODULUS = 1 << 47
 # Default one sigma timestamp noise by clock rate [s]: quantization plus typical demodulator jitter.
-DEFAULT_JITTER_S = {12_000_000: 70e-9, 48_000_000: 40e-9}
+DEFAULT_JITTER_S = {12_000_000: 60e-9, 48_000_000: 25e-9}
 # Default position accuracy by source, (horizontal, vertical) one sigma [m].
 DEFAULT_ACCURACY_M = {"gnss": (5.0, 10.0), "fixed": (1.0, 2.0), "config": (1.0, 2.0)}
 RESET_TOLERANCE_S = 1.0  # A timestamp this far off the Unix time map means the counter restarted.
@@ -17,6 +17,8 @@ RESET_TOLERANCE_S = 1.0  # A timestamp this far off the Unix time map means the 
 
 class Receiver:
     """A receiver feeding the server. Times are seconds of this receiver's clock since its current epoch began."""
+
+    position_changes = 0  # Counts position updates of all receivers, to invalidate caches.
 
     def __init__(self, rid: str, index: int, clock_hz: int = 12_000_000):
         self.id = rid
@@ -32,10 +34,13 @@ class Receiver:
         self.pps = None
         self.firmware = None
         self.connected = False
+        self.enabled = True
+        self.fixed_override = None  # (lat, lon, alt) set by an operator; wins over reported positions.
         self.peer = None
         self.jitter_s = DEFAULT_JITTER_S.get(clock_hz, 70e-9)
         self.jitter_estimated = False
         self.msg_count = 0
+        self.sync_degree = 0  # Valid sync pairs, refreshed every second.
         self.msg_rate = 0.0
         self._rate_count = 0
         self._rate_t = None
@@ -66,6 +71,7 @@ class Receiver:
         self.lat, self.lon, self.alt = float(lat), float(lon), float(alt)
         self.ecef = geo.llh_to_ecef(self.lat, self.lon, self.alt)
         self.radius_surface = float(np.linalg.norm(self.ecef)) - self.alt
+        Receiver.position_changes += 1
         self.pos_src = src
         dh, dv = DEFAULT_ACCURACY_M.get(src, (5.0, 10.0))
         self.hacc = float(hacc) if hacc is not None else dh
@@ -94,7 +100,7 @@ class Receiver:
                 self.reset_clock()
                 reset = True
             self.epoch = info["ep"]
-        if all(k in info for k in ("lat", "lon", "alt")):
+        if all(k in info for k in ("lat", "lon", "alt")) and self.fixed_override is None:
             self.set_position(info["lat"], info["lon"], info["alt"], info.get("src", "gnss"), info.get("hacc"),
                               info.get("vacc"))
         if "mov" in info:

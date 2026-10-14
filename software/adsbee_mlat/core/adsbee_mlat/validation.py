@@ -60,7 +60,7 @@ def run(scenario, duration_s, latency_s=0.05, chunk_s=0.02, group_window_s=0.2, 
     """Drives an Engine directly with simulated time. Returns (engine, collector)."""
     col = TruthCollector(scenario)
     eng = engine or Engine(group_window_s=group_window_s, publish_mlat_for_adsb=True, on_fix=col.on_fix,
-                           on_mlat=col.on_mlat)
+                           on_mlat=col.on_mlat, adsb_mlat_fraction=1.0)
     if engine is not None:
         eng.on_fix, eng.on_mlat = col.on_fix, col.on_mlat
     for rx in scenario.receivers:
@@ -194,3 +194,22 @@ async def stream(scenario, frames, host, port, udp=False, batch_s=0.01, bad_info
         w.close()
     for s in socks.values():
         s.close()
+
+
+def random_array(sim, center_lat, center_lon, n, radius_m, clock_hz=48e6, receiver_type="adsbee_1090", seed=0,
+                 gnss_sigma_m=None):
+    """n simulated receivers spread uniformly over a disk."""
+    rng = np.random.default_rng([seed, 20])
+    out = []
+    for k in range(n):
+        r = radius_m * math.sqrt(rng.uniform())
+        lat, lon = sim.destination(center_lat, center_lon, rng.uniform(0, 360), r)
+        rx = sim.Receiver(id=f"rx{k}", lat=float(lat), lon=float(lon), alt_m=float(rng.uniform(10, 300)),
+                          timing=sim.RECEIVER_TYPES[receiver_type](),
+                          clock=sim.Clock(clock_hz=clock_hz, offset_s=rng.uniform(0, 1000), ppm=rng.normal(0, 10),
+                                          seed=int(rng.integers(1 << 31))),
+                          pos_src="fixed" if gnss_sigma_m is None else "gnss")
+        if gnss_sigma_m is not None:
+            rx.add_position_noise(rng, gnss_sigma_m, 2 * gnss_sigma_m)
+        out.append(rx)
+    return out

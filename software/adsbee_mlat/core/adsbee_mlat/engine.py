@@ -1,6 +1,7 @@
 """The MLAT pipeline: receptions in, aircraft fixes out. Independent of networking so it can be driven directly."""
 
 import math
+import random
 import time
 from collections import deque
 
@@ -17,6 +18,10 @@ AIRCRAFT_TIMEOUT_S = 300.0
 ADSB_SUPPRESSES_MLAT_S = 5.0
 SYNC_POS_SIGMA_M = {None: 50.0}  # Reference aircraft position error by NUC, default.
 UNTRUSTED_MIN_RECEIVERS = 3
+MAX_RECEIVERS = 12  # Per MLAT update.
+MAX_SYNC_RECEIVERS = 12  # Per reference message; a random subset of larger groups.
+# Share of messages of aircraft with a live ADS-B position that update their MLAT track (keeps it ready for gaps).
+ADSB_MLAT_FRACTION = 0.1
 
 
 def _sync_pos_sigma(nuc):
@@ -33,7 +38,7 @@ class Engine:
     """
 
     def __init__(self, group_window_s=GROUP_WINDOW_S, publish_mlat_for_adsb=False, on_fix=None, on_mlat=None,
-                 clock=time.time):
+                 clock=time.time, max_receivers=MAX_RECEIVERS, adsb_mlat_fraction=ADSB_MLAT_FRACTION):
         self.receivers = {}
         self.by_index = []
         self.sync = ClockSync()
@@ -41,6 +46,7 @@ class Engine:
         self.groups = {}
         self.group_window_s = group_window_s
         self.publish_mlat_for_adsb = publish_mlat_for_adsb
+        self.max_receivers = max_receivers
         self.on_fix = on_fix
         self.on_mlat = on_mlat  # Optional on_mlat(aircraft, track, extra) for every accepted MLAT update.
         self.clock = clock
@@ -49,6 +55,9 @@ class Engine:
         self.latencies = deque(maxlen=5000)
         self.residuals = deque(maxlen=5000)
         self._last_housekeeping = None
+        self._dist_key = None
+        self._rng = random.Random(1)
+        self.adsb_mlat_fraction = adsb_mlat_fraction
 
     # Receivers.
 
@@ -126,7 +135,7 @@ class Engine:
         for rx in self.by_index:
             rx.update_rate(now)
         self.sync.expire(now)
-        for idx, sigma in self.sync.estimate_jitter(self.by_index).items():
+        for idx, sigma in self.sync.estimate_jitter().items():
             rx = self.by_index[idx]
             rx.jitter_s = sigma
             rx.jitter_estimated = True
@@ -135,6 +144,8 @@ class Engine:
             if rx.jitter_estimated and rx.jitter_s > 1e-6:
                 excluded.add(rx.index)
         self.sync.excluded = excluded
+        for rx in self.by_index:
+            rx.sync_degree = self.sync.degree(rx.index)
         dead = [k for k, a in self.aircraft.items() if now - (a.last_seen or 0) > AIRCRAFT_TIMEOUT_S]
         for k in dead:
             del self.aircraft[k]
@@ -172,6 +183,10 @@ class Engine:
                     if len(cluster) >= 2:
                         self._sync_event(ac, d, pos, cluster, t_unix, now)
             if len(cluster) >= 2:
+                if (self.adsb_mlat_fraction < 1.0 and ac.adsb_t is not None
+                        and t_unix - ac.adsb_t < ADSB_SUPPRESSES_MLAT_S
+                        and self._rng.random() >= self.adsb_mlat_fraction):
+                    continue
                 self._mlat(ac, d, cluster, t_unix, now)
 
     def _split_emissions(self, stamped):
@@ -205,6 +220,8 @@ class Engine:
         if alt is None:
             return
         p = geo.llh_to_ecef(pos[0], pos[1], alt[0])
+        if len(cluster) > MAX_SYNC_RECEIVERS:
+            cluster = self._rng.sample(cluster, MAX_SYNC_RECEIVERS)
         idxs = []
         emits = []
         var_each = []
@@ -227,35 +244,42 @@ class Engine:
         self.sync.add_event(idxs, emits, var_each, now, pos_var)
         self.stats["sync_events"] += 1
 
+    def _rx_distances(self):
+        """Distances between receivers [m], cached until a receiver is added or moves."""
+        key = (len(self.by_index), Receiver.position_changes)
+        if self._dist_key != key:
+            pts = np.array([rx.ecef if rx.has_position else np.full(3, np.nan) for rx in self.by_index])
+            d = np.linalg.norm(pts[:, None, :] - pts[None, :, :], axis=2)
+            self._dist = np.nan_to_num(d, nan=0.0)
+            self._dist_key = key
+        return self._dist
+
     def _to_common_clock(self, cluster, now):
-        """Brings a cluster onto one receiver's clock. Returns (rx list, times, sigmas) sorted by sigma, or None."""
+        """Brings a cluster onto one receiver's clock. Returns (rx list, times, sigmas) sorted by sigma, or None.
+
+        Large clusters are cut to max_receivers, chosen for the widest spread (farthest point sampling).
+        """
         sync = self.sync
-        best = None
-        best_score = -1
-        idx_set = [rx.index for rx, _ in cluster if rx.index not in sync.excluded]
-        if len(idx_set) < 2:
+        excluded = sync.excluded
+        cl = [c for c in cluster if c[0].sync_degree > 0 and c[0].index not in excluded]
+        if len(cl) < 2:
             return None
-        for rx, _ in cluster:
-            if rx.index in sync.excluded:
-                continue
-            score = 0
-            for other in idx_set:
-                if other != rx.index:
-                    i, j = (rx.index, other) if rx.index < other else (other, rx.index)
-                    p = sync.pairs.get((i, j))
-                    if p is not None and p.valid:
-                        score += 1
-            if score > best_score:
-                best, best_score = rx, score
-        if best_score <= 0:
-            return None
+        base = max(cl, key=lambda c: c[0].sync_degree)[0]
+        if len(cl) > self.max_receivers:
+            dist = self._rx_distances()[np.ix_([c[0].index for c in cl], [c[0].index for c in cl])]
+            k = next(k for k, c in enumerate(cl) if c[0] is base)
+            chosen = [k]
+            dmin = dist[k].copy()
+            for _ in range(self.max_receivers - 1):
+                k = int(np.argmax(dmin))
+                chosen.append(k)
+                np.minimum(dmin, dist[k], out=dmin)
+            cl = [cl[k] for k in chosen]
         out_rx = []
         times = []
         sig = []
-        for rx, t in cluster:
-            if rx.index in sync.excluded:
-                continue
-            r = sync.to_base(best.index, rx.index, t, now)
+        for rx, t in cl:
+            r = sync.to_base(base.index, rx.index, t, now)
             if r is None:
                 continue
             tb, var = r

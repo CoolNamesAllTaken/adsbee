@@ -64,8 +64,8 @@ def load(path=None, env=os.environ):
             peer=match.get("peer"), connect=r.get("connect")))
     if "REDIS_URL" in env:
         cfg.redis_url = env["REDIS_URL"] or None
-    if "MLAT_LISTEN_PORT" in env:
-        cfg.listen_port = int(env["MLAT_LISTEN_PORT"])
+    if "MLAT_FEED_PORT" in env:
+        cfg.listen_port = int(env["MLAT_FEED_PORT"])
     if "MLAT_SBS_PORT" in env:
         cfg.sbs_port = int(env["MLAT_SBS_PORT"]) or None
     return cfg

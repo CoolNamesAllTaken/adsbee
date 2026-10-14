@@ -23,13 +23,15 @@ VALID_MIN_UPDATES = 4
 VALID_MAX_STD_S = 1e-6
 MIN_UPDATE_INTERVAL_S = 0.1  # Per pair, to bound the work for large groups.
 RESID_EWMA = 0.05
+NIS_EWMA = 0.05  # Normalized innovation squared average.
+Q_SCALE_MAX = 1e5
 
 
 class PairSync:
     """Relation between receivers i (lower index) and j: e_j - e_i = a + b * (e_i - t_ref)."""
 
     __slots__ = ("i", "j", "a", "b", "p00", "p01", "p11", "t_ref", "n", "outliers", "resid_var", "last_wall",
-                 "total_outliers")
+                 "total_outliers", "valid", "q_scale", "nis")
 
     def __init__(self, i, j):
         self.i = i
@@ -40,6 +42,9 @@ class PairSync:
         self.resid_var = None
         self.last_wall = None
         self.t_ref = None
+        self.valid = False
+        self.q_scale = 1.0
+        self.nis = 1.0
 
     def _init(self, ei, z, r):
         self.a = z
@@ -50,13 +55,16 @@ class PairSync:
         self.t_ref = ei
         self.n = 1
         self.outliers = 0
+        self.valid = False
+        self.nis = 1.0
 
     def predict(self, ei):
         """Predicted (offset, variance) of e_j - e_i at receiver i time ei."""
         dt = ei - self.t_ref
         a = self.a + self.b * dt
         adt = abs(dt)
-        var = self.p00 + 2 * dt * self.p01 + dt * dt * self.p11 + Q_PHASE * adt + Q_RATE * adt**3 / 3
+        q = self.q_scale
+        var = self.p00 + 2 * dt * self.p01 + dt * dt * self.p11 + q * (Q_PHASE * adt + Q_RATE * adt**3 / 3)
         return a, var
 
     def update(self, ei, ej, r, wall=None) -> bool:
@@ -68,11 +76,13 @@ class PairSync:
             return True
         dt = ei - self.t_ref
         adt = abs(dt)
+        q = self.q_scale
         # Predict.
         a = self.a + self.b * dt
-        p00 = self.p00 + 2 * dt * self.p01 + dt * dt * self.p11 + Q_PHASE * adt + Q_RATE * adt**3 / 3
-        p01 = self.p01 + dt * self.p11 + Q_RATE * dt * adt / 2
-        p11 = self.p11 + Q_RATE * adt
+        p00 = self.p00 + 2 * dt * self.p01 + dt * dt * self.p11 + q * (Q_PHASE * adt + Q_RATE * adt**3 / 3)
+        p01 = self.p01 + q * Q_RATE * dt * adt / 2
+        p01 += dt * self.p11
+        p11 = self.p11 + q * Q_RATE * adt
         nu = z - a
         s = p00 + r
         if self.n >= 3 and nu * nu > GATE_SIGMA * GATE_SIGMA * s and abs(nu) > GATE_FLOOR_S:
@@ -82,6 +92,13 @@ class PairSync:
                 self._init(ei, z, r)  # Persistent disagreement: a clock step. Start over.
                 self.last_wall = wall
             return False
+        # Adapt the clock process noise to what the innovations show (oscillators differ a lot).
+        self.nis += NIS_EWMA * (nu * nu / s - self.nis)
+        if self.n > 10:
+            if self.nis > 2.0 and self.q_scale < Q_SCALE_MAX:
+                self.q_scale *= 1.5
+            elif self.nis < 0.8 and self.q_scale > 1.0:
+                self.q_scale = max(1.0, self.q_scale / 1.1)
         k0 = p00 / s
         k1 = p01 / s
         self.a = a + k0 * nu
@@ -93,14 +110,11 @@ class PairSync:
         self.n += 1
         self.outliers = 0
         self.last_wall = wall
+        self.valid = self.n >= VALID_MIN_UPDATES and self.p00 < VALID_MAX_STD_S**2
         if self.n > 3:
             e2 = nu * nu
             self.resid_var = e2 if self.resid_var is None else self.resid_var + RESID_EWMA * (e2 - self.resid_var)
         return True
-
-    @property
-    def valid(self):
-        return self.n >= VALID_MIN_UPDATES and self.p00 < VALID_MAX_STD_S**2
 
 
 class ClockSync:
@@ -254,30 +268,31 @@ class ClockSync:
                 n += 1
         return n
 
-    def estimate_jitter(self, receivers):
-        """Least squares split of pair residual variances into per receiver timestamp variances.
+    def estimate_jitter(self, receivers=None):
+        """Per receiver timestamp noise from pair residual variances: the median of the three-cornered hat
+        (v_ij + v_ik - v_jk) / 2 over peer pairs (j, k), which a single bad receiver cannot drag along.
 
-        Returns {index: sigma_s} for receivers in at least two estimated pairs, using pairs with residual history.
+        Returns {index: sigma_s} for receivers with at least two peers whose pairs have residual history.
         """
-        rows = []
-        vals = []
-        for (i, j), p in self.pairs.items():
-            if p.resid_var is None or p.n < 10:
-                continue
-            rows.append((i, j))
-            vals.append(max(p.resid_var - p.p00, 0.0))
-        if len(rows) < 3:
+        items = [((i, j), max(p.resid_var - p.p00, 0.0)) for (i, j), p in self.pairs.items()
+                 if p.resid_var is not None and p.n >= 10]
+        if len(items) < 3:
             return {}
-        idxs = sorted({k for r in rows for k in r})
+        idxs = sorted({k for (ij, _) in items for k in ij})
         pos = {k: n for n, k in enumerate(idxs)}
-        a = np.zeros((len(rows), len(idxs)))
-        for r, (i, j) in enumerate(rows):
-            a[r, pos[i]] = 1.0
-            a[r, pos[j]] = 1.0
-        counts = a.sum(axis=0)
-        sol, *_ = np.linalg.lstsq(a, np.asarray(vals), rcond=None)
+        m = len(idxs)
+        v = np.full((m, m), np.nan)
+        for (i, j), val in items:
+            v[pos[i], pos[j]] = v[pos[j], pos[i]] = val
         out = {}
+        iu = np.triu_indices(m, 1)
         for k, n in pos.items():
-            if counts[n] >= 2:
-                out[k] = math.sqrt(max(sol[n], (5e-9) ** 2))
+            row = v[n]
+            hat = (row[:, None] + row[None, :] - v) / 2
+            hat[n, :] = np.nan
+            hat[:, n] = np.nan
+            vals = hat[iu]
+            vals = vals[np.isfinite(vals)]
+            if len(vals):
+                out[k] = math.sqrt(max(float(np.median(vals)), (5e-9) ** 2))
         return out
