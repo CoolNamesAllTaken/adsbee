@@ -1,0 +1,574 @@
+Hex: 17 00 19 d8 19 07 01 00 00 00 8b 02 f5 80 19 07 02 23 00 00 00 02 01 02 04 15 01 21 f3 5b 39 d3 c1 a0 19 07 11 01 10 0f ff 01 f3 f2 58 b6 35 c2 8f 4a 04 72 ad f0 01 00 01 00 00 01 40 00 02 0f c0 20 5b 45 00 f0 00 01 80 48 54 c3 54 5c 60 0a 80 d8 d3 3b 39 93 c1 20 19 07 10 01 f3 f2 58 b6 35 c2 8f 4a 00 fa ad f0 01 58 78 e5 58 79 25 00 02 02 80 20 5b 00 f0 58 79 65 48 54 c3 54 5c 60 0a d8 d3 19 39 03 c1 20 19 07 11 40 01 f3 f2 58 b6 35 c2 8f 4a ad f0 01 58 78 e5 00 02 02 80 58 79 65 48 54 c3 54 5c 60 0a d8 d3 1b 73 4b c1 20 19 07 00 02 10 ec a8 5b d4 83 fb 61 ad f0 02 58 79 58 58 79 58 02 d0 15 13 01 d0 11 00 ad 4f 02 22 80 00 58 79 65 3b 1c b3 d3 58 20 0b b5 d3 19 21 03 41 20 19 07 41 40 02 10 df 01 28 d4 83 12 7d ad f0 03 58 79 5f 00 58 79 65 15 00 d3 19 21 03 41 20 19 07 03 40 02 00 00 00 00 00 00 00 00 ad f0 04 58 77 e5 00 58 79 65 00 00 d3 19 21 03 41 20 19 07 60 02 00 00 00 00 00 00 00 00 ad f0 05 58 77 e5 00 58 79 65 00 00
+
+
+
+Asterix record: 1 
+Len: 9
+CRC: 05DB044B
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 23 (CNS/ATM Ground Station and Service Status Reports)
+Hexdata: D81907010000008B02
+Item: I010 (Data Source Identifier)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identifier)
+	SIC (System Identification Code): 7 
+Item: I000 (Report Type)
+	report_type (Report Type): 1 Ground Station Status Report
+Item: I070 (Time of Day)
+	ToD (Time Of Day): 0.0 
+Item: I100 (Ground Station Status)
+	NOGO (Operational Release Status of the Data): 1 Data must not be used operationally
+Item: I100 (Ground Station Status)
+	ODP (Data Processor Overload Indicator): 0 Default, no overload
+Item: I100 (Ground Station Status)
+	OXT (Ground Interface Data Communications): 0 Default, no overload
+Item: I100 (Ground Station Status)
+	MSC (Monitoring System Connected Status): 0 Monitoring system not connected or unknown
+Item: I100 (Ground Station Status)
+	TSV (Time Source Validity): 1 invalid
+Item: I100 (Ground Station Status)
+	SPO (Indication of spoofing attack): 0 no spoofing detected
+Item: I100 (Ground Station Status)
+	RN (Renumbering Indication for Track ID): 1 track numbering has restarted
+Item: I100 (Ground Station Status)
+	FX (FX): 0 No extension
+Item: I100 (Ground Station Status)
+	GSSP (Ground Station Status Reporting): 1.0 
+
+Asterix record: 2 
+Len: 13
+CRC: 456CB244
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 23 (CNS/ATM Ground Station and Service Status Reports)
+Hexdata: F5801907022300000002010204
+Item: I010 (Data Source Identifier)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identifier)
+	SIC (System Identification Code): 7 
+Item: I000 (Report Type)
+	report_type (Report Type): 2 Service Status Report
+Item: I015 (Service Type and Identification)
+	SID (Service Identification): 2 
+Item: I015 (Service Type and Identification)
+	STYP (Type of Service): 3 ADS-B UAT
+Item: I070 (Time of Day)
+	ToD (Time Of Day): 0.0 
+Item: I101 (Service Configuration)
+	RP (Report Period for Category 021 Reports): 1.0 
+Item: I101 (Service Configuration)
+	SC (Service Class): 0 No information
+Item: I101 (Service Configuration)
+	spare (Spare bit set to zero): 0 
+Item: I101 (Service Configuration)
+	FX (FX): 0 End of item
+Item: I101 (Service Configuration)
+	SSRP (Service Status Reporting Period): 1.0 
+Item: I110 (Service Status)
+	spare (Spare bit set to 0): 0 
+	STAT (Status of the Service): 2 Disabled
+	FX (FX): 0 No extension
+
+Asterix record: 3 
+Len: 54
+CRC: 9CD1ECA5
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 21 (Surveillance Data Exchange - Part 12 ADS-B Reports)
+Hexdata: F35B39D3C1A019071101100FFF01F3F258B635C28F4A0472ADF00100010000014000020FC0205B4500F00001804854C3545C600A80D8
+Item: I010 (Data Source Identification)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identification)
+	SIC (System Identification Code): 7 
+Item: I040 (Target Report Descriptor)
+	ATP (Address Type): 0 24-Bit ICAO address
+Item: I040 (Target Report Descriptor)
+	ARC (Altitude Reporting Capability): 2 Unknown
+Item: I040 (Target Report Descriptor)
+	RC (Range Check): 0 Default
+Item: I040 (Target Report Descriptor)
+	RAB (Report Type): 0 Report from target transponder
+Item: I040 (Target Report Descriptor)
+	FX (Field Extension): 0 End of item
+Item: I040 (Target Report Descriptor)
+	DCR (Differential Correction): 0 No differential correction (ADS-B)
+Item: I040 (Target Report Descriptor)
+	GBS (Ground Bit Setting): 0 Ground Bit not set
+Item: I040 (Target Report Descriptor)
+	SIM (Simulated Target): 0 Actual target report
+Item: I040 (Target Report Descriptor)
+	TST (Test Target): 0 Default
+Item: I040 (Target Report Descriptor)
+	SAA (Selected Altitude Available): 0 Equipment capable to provide Selected Altitude
+Item: I040 (Target Report Descriptor)
+	CL (Confidence Level): 0 Report valid
+Item: I040 (Target Report Descriptor)
+	spare (Spare bits set to 0): 0 
+Item: I040 (Target Report Descriptor)
+	LLC (List Lookup Check): 0 default
+Item: I040 (Target Report Descriptor)
+	IPC (Independent Position Check): 0 default
+Item: I040 (Target Report Descriptor)
+	NOGO (No-go Bit Status): 1 NOGO-bit set
+Item: I040 (Target Report Descriptor)
+	CPR (Compact Position Reporting): 0 CPR Validation correct
+Item: I040 (Target Report Descriptor)
+	LDPJ (Local Decoding Position Jump): 0 LDPJ not detected
+Item: I040 (Target Report Descriptor)
+	RCF (Range Check): 0 default
+Item: I161 (Track Number)
+	spare (Spare bits set to zero): 0 
+Item: I161 (Track Number)
+	TrackN (Track number): 4095 
+Item: I015 (Service Identification)
+	id (Service Identification): 1 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lat (Latitude In WGS.84 in two's complement. Range -90 <= Lat <= 90 deg.): -33.90000153332949 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lon (Longitude In WGS.84 in two's complement. Range -180 <= longitude < 180 deg.): 151.19999695569277 
+Item: I150 (Air Speed)
+	IM (Air Speed type): 0 Air Speed = IAS
+Item: I150 (Air Speed)
+	ASpeed (Air Speed (IAS or Mach)): 1138 
+Item: I080 (Target Address)
+	TAddr (Target Address): ADF001 
+Item: I073 (Time of Message Reception for Position)
+	time_reception_position (Time of Message Reception of Position): 2.0 
+Item: I075 (Time of Message Reception for Velocity)
+	time_reception_velocity (Time of Message Reception of Velocity): 2.5 
+Item: I090 (Quality Indicators)
+	NUCr_or_NACv (Navigation Uncertainty Category for velocity or Navigation Accuracy Category for Velocity): 0 
+Item: I090 (Quality Indicators)
+	NUCp_or_NIC (Navigation Uncertainty Category for Position NUCp or Navigation Integrity Category NIC.): 0 
+Item: I090 (Quality Indicators)
+	FX (Extension Indicator): 0 End of Data Item
+Item: I210 (MOPS Version)
+	spare (Spare bits set to zero): 0 
+Item: I210 (MOPS Version)
+	VNS (Version Not Supported): 0 The MOPS Version is supported by the GS
+Item: I210 (MOPS Version)
+	VN (Version Number): 0 ED102/DO-260 [Ref. 8]
+Item: I210 (MOPS Version)
+	LTT (Link Technology Type): 2 1090 ES
+Item: I070 (Mode 3/A Code in Octal Representation)
+	spare (Spare bits set to 0): 0 
+Item: I070 (Mode 3/A Code in Octal Representation)
+	Mode3A (Mode-3/A reply in octal): 7700 
+Item: I152 (Magnetic Heading)
+	MHdg (Magnetic Heading): 45.4998779296875 
+Item: I200 (Target Status)
+	ICF (Intent Change Flag): 0 No intent change active
+Item: I200 (Target Status)
+	LNAV (LNAV Mode): 1 LNAV Mode not engaged
+Item: I200 (Target Status)
+	ME (Military emergency): 0 No military emergency
+Item: I200 (Target Status)
+	PS (Priority Status): 1 General emergency
+Item: I200 (Target Status)
+	SS (Surveillance Status): 1 Permanent Alert (Emergency condition)
+Item: I157 (Geometric Vertical Rate)
+	RE (Range Exceeded Indicator): 0 Value in defined range
+Item: I157 (Geometric Vertical Rate)
+	GVR (Geometric Vertical Rate): 1500.0 
+Item: I077 (Time of ASTERIX Report Transmission)
+	time_report_transmission (Time of ASTERIX Report Transmission): 3.0 
+Item: I170 (Target Identification)
+	TId (Characters 1-8 (coded on 6 Bits each) defining target identification when flight plan is available or the registration marking when no flight plan is available. Coding rules are provided in [6] Section 3.1.2.9.1.2 and Table 3-9.): RESCUE1  
+Item: I020 (Emitter Category)
+	ECAT (Emitter Category): 10 rotocraft
+Item: I008 (Aircraft Operational Status)
+	RA (TCAS Resolution Advisory active): 1 TCAS RA active
+Item: I008 (Aircraft Operational Status)
+	TC (Target Trajectory Change Report Capability): 0 no capability for Trajectory Change Reports
+Item: I008 (Aircraft Operational Status)
+	TS (Target State Report Capability): 0 no capability to support Target State Reports
+Item: I008 (Aircraft Operational Status)
+	ARV (Air-Referenced Velocity Report Capability): 0 no capability to generate ARV-reports
+Item: I008 (Aircraft Operational Status)
+	CDTI_A (Cockpit Display of Traffic Information airborne): 0 CDTI not operational
+Item: I008 (Aircraft Operational Status)
+	not_TCAS (TCAS System Status): 0 TCAS operational or unknown
+Item: I008 (Aircraft Operational Status)
+	SA (Single Antenna): 0 Antenna Diversity
+Item: I132 (Message Amplitude)
+	MAM (Message Amplitude): -40.0 
+
+Asterix record: 4 
+Len: 48
+CRC: 8C2CB8BF
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 21 (Surveillance Data Exchange - Part 12 ADS-B Reports)
+Hexdata: D33B3993C12019071001F3F258B635C28F4A00FAADF0015878E558792500020280205B00F05879654854C3545C600AD8
+Item: I010 (Data Source Identification)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identification)
+	SIC (System Identification Code): 7 
+Item: I040 (Target Report Descriptor)
+	ATP (Address Type): 0 24-Bit ICAO address
+Item: I040 (Target Report Descriptor)
+	ARC (Altitude Reporting Capability): 2 Unknown
+Item: I040 (Target Report Descriptor)
+	RC (Range Check): 0 Default
+Item: I040 (Target Report Descriptor)
+	RAB (Report Type): 0 Report from target transponder
+Item: I040 (Target Report Descriptor)
+	FX (Field Extension): 0 End of item
+Item: I015 (Service Identification)
+	id (Service Identification): 1 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lat (Latitude In WGS.84 in two's complement. Range -90 <= Lat <= 90 deg.): -33.90000153332949 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lon (Longitude In WGS.84 in two's complement. Range -180 <= longitude < 180 deg.): 151.19999695569277 
+Item: I151 (True Air Speed)
+	RE (Range Exceeded Indicator): 0 Value in defined range
+Item: I151 (True Air Speed)
+	TAS (True Air Speed): 250.0 
+Item: I080 (Target Address)
+	TAddr (Target Address): ADF001 
+Item: I073 (Time of Message Reception for Position)
+	time_reception_position (Time of Message Reception of Position): 45297.7890625 
+Item: I075 (Time of Message Reception for Velocity)
+	time_reception_velocity (Time of Message Reception of Velocity): 45298.2890625 
+Item: I090 (Quality Indicators)
+	NUCr_or_NACv (Navigation Uncertainty Category for velocity or Navigation Accuracy Category for Velocity): 0 
+Item: I090 (Quality Indicators)
+	NUCp_or_NIC (Navigation Uncertainty Category for Position NUCp or Navigation Integrity Category NIC.): 0 
+Item: I090 (Quality Indicators)
+	FX (Extension Indicator): 0 End of Data Item
+Item: I210 (MOPS Version)
+	spare (Spare bits set to zero): 0 
+Item: I210 (MOPS Version)
+	VNS (Version Not Supported): 0 The MOPS Version is supported by the GS
+Item: I210 (MOPS Version)
+	VN (Version Number): 0 ED102/DO-260 [Ref. 8]
+Item: I210 (MOPS Version)
+	LTT (Link Technology Type): 2 1090 ES
+Item: I070 (Mode 3/A Code in Octal Representation)
+	spare (Spare bits set to 0): 0 
+Item: I070 (Mode 3/A Code in Octal Representation)
+	Mode3A (Mode-3/A reply in octal): 1200 
+Item: I152 (Magnetic Heading)
+	MHdg (Magnetic Heading): 45.4998779296875 
+Item: I157 (Geometric Vertical Rate)
+	RE (Range Exceeded Indicator): 0 Value in defined range
+Item: I157 (Geometric Vertical Rate)
+	GVR (Geometric Vertical Rate): 1500.0 
+Item: I077 (Time of ASTERIX Report Transmission)
+	time_report_transmission (Time of ASTERIX Report Transmission): 45298.7890625 
+Item: I170 (Target Identification)
+	TId (Characters 1-8 (coded on 6 Bits each) defining target identification when flight plan is available or the registration marking when no flight plan is available. Coding rules are provided in [6] Section 3.1.2.9.1.2 and Table 3-9.): RESCUE1  
+Item: I020 (Emitter Category)
+	ECAT (Emitter Category): 10 rotocraft
+Item: I132 (Message Amplitude)
+	MAM (Message Amplitude): -40.0 
+
+Asterix record: 5 
+Len: 40
+CRC: FF4D9058
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 21 (Surveillance Data Exchange - Part 12 ADS-B Reports)
+Hexdata: D3193903C1201907114001F3F258B635C28F4AADF0015878E5000202805879654854C3545C600AD8
+Item: I010 (Data Source Identification)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identification)
+	SIC (System Identification Code): 7 
+Item: I040 (Target Report Descriptor)
+	ATP (Address Type): 0 24-Bit ICAO address
+Item: I040 (Target Report Descriptor)
+	ARC (Altitude Reporting Capability): 2 Unknown
+Item: I040 (Target Report Descriptor)
+	RC (Range Check): 0 Default
+Item: I040 (Target Report Descriptor)
+	RAB (Report Type): 0 Report from target transponder
+Item: I040 (Target Report Descriptor)
+	FX (Field Extension): 0 End of item
+Item: I040 (Target Report Descriptor)
+	DCR (Differential Correction): 0 No differential correction (ADS-B)
+Item: I040 (Target Report Descriptor)
+	GBS (Ground Bit Setting): 1 Ground Bit set
+Item: I040 (Target Report Descriptor)
+	SIM (Simulated Target): 0 Actual target report
+Item: I040 (Target Report Descriptor)
+	TST (Test Target): 0 Default
+Item: I040 (Target Report Descriptor)
+	SAA (Selected Altitude Available): 0 Equipment capable to provide Selected Altitude
+Item: I040 (Target Report Descriptor)
+	CL (Confidence Level): 0 Report valid
+Item: I015 (Service Identification)
+	id (Service Identification): 1 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lat (Latitude In WGS.84 in two's complement. Range -90 <= Lat <= 90 deg.): -33.90000153332949 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lon (Longitude In WGS.84 in two's complement. Range -180 <= longitude < 180 deg.): 151.19999695569277 
+Item: I080 (Target Address)
+	TAddr (Target Address): ADF001 
+Item: I073 (Time of Message Reception for Position)
+	time_reception_position (Time of Message Reception of Position): 45297.7890625 
+Item: I090 (Quality Indicators)
+	NUCr_or_NACv (Navigation Uncertainty Category for velocity or Navigation Accuracy Category for Velocity): 0 
+Item: I090 (Quality Indicators)
+	NUCp_or_NIC (Navigation Uncertainty Category for Position NUCp or Navigation Integrity Category NIC.): 0 
+Item: I090 (Quality Indicators)
+	FX (Extension Indicator): 0 End of Data Item
+Item: I210 (MOPS Version)
+	spare (Spare bits set to zero): 0 
+Item: I210 (MOPS Version)
+	VNS (Version Not Supported): 0 The MOPS Version is supported by the GS
+Item: I210 (MOPS Version)
+	VN (Version Number): 0 ED102/DO-260 [Ref. 8]
+Item: I210 (MOPS Version)
+	LTT (Link Technology Type): 2 1090 ES
+Item: I070 (Mode 3/A Code in Octal Representation)
+	spare (Spare bits set to 0): 0 
+Item: I070 (Mode 3/A Code in Octal Representation)
+	Mode3A (Mode-3/A reply in octal): 1200 
+Item: I077 (Time of ASTERIX Report Transmission)
+	time_report_transmission (Time of ASTERIX Report Transmission): 45298.7890625 
+Item: I170 (Target Identification)
+	TId (Characters 1-8 (coded on 6 Bits each) defining target identification when flight plan is available or the registration marking when no flight plan is available. Coding rules are provided in [6] Section 3.1.2.9.1.2 and Table 3-9.): RESCUE1  
+Item: I020 (Emitter Category)
+	ECAT (Emitter Category): 10 rotocraft
+Item: I132 (Message Amplitude)
+	MAM (Message Amplitude): -40.0 
+
+Asterix record: 6 
+Len: 52
+CRC: C1880F72
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 21 (Surveillance Data Exchange - Part 12 ADS-B Reports)
+Hexdata: D31B734BC1201907000210ECA85BD483FB61ADF00258795858795802D0151301D01100AD4F022280005879653B1CB3D358200BB5
+Item: I010 (Data Source Identification)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identification)
+	SIC (System Identification Code): 7 
+Item: I040 (Target Report Descriptor)
+	ATP (Address Type): 0 24-Bit ICAO address
+Item: I040 (Target Report Descriptor)
+	ARC (Altitude Reporting Capability): 0 25 ft
+Item: I040 (Target Report Descriptor)
+	RC (Range Check): 0 Default
+Item: I040 (Target Report Descriptor)
+	RAB (Report Type): 0 Report from target transponder
+Item: I040 (Target Report Descriptor)
+	FX (Field Extension): 0 End of item
+Item: I015 (Service Identification)
+	id (Service Identification): 2 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lat (Latitude In WGS.84 in two's complement. Range -90 <= Lat <= 90 deg.): 47.5999984703958 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lon (Longitude In WGS.84 in two's complement. Range -180 <= longitude < 180 deg.): -122.30000300332904 
+Item: I080 (Target Address)
+	TAddr (Target Address): ADF002 
+Item: I073 (Time of Message Reception for Position)
+	time_reception_position (Time of Message Reception of Position): 45298.6875 
+Item: I075 (Time of Message Reception for Velocity)
+	time_reception_velocity (Time of Message Reception of Velocity): 45298.6875 
+Item: I140 (Geometric Height)
+	geometric_height (Geometric Height): 4500.0 
+Item: I090 (Quality Indicators)
+	NUCr_or_NACv (Navigation Uncertainty Category for velocity or Navigation Accuracy Category for Velocity): 0 
+Item: I090 (Quality Indicators)
+	NUCp_or_NIC (Navigation Uncertainty Category for Position NUCp or Navigation Integrity Category NIC.): 10 
+Item: I090 (Quality Indicators)
+	FX (Extension Indicator): 0 End of Data Item
+Item: I090 (Quality Indicators)
+	NICbaro (Navigation Integrity Category for Barometric Altitude): 0 
+Item: I090 (Quality Indicators)
+	SIL (Surveillance (version 1) or Source (version 2) Integrity Level): 0 
+Item: I090 (Quality Indicators)
+	NACp (Navigation Accuracy Category for Position): 9 
+Item: I090 (Quality Indicators)
+	spare (Spare bits set to 0): 0 
+Item: I090 (Quality Indicators)
+	SILS (SILS): 0 Measured per flight-hour
+Item: I090 (Quality Indicators)
+	SDA (Horizontal Position System Design Assurance Level (as defined in version 2)): 0 
+Item: I090 (Quality Indicators)
+	GVA (Geometric Altitude Accuracy): 0 
+Item: I090 (Quality Indicators)
+	PIC (Position Integrity Category): 13 
+Item: I210 (MOPS Version)
+	spare (Spare bits set to zero): 0 
+Item: I210 (MOPS Version)
+	VNS (Version Not Supported): 0 The MOPS Version is supported by the GS
+Item: I210 (MOPS Version)
+	VN (Version Number): 2 ED102A/DO-260B [Ref. 10]
+Item: I210 (MOPS Version)
+	LTT (Link Technology Type): 1 UAT
+Item: I145 (Flight Level)
+	FL (Flight Level): 43.25 
+Item: I200 (Target Status)
+	ICF (Intent Change Flag): 0 No intent change active
+Item: I200 (Target Status)
+	LNAV (LNAV Mode): 1 LNAV Mode not engaged
+Item: I200 (Target Status)
+	ME (Military emergency): 0 No military emergency
+Item: I200 (Target Status)
+	PS (Priority Status): 3 Minimum fuel
+Item: I200 (Target Status)
+	SS (Surveillance Status): 3 SPI set
+Item: I160 (Airborne Ground Vector)
+	RE (Range Exceeded Indicator): 0 Value in defined range
+Item: I160 (Airborne Ground Vector)
+	GS (Ground Speed referenced to WGS-84): 0.0333251953125 
+Item: I160 (Airborne Ground Vector)
+	TA (Track Angle clockwise reference to True North): 180.0 
+Item: I077 (Time of ASTERIX Report Transmission)
+	time_report_transmission (Time of ASTERIX Report Transmission): 45298.7890625 
+Item: I170 (Target Identification)
+	TId (Characters 1-8 (coded on 6 Bits each) defining target identification when flight plan is available or the registration marking when no flight plan is available. Coding rules are provided in [6] Section 3.1.2.9.1.2 and Table 3-9.): N12345   
+Item: I020 (Emitter Category)
+	ECAT (Emitter Category): 11 glider / sailplane
+Item: I132 (Message Amplitude)
+	MAM (Message Amplitude): -75.0 
+
+Asterix record: 7 
+Len: 31
+CRC: 32C58B3F
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 21 (Surveillance Data Exchange - Part 12 ADS-B Reports)
+Hexdata: D31921034120190741400210DF0128D483127DADF00358795F005879651500
+Item: I010 (Data Source Identification)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identification)
+	SIC (System Identification Code): 7 
+Item: I040 (Target Report Descriptor)
+	ATP (Address Type): 2 Surface vehicle address
+Item: I040 (Target Report Descriptor)
+	ARC (Altitude Reporting Capability): 0 25 ft
+Item: I040 (Target Report Descriptor)
+	RC (Range Check): 0 Default
+Item: I040 (Target Report Descriptor)
+	RAB (Report Type): 0 Report from target transponder
+Item: I040 (Target Report Descriptor)
+	FX (Field Extension): 0 End of item
+Item: I040 (Target Report Descriptor)
+	DCR (Differential Correction): 0 No differential correction (ADS-B)
+Item: I040 (Target Report Descriptor)
+	GBS (Ground Bit Setting): 1 Ground Bit set
+Item: I040 (Target Report Descriptor)
+	SIM (Simulated Target): 0 Actual target report
+Item: I040 (Target Report Descriptor)
+	TST (Test Target): 0 Default
+Item: I040 (Target Report Descriptor)
+	SAA (Selected Altitude Available): 0 Equipment capable to provide Selected Altitude
+Item: I040 (Target Report Descriptor)
+	CL (Confidence Level): 0 Report valid
+Item: I015 (Service Identification)
+	id (Service Identification): 2 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lat (Latitude In WGS.84 in two's complement. Range -90 <= Lat <= 90 deg.): 47.450000792741776 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lon (Longitude In WGS.84 in two's complement. Range -180 <= longitude < 180 deg.): -122.30999758467078 
+Item: I080 (Target Address)
+	TAddr (Target Address): ADF003 
+Item: I073 (Time of Message Reception for Position)
+	time_reception_position (Time of Message Reception of Position): 45298.7421875 
+Item: I090 (Quality Indicators)
+	NUCr_or_NACv (Navigation Uncertainty Category for velocity or Navigation Accuracy Category for Velocity): 0 
+Item: I090 (Quality Indicators)
+	NUCp_or_NIC (Navigation Uncertainty Category for Position NUCp or Navigation Integrity Category NIC.): 0 
+Item: I090 (Quality Indicators)
+	FX (Extension Indicator): 0 End of Data Item
+Item: I077 (Time of ASTERIX Report Transmission)
+	time_report_transmission (Time of ASTERIX Report Transmission): 45298.7890625 
+Item: I020 (Emitter Category)
+	ECAT (Emitter Category): 21 surface service vehicle
+Item: I132 (Message Amplitude)
+	MAM (Message Amplitude): 0.0 
+
+Asterix record: 8 
+Len: 31
+CRC: BBF750A5
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 21 (Surveillance Data Exchange - Part 12 ADS-B Reports)
+Hexdata: D3192103412019070340020000000000000000ADF0045877E5005879650000
+Item: I010 (Data Source Identification)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identification)
+	SIC (System Identification Code): 7 
+Item: I040 (Target Report Descriptor)
+	ATP (Address Type): 0 24-Bit ICAO address
+Item: I040 (Target Report Descriptor)
+	ARC (Altitude Reporting Capability): 0 25 ft
+Item: I040 (Target Report Descriptor)
+	RC (Range Check): 0 Default
+Item: I040 (Target Report Descriptor)
+	RAB (Report Type): 1 Report from field monitor (fixed transponder)
+Item: I040 (Target Report Descriptor)
+	FX (Field Extension): 0 End of item
+Item: I040 (Target Report Descriptor)
+	DCR (Differential Correction): 0 No differential correction (ADS-B)
+Item: I040 (Target Report Descriptor)
+	GBS (Ground Bit Setting): 1 Ground Bit set
+Item: I040 (Target Report Descriptor)
+	SIM (Simulated Target): 0 Actual target report
+Item: I040 (Target Report Descriptor)
+	TST (Test Target): 0 Default
+Item: I040 (Target Report Descriptor)
+	SAA (Selected Altitude Available): 0 Equipment capable to provide Selected Altitude
+Item: I040 (Target Report Descriptor)
+	CL (Confidence Level): 0 Report valid
+Item: I015 (Service Identification)
+	id (Service Identification): 2 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lat (Latitude In WGS.84 in two's complement. Range -90 <= Lat <= 90 deg.): 0.0 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lon (Longitude In WGS.84 in two's complement. Range -180 <= longitude < 180 deg.): 0.0 
+Item: I080 (Target Address)
+	TAddr (Target Address): ADF004 
+Item: I073 (Time of Message Reception for Position)
+	time_reception_position (Time of Message Reception of Position): 45295.7890625 
+Item: I090 (Quality Indicators)
+	NUCr_or_NACv (Navigation Uncertainty Category for velocity or Navigation Accuracy Category for Velocity): 0 
+Item: I090 (Quality Indicators)
+	NUCp_or_NIC (Navigation Uncertainty Category for Position NUCp or Navigation Integrity Category NIC.): 0 
+Item: I090 (Quality Indicators)
+	FX (Extension Indicator): 0 End of Data Item
+Item: I077 (Time of ASTERIX Report Transmission)
+	time_report_transmission (Time of ASTERIX Report Transmission): 45298.7890625 
+Item: I020 (Emitter Category)
+	ECAT (Emitter Category): 0 No ADS-B Emitter Category Information
+Item: I132 (Message Amplitude)
+	MAM (Message Amplitude): 0.0 
+
+Asterix record: 9 
+Len: 30
+CRC: 669C34C4
+Timestamp: 1791977569422 (2026-10-14 11:32:49.422000)
+Category: 21 (Surveillance Data Exchange - Part 12 ADS-B Reports)
+Hexdata: D31921034120190760020000000000000000ADF0055877E5005879650000
+Item: I010 (Data Source Identification)
+	SAC (System Area Code): 25 
+Item: I010 (Data Source Identification)
+	SIC (System Identification Code): 7 
+Item: I040 (Target Report Descriptor)
+	ATP (Address Type): 3 Anonymous address
+Item: I040 (Target Report Descriptor)
+	ARC (Altitude Reporting Capability): 0 25 ft
+Item: I040 (Target Report Descriptor)
+	RC (Range Check): 0 Default
+Item: I040 (Target Report Descriptor)
+	RAB (Report Type): 0 Report from target transponder
+Item: I040 (Target Report Descriptor)
+	FX (Field Extension): 0 End of item
+Item: I015 (Service Identification)
+	id (Service Identification): 2 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lat (Latitude In WGS.84 in two's complement. Range -90 <= Lat <= 90 deg.): 0.0 
+Item: I131 (High-Resolution Position in WGS-84 Co-ordinates)
+	Lon (Longitude In WGS.84 in two's complement. Range -180 <= longitude < 180 deg.): 0.0 
+Item: I080 (Target Address)
+	TAddr (Target Address): ADF005 
+Item: I073 (Time of Message Reception for Position)
+	time_reception_position (Time of Message Reception of Position): 45295.7890625 
+Item: I090 (Quality Indicators)
+	NUCr_or_NACv (Navigation Uncertainty Category for velocity or Navigation Accuracy Category for Velocity): 0 
+Item: I090 (Quality Indicators)
+	NUCp_or_NIC (Navigation Uncertainty Category for Position NUCp or Navigation Integrity Category NIC.): 0 
+Item: I090 (Quality Indicators)
+	FX (Extension Indicator): 0 End of Data Item
+Item: I077 (Time of ASTERIX Report Transmission)
+	time_report_transmission (Time of ASTERIX Report Transmission): 45298.7890625 
+Item: I020 (Emitter Category)
+	ECAT (Emitter Category): 0 No ADS-B Emitter Category Information
+Item: I132 (Message Amplitude)
+	MAM (Message Amplitude): 0.0 
