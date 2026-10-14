@@ -19,6 +19,7 @@ ADSB_SUPPRESSES_MLAT_S = 5.0
 SYNC_POS_SIGMA_M = {None: 50.0}  # Reference aircraft position error by NUC, default.
 UNTRUSTED_MIN_RECEIVERS = 3
 MAX_RECEIVERS = 12  # Per MLAT update.
+EXCLUDE_JITTER_S = 500e-9  # Receivers whose clocks are noisier than this are left out of MLAT.
 MAX_SYNC_RECEIVERS = 12  # Per reference message; a random subset of larger groups.
 # Share of messages of aircraft with a live ADS-B position that update their MLAT track (keeps it ready for gaps).
 ADSB_MLAT_FRACTION = 0.1
@@ -141,7 +142,7 @@ class Engine:
             rx.jitter_estimated = True
         excluded = set()
         for rx in self.by_index:
-            if rx.jitter_estimated and rx.jitter_s > 1e-6:
+            if rx.jitter_estimated and rx.jitter_s > EXCLUDE_JITTER_S:
                 excluded.add(rx.index)
         self.sync.excluded = excluded
         for rx in self.by_index:
