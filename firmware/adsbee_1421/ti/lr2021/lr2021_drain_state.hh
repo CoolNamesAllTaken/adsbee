@@ -47,19 +47,35 @@ constexpr bool LR2021LoopDrainHoldsRead(LR2021DrainState s, uint16_t read_len_by
     return read_len_bytes > 0 && s >= LR2021DrainState::kFifoRead && s <= LR2021DrainState::kDataReady;
 }
 
-// Whether the chain may discard a loop drain in state s (not kIdle, not a chain state) and take the bus.
+// Whether the chain may take the bus from a loop drain in state s (not kIdle, not a chain state).
 enum class LR2021DrainSteal : uint8_t {
     kAllowed = 0,
     // A frame is on the bus, the state is terminal (kError holds an unreported failure), or kClearFifoRspWait:
     // GetAndClearFifoIrqFlags frame 1 cleared the FIFO sub-flags and the pending frame 2 holds their only copy, the
     // overflow evidence the resync depends on.
     kBusy,
-    kUnparsedRead,  // Parked between frames with a read not parsed yet.
+    // Allowed, parked between frames with a read not parsed yet: the read stays in the async buffer for the main
+    // loop and no loop drain may start until it is parsed.
+    kKeepRead,
 };
 constexpr LR2021DrainSteal LR2021ChainStealCheck(LR2021DrainState s, bool frame_in_flight, uint16_t read_len_bytes) {
     if (frame_in_flight || s == LR2021DrainState::kDataReady || s == LR2021DrainState::kError ||
         s == LR2021DrainState::kClearFifoRspWait) {
         return LR2021DrainSteal::kBusy;
     }
-    return LR2021LoopDrainHoldsRead(s, read_len_bytes) ? LR2021DrainSteal::kUnparsedRead : LR2021DrainSteal::kAllowed;
+    return LR2021LoopDrainHoldsRead(s, read_len_bytes) ? LR2021DrainSteal::kKeepRead : LR2021DrainSteal::kAllowed;
+}
+
+// Whether the chain takes over a loop drain whose frame in state s just completed, to run the clear tail: after a
+// good ReadRxFifo frame with the LR_IRQ line high.
+constexpr bool LR2021ChainTakesLoopTail(LR2021DrainState s, bool frame_ok, bool irq_line_high) {
+    return s == LR2021DrainState::kFifoRead && frame_ok && irq_line_high;
+}
+
+// Whether an LR_IRQ edge skipped as kBusy in state s is retried when the frame on the bus completes (kDataReady: when
+// the main loop is done parsing). Only where nothing was popped from the FIFO since the edge, so the chain's read of
+// a full threshold still holds: not after a ReadRxFifo frame.
+constexpr bool LR2021ChainRetriesSkippedEdge(LR2021DrainState s) {
+    return s == LR2021DrainState::kLevelCmd || s == LR2021DrainState::kLevelRsp || s == LR2021DrainState::kIrqRsp ||
+           s == LR2021DrainState::kDataReady;
 }

@@ -654,6 +654,17 @@ bool ADSBee::UpdateLR2021() {
     }
     uint32_t start_us = get_time_since_boot_us();
 
+    // A read the chain took over from the loop drain predates the chain's own slots.
+    bool chain_read_parsed = false;
+    if (lr2021.kept_read_pending()) {
+        if (lr2021.drain_fifo_was_full()) {
+            lr2021_fifo_full_count++;
+        }
+        ParseLR2021RxFifo(lr2021.drain_payload(), lr2021.drain_level(), start_us);
+        lr2021.ReleaseKeptRead();
+        chain_read_parsed = true;
+    }
+
     // Consume staging slots filled by the IRQ-paced drain chain (lr2021_irq_drain.cpp) first: they
     // predate anything the loop drain is currently reading, and their timestamps were captured at the
     // IRQ edge.
@@ -661,6 +672,7 @@ bool ADSBee::UpdateLR2021() {
     while ((slot = lr2021.NextFilledSlot()) != nullptr) {
         ParseLR2021RxFifo(slot->buf + 2, slot->len, slot->timestamp_us);
         lr2021.ReleaseSlot();
+        chain_read_parsed = true;
     }
 
     // FIFO tear hazard observed (level read back full, or a Full/Overflow/Underflow sub-flag seen by
@@ -735,9 +747,11 @@ bool ADSBee::UpdateLR2021() {
     // ever leaves RX (or a config attempt failed and left the SPI closed), the drain just polls an
     // empty FIFO with no error. Every COMPLETED drain sweep refreshes last_stat() from a live Stat
     // readback, so gate the "healthy" stamp on completion -- a dead SPI never completes a sweep, so a
-    // stale-but-kRx last_stat() can't mask a dead receiver.
+    // stale-but-kRx last_stat() can't mask a dead receiver. A read the chain made or kept is a live readback
+    // too: under a sustained load the chain takes over nearly every loop drain.
     uint32_t now_ms = get_time_since_boot_ms();
-    if ((drain_result == LR2021::DrainResult::kDataReady || drain_result == LR2021::DrainResult::kNoData) &&
+    if ((chain_read_parsed || drain_result == LR2021::DrainResult::kDataReady ||
+         drain_result == LR2021::DrainResult::kNoData) &&
         lr2021.last_stat().chip_mode == LR2021::ChipMode::kRx) {
         lr2021_last_rx_ok_ms_ = now_ms;
         lr2021_rearm_attempts_ = 0;
