@@ -2,6 +2,7 @@
 #   cp .env.example .env    (then edit it)
 #   docker compose up -d
 # Without the core, `docker compose --profile demo up -d redis web fake` runs the map on synthetic traffic.
+# With simulated receivers feeding the core: `docker compose --profile sim up -d` (see simfeed/simfeed.py).
 
 name: adsbee-mlat
 
@@ -60,6 +61,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  # Simulated receivers (8 ADSBee at 48 MHz, 2 plain Beast at 12 MHz) feeding the core in real time. Set
+  # MLAT_CONFIG=/config/sim.toml in .env so the core knows the plain Beast receivers.
+  simfeed:
+    build:
+      context: .
+      dockerfile: simfeed/Dockerfile
+    profiles: ["sim"]
+    restart: "no"
+    command: ["--host", "core", "--port", "31090"]
+    depends_on:
+      - core
 
 volumes:
   web-data:

@@ -15,6 +15,8 @@ docker compose up -d --build
 - Admin: `http://<server>:8080/admin/` with `DJANGO_SUPERUSER_USERNAME` / `DJANGO_SUPERUSER_PASSWORD` from `.env`.
 - Receivers feed the core on port 31090 (TCP or UDP); see [PROTOCOL.md](PROTOCOL.md).
 - Try the map without receivers: `docker compose --profile demo up -d redis web fake` plays synthetic traffic.
+- Try the whole chain: set `MLAT_CONFIG=/config/sim.toml` in `.env`, then `docker compose --profile sim up -d --build`.
+  Simulated receivers (8 ADSBee, 2 plain Beast) stream to the core over TCP, and the map shows the core's fixes.
 
 Update with `git pull && docker compose up -d --build`. Map and admin data (users, receiver settings) live in the
 `web-data` volume.

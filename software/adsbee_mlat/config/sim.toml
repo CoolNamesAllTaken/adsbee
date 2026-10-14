@@ -1,0 +1,19 @@
+# Plain Beast receivers of simfeed/simfeed.py (generated with --write-config).
+
+[[receiver]]
+id = "beast-1"
+name = "Beast 1"
+match = { uuid = "2eb80698-b5d1-5217-aa66-fccacb405b73" }
+lat = 47.7143392
+lon = -122.1298749
+alt = 30.0
+clock_hz = 12000000
+
+[[receiver]]
+id = "beast-2"
+name = "Beast 2"
+match = { uuid = "25dd8aea-0013-5e91-8833-7c611c495cbb" }
+lat = 47.4854103
+lon = -122.4693823
+alt = 30.0
+clock_hz = 12000000
