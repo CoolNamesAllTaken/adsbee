@@ -55,6 +55,7 @@ class SettingsManager {
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
+        kASTERIX,                // EUROCONTROL ASTERIX CAT021 target reports and CAT023 status.
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;

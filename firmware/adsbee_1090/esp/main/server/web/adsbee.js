@@ -511,7 +511,7 @@ function whereplaneMapUrl(uri, protocol, receiverId) {
 
 class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
-        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'AIRCRAFT_JSON_UAT_UPLINK'];
+        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX'];
 
     static async open(feedSlot) {
         const modal = document.getElementById('feed-modal');

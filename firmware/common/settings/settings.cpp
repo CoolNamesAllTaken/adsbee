@@ -386,4 +386,7 @@ void SettingsManager::PrintAT() {
 
     // AT+AUTO_UPDATE
     CONSOLE_PRINTF("AT+AUTO_UPDATE=%d\r\n", settings.auto_update_enabled);
+
+    // AT+ASTERIX_SAC_SIC
+    CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
 }

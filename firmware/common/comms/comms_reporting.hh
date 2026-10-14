@@ -10,10 +10,14 @@ static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
 static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
 static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
 static constexpr uint32_t kAircraftJSONReportingIntervalMs = 1000;
+static constexpr uint32_t kASTERIXReportingIntervalMs = 1000;
 static constexpr uint32_t kCSBeeChunkBudgetMs = 50;        // Max wall time per ReportCSBee invocation.
 static constexpr uint32_t kMAVLINKChunkBudgetMs = 50;      // Max wall time per ReportMAVLINK invocation.
 static constexpr uint32_t kGDL90ChunkBudgetMs = 50;        // Max wall time per ReportGDL90 invocation.
 static constexpr uint32_t kAircraftJSONChunkBudgetMs = 50;  // Max wall time per ReportAircraftJSON invocation.
+static constexpr uint32_t kASTERIXChunkBudgetMs = 50;       // Max wall time per ReportASTERIX invocation.
+// Largest ASTERIX data block, small enough for one UDP datagram on a tunnel with a reduced MTU.
+static constexpr uint16_t kASTERIXDataBlockMaxLenBytes = 1024;
 // Shared UID snapshot capacity — one array serves all periodic reporting protocols.
 static constexpr uint16_t kMaxReportUIDs = kAircraftDictionaryMaxNumAircraft;
 
@@ -147,6 +151,15 @@ bool ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, const CompositeArr
  * @retval True if successful, false if something broke.
  */
 bool ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks);
+
+/**
+ * Reports the aircraft dictionary as EUROCONTROL ASTERIX data blocks: one CAT023 block with the ground station and
+ * service status at the start of each round, then CAT021 target reports for the ADS-B aircraft with a position.
+ * @param[in] sinks Array of ReportSinks to send the data blocks on.
+ * @param[in] num_sinks Number of ReportSinks in the sinks array.
+ * @retval True if successful, false if something broke.
+ */
+bool ReportASTERIX(ReportSink* sinks, uint16_t num_sinks);
 
 /**
  * Reports each UAT uplink message as one JSON line with the de-interleaved payload in Base64 (see

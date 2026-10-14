@@ -135,6 +135,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATR1090GainCallback);
     CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATLREnableCallback);
+    CPP_AT_CALLBACK(ATASTERIXSACSICCallback);
     CPP_AT_CALLBACK(ATMAVLINKIDCallback);
     CPP_AT_CALLBACK(ATR1090PreambleCallback);
     CPP_AT_CALLBACK(ATR1090RxBoostCallback);
@@ -319,6 +320,7 @@ class CommsManager {
     uint16_t mavlink2_report_uid_index_ = 0;
     uint16_t gdl90_report_uid_index_ = 0;
     uint16_t aircraftjson_report_uid_index_ = 0;
+    uint16_t asterix_report_uid_index_ = 0;
 
     // Per-protocol "round active" flags. Set by UpdateReporting when a new round starts;
     // cleared by each Report* function when it finishes sending its footer/delimiter.
@@ -327,6 +329,7 @@ class CommsManager {
     bool mavlink2_round_active_ = false;
     bool gdl90_round_active_ = false;
     bool aircraftjson_round_active_ = false;
+    bool asterix_round_active_ = false;
 
     // Overrun error gates — each fires once per overrunning round to prevent log spam.
     bool csbee_overrun_reported_ = false;
@@ -334,6 +337,7 @@ class CommsManager {
     bool mavlink2_overrun_reported_ = false;
     bool gdl90_overrun_reported_ = false;
     bool aircraftjson_overrun_reported_ = false;
+    bool asterix_overrun_reported_ = false;
 };
 
 extern CommsManager comms_manager;

@@ -554,7 +554,10 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     ASSERT_NE(auto_update, std::string::npos);
     EXPECT_LT(wifi, ip_mode);
     EXPECT_LT(ip_mode, auto_update);
-    EXPECT_EQ(dump.find("AT+", auto_update + 1), std::string::npos);
+    size_t asterix = dump.find("AT+ASTERIX_SAC_SIC=0,0");
+    ASSERT_NE(asterix, std::string::npos);
+    EXPECT_LT(auto_update, asterix);
+    EXPECT_EQ(dump.find("AT+", asterix + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);

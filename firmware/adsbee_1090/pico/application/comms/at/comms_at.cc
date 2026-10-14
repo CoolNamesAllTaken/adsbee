@@ -1210,6 +1210,30 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATASTERIXSACSICCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%u,%u", settings_manager.settings.asterix_sac, settings_manager.settings.asterix_sic);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
+                CPP_AT_ERROR("Requires two arguments: AT+ASTERIX_SAC_SIC=<sac>,<sic>.");
+            }
+            uint16_t sac, sic;
+            CPP_AT_TRY_ARG2NUM(0, sac);
+            CPP_AT_TRY_ARG2NUM(1, sic);
+            if (sac > 255 || sic > 255) {
+                CPP_AT_ERROR("SAC and SIC must be between 0 and 255.");
+            }
+            settings_manager.settings.asterix_sac = static_cast<uint8_t>(sac);
+            settings_manager.settings.asterix_sic = static_cast<uint8_t>(sic);
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     switch (op) {
         case '?':
@@ -1594,6 +1618,7 @@ static void PrintSettingsJSON() {
     const SettingsManager::Settings::CoreNetworkSettings& cns = s.core_network_settings;
 
     CPP_AT_PRINTF("SETTINGS={");
+    CPP_AT_PRINTF("\"ASTERIX_SAC_SIC\":[%u,%u],", s.asterix_sac, s.asterix_sic);
     CPP_AT_PRINTF("\"AUTO_UPDATE\":[%d],", s.auto_update_enabled);
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu,%lu],",
                   (unsigned long)s.baud_rates[SettingsManager::SerialInterface::kCommsUART],
@@ -1992,6 +2017,12 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTANetworkCallback) {
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command = "ASTERIX_SAC_SIC",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+ASTERIX_SAC_SIC=<sac>,<sic>\r\n\tSet the ASTERIX System Area Code and System Identification "
+                    "Code (0-255 each) sent in every ASTERIX record.\r\n\tAT+ASTERIX_SAC_SIC?\r\n\tQuery them.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATASTERIXSACSICCallback, comms_manager)},
     {.command = "AUTO_UPDATE",
      .min_args = 0,
      .max_args = 1,

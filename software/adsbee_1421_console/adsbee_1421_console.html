@@ -4585,7 +4585,6 @@
 // ══ BEGIN VENDORED ADSBee settings engine (from firmware/adsbee_1090/esp/main/server/web/settings.js) ══
 // Copied verbatim from between that file's BEGIN/END SHARED SETTINGS ENGINE markers;
 // edit it there and re-copy. Unindented to keep the copy mechanical, like Leaflet above.
-
 // Schema-driven settings form. Each schema entry describes one AT command:
 //
 //   {
@@ -5259,7 +5258,7 @@ class SettingsEngine {
 // Constants and schema-entry factories for AT commands shared by both products.
 
 const SETTINGS_PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK', 'CSBEE',
-    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK'];
+    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX'];
 const SETTINGS_LOG_LEVELS = ['SILENT', 'ERRORS', 'WARNINGS', 'INFO'];
 
 // RX_POSITION is identical on both products; the entry is built by a factory so each
@@ -5339,6 +5338,19 @@ function makeMavlinkIdEntry() {
     };
 }
 
+// ASTERIX_SAC_SIC is identical on both products.
+function makeAsterixSacSicEntry() {
+    return {
+        cmd: 'ASTERIX_SAC_SIC', label: 'ASTERIX Data Source', group: 'Reporting',
+        help: 'System Area Code and System Identification Code sent in every ASTERIX record.',
+        query: { expect: /^ASTERIX_SAC_SIC=/ },
+        fields: [
+            { id: 'sac', label: 'SAC', type: 'int', min: 0, max: 255 },
+            { id: 'sic', label: 'SIC', type: 'int', min: 0, max: 255 },
+        ],
+    };
+}
+
 // RX_ENABLE is identical on both products.
 function makeRxEnableEntry() {
     return {
@@ -5361,7 +5373,6 @@ function makeRxEnableEntry() {
         build(v) { return [`AT+RX_ENABLE=,${v.r1090 ? 1 : 0},${v.subg ? 1 : 0}`]; },
     };
 }
-
 // ══ END VENDORED ADSBee settings engine ══
 
         // ─── LineRouter ──────────────────────────────────────────────────────────
@@ -6433,6 +6444,7 @@ function makeRxEnableEntry() {
                 build(v) { return [`AT+PROTOCOL_OUT=CONSOLE,${v.CONSOLE}`]; },
             },
             makeMavlinkIdEntry(),
+            makeAsterixSacSicEntry(),
             // ── Position ──
             makeRxPositionEntry(),
             // ── Serial ──

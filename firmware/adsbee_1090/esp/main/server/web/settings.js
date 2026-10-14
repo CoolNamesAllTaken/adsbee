@@ -682,7 +682,7 @@ class SettingsEngine {
 // Constants and schema-entry factories for AT commands shared by both products.
 
 const SETTINGS_PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK', 'CSBEE',
-    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK'];
+    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX'];
 const SETTINGS_LOG_LEVELS = ['SILENT', 'ERRORS', 'WARNINGS', 'INFO'];
 
 // RX_POSITION is identical on both products; the entry is built by a factory so each
@@ -759,6 +759,19 @@ function makeMavlinkIdEntry() {
             return values.sys === undefined ? null : values;
         },
         build(v) { return [`AT+MAVLINK_ID=${v.sys},${v.comp}`]; },
+    };
+}
+
+// ASTERIX_SAC_SIC is identical on both products.
+function makeAsterixSacSicEntry() {
+    return {
+        cmd: 'ASTERIX_SAC_SIC', label: 'ASTERIX Data Source', group: 'Reporting',
+        help: 'System Area Code and System Identification Code sent in every ASTERIX record.',
+        query: { expect: /^ASTERIX_SAC_SIC=/ },
+        fields: [
+            { id: 'sac', label: 'SAC', type: 'int', min: 0, max: 255 },
+            { id: 'sic', label: 'SIC', type: 'int', min: 0, max: 255 },
+        ],
     };
 }
 
@@ -922,6 +935,7 @@ const SETTINGS_SCHEMA_1090 = [
         build(v, dirty) { return [...dirty].map(iface => `AT+PROTOCOL_OUT=${iface},${v[iface]}`); },
     },
     makeMavlinkIdEntry(),
+    makeAsterixSacSicEntry(),
     // ── Position ──
     makeRxPositionEntry(),
     {

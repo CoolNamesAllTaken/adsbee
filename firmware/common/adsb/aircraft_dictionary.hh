@@ -103,6 +103,7 @@ class Aircraft {
     // Local time (get_time_since_boot_ms()) of the last accepted position, comparable across aircraft types. The
     // protocol-specific last_track_update_timestamp_ms holds packet MLAT time for Mode S.
     uint32_t last_position_update_ms = 0;
+    uint32_t last_velocity_update_ms = 0;  // Local time of the last velocity, 0 until one arrives.
 
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;

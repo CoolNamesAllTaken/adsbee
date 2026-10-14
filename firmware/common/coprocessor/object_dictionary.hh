@@ -141,7 +141,7 @@ class ObjectDictionary {
         float gnss_heading_deg = 0.0f;
         int32_t gnss_speed_kts = 0;
         uint8_t gnss_num_satellites = 0;
-        bool gnss_utc_time_valid = false;
+        bool gnss_utc_time_valid = false;  // The gnss_utc_* fields hold UTC at timestamp_ms.
         uint8_t gnss_utc_hour = 0;
         uint8_t gnss_utc_minute = 0;
         uint8_t gnss_utc_second = 0;

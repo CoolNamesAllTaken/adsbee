@@ -245,6 +245,10 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tMAVLink System ID: %u\r\n", settings.mavlink_system_id);
     CONSOLE_PRINTF("\tMAVLink Component ID: %u\r\n", settings.mavlink_component_id);
 
+    // ASTERIX settings
+    CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
+    CONSOLE_PRINTF("\tASTERIX SIC: %u\r\n", settings.asterix_sic);
+
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
     CONSOLE_PRINTF("\t\tSource: %s [%s]\r\n", RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
@@ -321,4 +325,7 @@ void SettingsManager::PrintAT() {
 
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", adsbee.GetWatchdogTimeoutSec());
+
+    // AT+ASTERIX_SAC_SIC
+    CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
 }

@@ -6,6 +6,7 @@
 
 // Reporting utils.
 #include "aircraftjson_utils.hh"
+#include "asterix_utils.hh"
 #include "beast_utils.hh"
 #include "csbee_utils.hh"
 #include "gdl90_utils.hh"
@@ -24,12 +25,13 @@ AircraftDictionary& aircraft_dictionary = adsbee.aircraft_dictionary;
 #endif
 
 GDL90Reporter gdl90;
+static ASTERIXReporter::TrackNumbers asterix_track_numbers;
 
 // Failure tallies, one per reporting function. File scope rather than CommsManager members because
 // there is a single CommsManager per device and this keeps the three per-platform comms.hh headers
 // (which already triplicate the round state) untouched.
 static CommsManager::ReportFailureTally raw_tally, beast_tally, csbee_tally, gdl90_tally, gdl90_uplink_tally,
-    aircraftjson_tally, uat_uplink_json_tally;
+    aircraftjson_tally, uat_uplink_json_tally, asterix_tally;
 
 /**
  * These have to be macros rather than helper functions: the RP2040 and 1421 CONSOLE_* macros
@@ -137,10 +139,12 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     ReportSink gdl90_no_uat_uplink_sinks[SettingsManager::kMaxNumReportSinks];
     ReportSink aircraftjson_sinks[SettingsManager::kMaxNumReportSinks];
     ReportSink uat_uplink_json_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink asterix_sinks[SettingsManager::kMaxNumReportSinks];
 
     uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_beast_no_uat_uplink_sinks = 0,
              num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0,
-             num_gdl90_no_uat_uplink_sinks = 0, num_aircraftjson_sinks = 0, num_uat_uplink_json_sinks = 0;
+             num_gdl90_no_uat_uplink_sinks = 0, num_aircraftjson_sinks = 0, num_uat_uplink_json_sinks = 0,
+             num_asterix_sinks = 0;
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
@@ -180,6 +184,9 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
                 // Same aircraft lines as kAircraftJSON, plus the uplink pass-through below.
                 aircraftjson_sinks[num_aircraftjson_sinks++] = sinks[i];
                 uat_uplink_json_sinks[num_uat_uplink_json_sinks++] = sinks[i];
+                break;
+            case SettingsManager::kASTERIX:
+                asterix_sinks[num_asterix_sinks++] = sinks[i];
                 break;
             default:
                 // Both values are printed numerically on purpose. Reaching this arm means
@@ -252,11 +259,13 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     if (mavlink2_round_active_ && num_mavlink2_sinks == 0) mavlink2_round_active_ = false;
     if (gdl90_round_active_ && num_gdl90_all_sinks == 0) gdl90_round_active_ = false;
     if (aircraftjson_round_active_ && num_aircraftjson_sinks == 0) aircraftjson_round_active_ = false;
+    if (asterix_round_active_ && num_asterix_sinks == 0) asterix_round_active_ = false;
 
     bool all_locally_decoded_done = !csbee_round_active_ && !mavlink1_round_active_ && !mavlink2_round_active_ &&
-                                    !gdl90_round_active_ && !aircraftjson_round_active_;
+                                    !gdl90_round_active_ && !aircraftjson_round_active_ && !asterix_round_active_;
     bool any_locally_decoded_active = (num_csbee_sinks > 0 || num_mavlink1_sinks > 0 || num_mavlink2_sinks > 0 ||
-                                       num_gdl90_all_sinks > 0 || num_aircraftjson_sinks > 0);
+                                       num_gdl90_all_sinks > 0 || num_aircraftjson_sinks > 0 ||
+                                       num_asterix_sinks > 0);
 
     if (any_locally_decoded_active && all_locally_decoded_done &&
         timestamp_ms - last_locally_decoded_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
@@ -271,6 +280,7 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         mavlink2_overrun_reported_ = false;
         gdl90_overrun_reported_ = false;
         aircraftjson_overrun_reported_ = false;
+        asterix_overrun_reported_ = false;
 
         // Snapshot current aircraft UIDs. All protocols will walk this same array.
         report_uids_count_ = 0;
@@ -284,6 +294,7 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         mavlink2_report_uid_index_ = 0;
         gdl90_report_uid_index_ = 0;
         aircraftjson_report_uid_index_ = 0;
+        asterix_report_uid_index_ = 0;
 
         // Activate rounds for protocols that currently have sinks.
         csbee_round_active_ = (num_csbee_sinks > 0);
@@ -291,6 +302,7 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         mavlink2_round_active_ = (num_mavlink2_sinks > 0);
         gdl90_round_active_ = (num_gdl90_all_sinks > 0);
         aircraftjson_round_active_ = (num_aircraftjson_sinks > 0);
+        asterix_round_active_ = (num_asterix_sinks > 0);
     }
 
     // Drive each in-progress reporting round. Log overrun once per round if the interval lapses.
@@ -348,6 +360,17 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         }
         if (!ReportAircraftJSON(aircraftjson_sinks, num_aircraftjson_sinks)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportAircraftJSON.");
+            ret = false;
+        }
+    }
+    if (asterix_round_active_) {
+        if (!asterix_overrun_reported_ && elapsed_ms >= kASTERIXReportingIntervalMs) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "ASTERIX reporting overran the %lums reporting interval.",
+                          kASTERIXReportingIntervalMs);
+            asterix_overrun_reported_ = true;
+        }
+        if (!ReportASTERIX(asterix_sinks, num_asterix_sinks)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportASTERIX.");
             ret = false;
         }
     }
@@ -870,6 +893,133 @@ bool CommsManager::ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks) {
     // End of the round: flush the accumulated failures from every chunk as one line.
     FLUSH_REPORT_TALLY("CommsManager::ReportAircraftJSON", aircraftjson_tally);
     aircraftjson_round_active_ = false;
+    return ret;
+}
+
+// UTC from the GNSS receiver, if there is one with a valid time.
+static ASTERIXReporter::Clock GetASTERIXClock() {
+    ASTERIXReporter::Clock clock;
+#if defined(ON_ESP32)
+    // The RP2040 sends its status on every main loop pass, with UTC brought forward to the time it was sent.
+    const ObjectDictionary::RP2040DeviceStatus& rp2040 = object_dictionary.composite_device_status.rp2040;
+    if (rp2040.gnss_utc_time_valid) {
+        clock.SetUTC(ASTERIXReporter::UTCMsOfDay(rp2040.gnss_utc_hour, rp2040.gnss_utc_minute, rp2040.gnss_utc_second,
+                                                 rp2040.gnss_utc_millisecond),
+                     get_time_since_boot_ms());
+    }
+#elif !defined(ON_TI)
+    if (gnss != nullptr && gnss->fix().utc_time_valid) {
+        const NMEAParser::GNSSFix& fix = gnss->fix();
+        clock.SetUTC(
+            ASTERIXReporter::UTCMsOfDay(fix.utc_hour, fix.utc_minute, fix.utc_second, fix.utc_millisecond),
+            fix.last_update_timestamp_ms);
+    }
+#endif
+    return clock;
+}
+
+bool CommsManager::ReportASTERIX(ReportSink* sinks, uint16_t num_sinks) {
+    bool ret = true;
+    static uint8_t block[kASTERIXDataBlockMaxLenBytes];
+    static bool track_numbering_restarted = true;  // Only the first status report after boot says so.
+
+    ASTERIXReporter::ReportContext ctx;
+    ctx.sac = settings_manager.settings.asterix_sac;
+    ctx.sic = settings_manager.settings.asterix_sic;
+    ctx.clock = GetASTERIXClock();
+    ctx.timestamp_ms = get_time_since_boot_ms();
+    uint32_t time_of_day = ctx.clock.TimeOfDay(ctx.timestamp_ms);
+
+    // Status at the start of each round: ground station status, then one service status per receiver.
+    if (asterix_report_uid_index_ == 0) {
+        asterix_track_numbers.StartRound();
+        uint16_t len = ASTERIXReporter::BeginDataBlock(block, sizeof(block),
+                                                       ASTERIXReporter::kCategoryGroundStationStatus);
+        len += ASTERIXReporter::WriteCAT023GroundStationStatusRecord(
+            block + len, sizeof(block) - len, ctx.sac, ctx.sic, time_of_day, ctx.clock.utc_valid,
+            track_numbering_restarted, kASTERIXReportingIntervalMs / 1000);
+        const uint8_t kReportPeriodHalfSeconds = kASTERIXReportingIntervalMs / 500;
+        len += ASTERIXReporter::WriteCAT023ServiceStatusRecord(
+            block + len, sizeof(block) - len, ctx.sac, ctx.sic, ASTERIXReporter::kServiceID1090ES,
+            ASTERIXReporter::kServiceType1090ES, time_of_day, kReportPeriodHalfSeconds,
+            kASTERIXReportingIntervalMs / 1000,
+            settings_manager.settings.r1090_rx_enabled ? ASTERIXReporter::kServiceStatusNormal
+                                                       : ASTERIXReporter::kServiceStatusDisabled);
+        len += ASTERIXReporter::WriteCAT023ServiceStatusRecord(
+            block + len, sizeof(block) - len, ctx.sac, ctx.sic, ASTERIXReporter::kServiceIDUAT,
+            ASTERIXReporter::kServiceTypeUAT, time_of_day, kReportPeriodHalfSeconds, kASTERIXReportingIntervalMs / 1000,
+            settings_manager.settings.subg_rx_enabled ? ASTERIXReporter::kServiceStatusNormal
+                                                      : ASTERIXReporter::kServiceStatusDisabled);
+        ASTERIXReporter::FinishDataBlock(block, len);
+        ret &= SendBufToSinks(sinks, num_sinks, (char*)block, len, asterix_tally, 3);
+        track_numbering_restarted = false;
+    }
+
+    // CAT021 records batched into blocks. A block goes out when full and before returning, so no record waits for
+    // the next tick.
+    uint16_t block_len = 0;
+    uint16_t num_records = 0;
+    auto flush = [&]() {
+        if (num_records > 0) {
+            ASTERIXReporter::FinishDataBlock(block, block_len);
+            ret &= SendBufToSinks(sinks, num_sinks, (char*)block, block_len, asterix_tally, num_records);
+        }
+        block_len = 0;
+        num_records = 0;
+    };
+
+    uint32_t chunk_start_ms = get_time_since_boot_ms();
+    while (asterix_report_uid_index_ < report_uids_count_) {
+        if (get_time_since_boot_ms() - chunk_start_ms >= kASTERIXChunkBudgetMs) {
+            flush();
+            return ret;  // Budget exhausted; resume on next UpdateReporting tick.
+        }
+
+        uint32_t uid = report_uids_[asterix_report_uid_index_++];
+        auto itr = aircraft_dictionary.dict.find(uid);
+        if (itr == aircraft_dictionary.dict.end()) {
+            continue;  // Aircraft pruned mid-round; skip without losing remaining entries.
+        }
+        if (!aircraft_dictionary.IsPreferredReportForAddress(uid, get_time_since_boot_ms())) {
+            continue;  // Another entry (e.g. the aircraft's own ADS-B) is reported for this ICAO address.
+        }
+
+        ASTERIXReporter::CAT021TargetReport report;
+        bool reportable = false;
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr->second)); mode_s_aircraft) {
+            reportable = ASTERIXReporter::BuildCAT021Report(report, *mode_s_aircraft, ctx);
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr->second)); uat_aircraft) {
+            reportable = ASTERIXReporter::BuildCAT021Report(report, *uat_aircraft, ctx);
+        }
+        // Remote ID drones have no ASTERIX ADS-B report.
+        if (!reportable) {
+            continue;
+        }
+        report.has_track_number = asterix_track_numbers.Get(uid, report.track_number);
+
+        uint8_t record[ASTERIXReporter::kCAT021RecordMaxLenBytes];
+        uint16_t record_len = ASTERIXReporter::WriteCAT021Record(record, sizeof(record), report);
+        if (record_len == 0) {
+            asterix_tally.num_build_failures++;
+            ret = false;
+            continue;
+        }
+        if (block_len + record_len > sizeof(block)) {
+            flush();
+        }
+        if (block_len == 0) {
+            block_len = ASTERIXReporter::BeginDataBlock(block, sizeof(block),
+                                                        ASTERIXReporter::kCategoryADSBTargetReports);
+        }
+        memcpy(block + block_len, record, record_len);
+        block_len += record_len;
+        num_records++;
+    }
+    flush();
+
+    // End of the round: flush the accumulated failures from every chunk as one line.
+    FLUSH_REPORT_TALLY("CommsManager::ReportASTERIX", asterix_tally);
+    asterix_round_active_ = false;
     return ret;
 }
 
