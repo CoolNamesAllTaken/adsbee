@@ -15,7 +15,7 @@ enum Scope : uint8_t {
 // Left out of kScopeFleet: hostname, WiFi access point SSID and channel (defaults come from the part code and a random
 // number), feed receiver IDs, the Remote ID UAS ID, and the receiver position values.
 inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) {
-    static_assert(kSettingsVersion == 18 && sizeof(SettingsManager::Settings) == 1340,
+    static_assert(kSettingsVersion == 19 && sizeof(SettingsManager::Settings) == 2652,
                   "Settings changed: add the new fields below, then update this check.");
     typedef SettingsManager::Settings Settings;
     const bool full = scope == kScopeFull;
@@ -87,6 +87,15 @@ inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) 
                          sizeof(settings.wifi_sta_extra_networks[i].password));
     }
     hasher.AddBool(settings.auto_update_enabled);
+    for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
+        const Settings::FeedMQTT& mqtt = settings.feed_mqtt[i];
+        hasher.AddU8(settings.feed_transports[i]);
+        hasher.AddString(mqtt.topic_prefix, sizeof(mqtt.topic_prefix));
+        hasher.AddString(mqtt.username, sizeof(mqtt.username));
+        hasher.AddString(mqtt.password, sizeof(mqtt.password));
+        hasher.AddBool(mqtt.tls);
+        hasher.AddU8(mqtt.qos);
+    }
 
     return hasher.Value();
 }

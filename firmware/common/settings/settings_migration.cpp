@@ -2,12 +2,13 @@
 
 #include <cstring>  // memcpy
 
-// The migration chain must end at the live version. When kSettingsVersion is bumped, freeze v18 and extend the chain
+// The migration chain must end at the live version. When kSettingsVersion is bumped, freeze v19 and extend the chain
 // (see settings_migration.hh).
-static_assert(kSettingsVersion == 18, "kSettingsVersion changed: freeze the previous layout and add a migration step.");
+static_assert(kSettingsVersion == 19, "kSettingsVersion changed: freeze the previous layout and add a migration step.");
 static_assert(sizeof(settings_v12::Settings) == 1088 && sizeof(settings_v13::Settings) == 1088 &&
                   sizeof(settings_v14::Settings) == 1140 && sizeof(settings_v15::Settings) == 1144 &&
-                  sizeof(settings_v16::Settings) == 1144 && sizeof(settings_v17::Settings) == 1340,
+                  sizeof(settings_v16::Settings) == 1144 && sizeof(settings_v17::Settings) == 1340 &&
+                  sizeof(settings_v18::Settings) == 1340,
               "A frozen settings snapshot changed size. Frozen snapshots must never be edited.");
 
 // The frozen nested layouts must stay byte-identical to the live ones for the raw copies below to be valid. If a future
@@ -285,8 +286,16 @@ void SettingsMigrator::MigrateV16ToV17(const settings_v16::Settings& in, setting
     out.ip_mode = in.ip_mode;
 }
 
-void SettingsMigrator::MigrateV17ToV18(const settings_v17::Settings& in, SettingsManager::Settings& out) {
-    // Start from a fresh, fully-defaulted current struct: automatic updates (new in v18) stay off.
+void SettingsMigrator::MigrateV17ToV18(const settings_v17::Settings& in, settings_v18::Settings& out) {
+    // v18 adds auto_update_enabled in v17's tail padding, which may hold any byte: automatic updates stay off.
+    static_assert(sizeof(in) == sizeof(out));
+    memcpy(&out, &in, sizeof(out));
+    out.settings_version = 18;
+    out.auto_update_enabled = false;
+}
+
+void SettingsMigrator::MigrateV18ToV19(const settings_v18::Settings& in, SettingsManager::Settings& out) {
+    // Start from a fresh, fully-defaulted current struct: feeds keep the TCP transport (new in v19).
     out = SettingsManager::Settings();
 
     out.settings_version = kSettingsVersion;
@@ -338,7 +347,7 @@ void SettingsMigrator::MigrateV17ToV18(const settings_v17::Settings& in, Setting
     memcpy(&out.rx_position, &in.rx_position, sizeof(in.rx_position));
     out.ip_mode = static_cast<SettingsManager::IPMode>(in.ip_mode);
     memcpy(out.wifi_sta_extra_networks, in.wifi_sta_extra_networks, sizeof(in.wifi_sta_extra_networks));
-    out.auto_update_enabled = false;
+    out.auto_update_enabled = in.auto_update_enabled;
 }
 
 bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t from_version,
@@ -349,7 +358,9 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
     settings_v14::Settings v14;
     settings_v15::Settings v15;
     settings_v16::Settings v16;
-    static settings_v17::Settings v17;  // Static: the snapshots above already fill the RP2040's 4 kB stack.
+    // Static: the snapshots above already fill the RP2040's 4 kB stack.
+    static settings_v17::Settings v17;
+    static settings_v18::Settings v18;
 
     switch (from_version) {
         case 12: {
@@ -404,7 +415,16 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
                 return false;
             }
             memcpy(&v17, blob, sizeof(v17));
-            MigrateV17ToV18(v17, out);
+            MigrateV17ToV18(v17, v18);
+            MigrateV18ToV19(v18, out);
+            return true;
+        }
+        case 18: {
+            if (blob_len < sizeof(settings_v18::Settings)) {
+                return false;
+            }
+            memcpy(&v18, blob, sizeof(v18));
+            MigrateV18ToV19(v18, out);
             return true;
         }
         default:
@@ -413,6 +433,7 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
     }
 
     MigrateV16ToV17(v16, v17);
-    MigrateV17ToV18(v17, out);  // Final step: v17 is the newest frozen version, so this lands on the live struct.
+    MigrateV17ToV18(v17, v18);
+    MigrateV18ToV19(v18, out);  // Final step: v18 is the newest frozen version, so this lands on the live struct.
     return true;
 }

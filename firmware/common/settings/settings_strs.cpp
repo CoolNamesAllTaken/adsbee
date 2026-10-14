@@ -15,6 +15,9 @@ const char
                                                "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90", "AIRCRAFT_JSON",
                                                "GDL90_NO_UAT_UPLINK", "AIRCRAFT_JSON_UAT_UPLINK"};
 
+const char SettingsManager::kFeedTransportStrs[SettingsManager::kNumFeedTransports]
+                                              [SettingsManager::kFeedTransportStrMaxLen] = {"TCP", "UDP", "MQTT"};
+
 const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioModes]
                                            [SettingsManager::kSubGHzModeStrMaxLen] = {
                                                "UAT_RX",  // UAT mode (978MHz receiver).
