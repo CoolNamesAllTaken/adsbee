@@ -43,9 +43,10 @@ def test_end_to_end(udp):
     eng = server.engine
     assert set(eng.receivers) == {rx.id for rx in sc.receivers}
     assert all(r["sync_ok"] for r in eng.receivers_status())
-    rows = col.errors(settle_s=10.0)
+    modes_only_ids = {a.icao for a in sc.aircraft if not a.adsb}
+    rows = [r for r in col.errors(settle_s=10.0) if r[0] in modes_only_ids]
     s = validation.summarize(rows)
-    assert s["n"] > 500
+    assert s["n"] > 300
     assert s["h_p50"] < 150.0, s
     assert s["rate_hz_median"] > 2.0, s
 
