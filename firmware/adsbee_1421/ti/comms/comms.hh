@@ -11,6 +11,7 @@ extern "C" {
 #include <cstdio>   // Regular pico/stdio.h doesn't support vprint functions.
 
 #include "aircraft_dictionary_config.hh"
+#include "beast_utils.hh"  // For BeastReporter::ReceiverInfo.
 #include "bsp.hh"
 #include "composite_array.hh"
 #include "console_autobaud.hh"
@@ -127,6 +128,7 @@ class CommsManager {
 
     inline uint32_t GetBaudRate() const { return config_.uart_baud_rate; }
 
+    CPP_AT_CALLBACK(ATAntennaPositionCallback);
     CPP_AT_CALLBACK(ATBaudRateCallback);
     CPP_AT_CALLBACK(ATBootloaderPinCallback);
     CPP_AT_CALLBACK(ATConfigHashCallback);

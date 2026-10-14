@@ -7,6 +7,8 @@
 #include <cstring>
 #include <strings.h>
 
+#include <string_view>
+
 /**
  * Antenna position of this receiver, for feeds that report where the receiver is (MLAT, ground station status).
  * Live GNSS with a valid fix wins, else the fixed position from the settings, else there is no position.
@@ -138,14 +140,34 @@ struct __attribute__((packed)) ReceiverPosition {
     }
 
     /**
+     * ApplyATArgs() for AT command arguments as string views (cppAT).
+     */
+    static bool ApplyATArgs(const std::string_view* args, uint16_t num_args, ReceiverPosition& position,
+                            const char*& error) {
+        static constexpr uint16_t kNumArgs = 7;
+        static constexpr uint16_t kArgMaxLen = 24;
+        char arg_bufs[kNumArgs][kArgMaxLen + 1] = {};
+        const char* arg_ptrs[kNumArgs];
+        for (uint16_t i = 0; i < kNumArgs; i++) {
+            if (i < num_args) {
+                if (args[i].length() > kArgMaxLen) {
+                    error = "Argument too long.";
+                    return false;
+                }
+                memcpy(arg_bufs[i], args[i].data(), args[i].length());
+            }
+            arg_ptrs[i] = arg_bufs[i];
+        }
+        return ApplyATArgs(arg_ptrs, kNumArgs, position, error);
+    }
+
+    /**
      * Writes a stored fixed position as the AT+ANTENNA_POSITION arguments, without the leading '='.
      * @retval Number of characters written, as snprintf.
      */
     static int PrintATArgs(char* buf, size_t buf_len, const ReceiverPosition& position) {
-        if (position.source != kSourceFixed) {
-            return snprintf(buf, buf_len, "NONE,,,,,,%d", position.moving);
-        }
-        return snprintf(buf, buf_len, "FIXED,%.7f,%.7f,%.2f,%.2f,%.2f,%d", position.latitude_deg,
+        return snprintf(buf, buf_len, "%s,%.7f,%.7f,%.2f,%.2f,%.2f,%d",
+                        position.source == kSourceFixed ? "FIXED" : "NONE", position.latitude_deg,
                         position.longitude_deg, position.height_m, position.horizontal_accuracy_m,
                         position.vertical_accuracy_m, position.moving);
     }

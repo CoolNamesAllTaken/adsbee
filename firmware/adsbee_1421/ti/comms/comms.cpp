@@ -5,18 +5,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "adsbee.hh"  // For the MLAT epoch.
 #include "beast_utils.hh"
 #include "gdl90_utils.hh"
 #include "hal.hh"
+#include "object_dictionary.hh"
 #include "raw_utils.hh"
 #include "uplink_tx_budget.hh"
 
 /* clang-format off */
 #include <ti/devices/DeviceFamily.h>
+#include DeviceFamily_constructPath(inc/hw_types.h)
 #include DeviceFamily_constructPath(inc/hw_memmap.h)
 #include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
 #include DeviceFamily_constructPath(driverlib/uart.h)
 #include DeviceFamily_constructPath(driverlib/cpu.h)
+#include DeviceFamily_constructPath(inc/hw_fcfg1.h)
 #include <ti/drivers/GPIO.h>
 #include <ti/drivers/dpl/HwiP.h>
 /* clang-format on */
@@ -297,6 +301,7 @@ bool CommsManager::ReportsRawPackets() const {
             case SettingsManager::kBeast:
             case SettingsManager::kBeastNoUAT:
             case SettingsManager::kBeastNoUATUplink:
+            case SettingsManager::kMLAT:
             case SettingsManager::kGDL90:  // Passes UAT uplinks through.
                 return true;
             default:
@@ -506,4 +511,30 @@ bool CommsManager::iface_getc(SettingsManager::SerialInterface iface, char& c) {
 
 bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char* buf, bool blocking) {
     return iface_write(iface, buf, strlen(buf), blocking);
+}
+
+bool GetReceiverPosition(ReceiverPosition& position) {
+    position = settings_manager.settings.antenna_position;  // No GNSS receiver: the fixed position or none.
+    return position.IsValid();
+}
+
+bool CommsManager::GetMLATReceiverInfo(ReportSink sink, BeastReporter::ReceiverInfo& info) {
+    (void)sink;
+    // Receiver ID: the CC1314R10 IEEE 802.15.4 EUI-64 from FCFG1, as AT+DEVICE_INFO prints it.
+    uint32_t unique_id_hi = HWREG(FCFG1_BASE + FCFG1_O_MAC_15_4_1);
+    uint32_t unique_id_lo = HWREG(FCFG1_BASE + FCFG1_O_MAC_15_4_0);
+    snprintf(info.id, sizeof(info.id), "%08lx%08lx", static_cast<unsigned long>(unique_id_hi),
+             static_cast<unsigned long>(unique_id_lo));
+    if (adsbee.mlat_epoch == 0) {
+        // The LR2021 never came up to supply a random epoch; anything that differs between boots will do.
+        adsbee.mlat_epoch = unique_id_lo ^ static_cast<uint32_t>(get_time_since_boot_us()) ^ 0x1421;
+    }
+    info.epoch = adsbee.mlat_epoch;
+    GetReceiverPosition(info.position);
+    BeastReporter::FormatFirmwareVersion(info.firmware_version, sizeof(info.firmware_version), "adsbee_1421",
+                                         ObjectDictionary::kFirmwareVersionMajor,
+                                         ObjectDictionary::kFirmwareVersionMinor,
+                                         ObjectDictionary::kFirmwareVersionPatch,
+                                         ObjectDictionary::kFirmwareVersionReleaseCandidate);
+    return true;
 }

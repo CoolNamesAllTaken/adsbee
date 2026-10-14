@@ -682,7 +682,7 @@ class SettingsEngine {
 // Constants and schema-entry factories for AT commands shared by both products.
 
 const SETTINGS_PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK', 'CSBEE',
-    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK'];
+    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK', 'MLAT'];
 const SETTINGS_LOG_LEVELS = ['SILENT', 'ERRORS', 'WARNINGS', 'INFO'];
 
 // RX_POSITION is identical on both products; the entry is built by a factory so each
@@ -736,6 +736,31 @@ function makeRxPositionEntry() {
             if (v.source === 'ICAO') return [`AT+RX_POSITION=ICAO,${v.icao}`];
             return [`AT+RX_POSITION=${v.source}`];
         },
+    };
+}
+
+// ANTENNA_POSITION is identical on both products.
+function makeAntennaPositionEntry() {
+    const fixed = v => v.source === 'FIXED';
+    return {
+        cmd: 'ANTENNA_POSITION', label: 'Antenna Position (MLAT)', group: 'Position',
+        help: 'Antenna position sent to MLAT servers (MLAT protocol) when there is no GNSS fix. Height is above the WGS84 ellipsoid (GNSS height), not above sea level.',
+        fields: [
+            {
+                id: 'source', label: 'Source', type: 'enum',
+                options: [
+                    { value: 'NONE', label: 'Not set' },
+                    { value: 'FIXED', label: 'Fixed (enter below)' },
+                ],
+            },
+            { id: 'lat', label: 'Latitude (deg)', type: 'float', min: -90, max: 90, visibleIf: fixed },
+            { id: 'lon', label: 'Longitude (deg)', type: 'float', min: -180, max: 180, visibleIf: fixed },
+            { id: 'height', label: 'Height above ellipsoid (m)', type: 'float', min: -1000, max: 100000, visibleIf: fixed },
+            { id: 'hacc', label: 'Horizontal accuracy, 1 sigma (m, 0 if unknown)', type: 'float', min: 0, visibleIf: fixed },
+            { id: 'vacc', label: 'Vertical accuracy, 1 sigma (m, 0 if unknown)', type: 'float', min: 0, visibleIf: fixed },
+            { id: 'moving', label: 'Receiver may move (vehicle)', type: 'bool' },
+            { id: 'in_use', label: 'Position in use', type: 'display' },
+        ],
     };
 }
 
@@ -924,6 +949,7 @@ const SETTINGS_SCHEMA_1090 = [
     makeMavlinkIdEntry(),
     // ── Position ──
     makeRxPositionEntry(),
+    makeAntennaPositionEntry(),
     {
         cmd: 'GNSS', label: 'GNSS Receiver', group: 'Position',
         fields: [

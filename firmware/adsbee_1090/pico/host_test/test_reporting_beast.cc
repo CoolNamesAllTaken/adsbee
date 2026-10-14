@@ -1,3 +1,6 @@
+#include <cstring>
+#include <string>
+
 #include "beast_utils.hh"
 #include "gtest/gtest.h"
 #include "mode_s_packet.hh"
@@ -216,4 +219,111 @@ TEST(BeastUtils, BuildUATUplinkFrame) {
         ByteBufferToHexString(beast_frame_buf_str, beast_frame_buf, bytes_written);
         EXPECT_STREQ(beast_frame_buf_str, test.beast_frame_buf);
     }
+}
+TEST(BeastUtils, BuildModeSBeastFrameWith48MHzTimestamp) {
+    // Same packet as BuildModeSBeastFrame: the 48MHz field is the full count mod 2^48, 4x the 12MHz one.
+    uint64_t mlat_48mhz = 0x00ABFF1AFFFFFF1AULL;
+    DecodedModeSPacket tpacket = DecodedModeSPacket((const char*)"8d495066587f469bb826d21ad767", 0, -80, 50, mlat_48mhz);
+    uint8_t frame_12mhz[BeastReporter::kModeSBeastFrameMaxLenBytes];
+    uint8_t frame_48mhz[BeastReporter::kModeSBeastFrameMaxLenBytes];
+    uint16_t len_12mhz = BeastReporter::BuildModeSBeastFrame(frame_12mhz, tpacket);
+    uint16_t len_48mhz = BeastReporter::BuildModeSBeastFrame(frame_48mhz, tpacket, true);
+
+    // Unescape the 6 timestamp bytes that follow the frame type.
+    auto timestamp = [](const uint8_t* frame) {
+        uint64_t value = 0;
+        uint16_t i = 2;
+        for (uint16_t n = 0; n < 6; n++, i++) {
+            value = (value << 8) | frame[i];
+            if (frame[i] == BeastReporter::kBeastEscapeChar) i++;
+        }
+        return value;
+    };
+    EXPECT_EQ(timestamp(frame_48mhz), 0xFF1AFFFFFF1AULL);
+    EXPECT_EQ(timestamp(frame_12mhz), (mlat_48mhz >> 2) & 0xFFFFFFFFFFFFULL);
+    EXPECT_EQ(frame_48mhz[0], BeastReporter::kBeastEscapeChar);
+    EXPECT_EQ(frame_48mhz[1], BeastReporter::kBeastFrameTypeModeSLong);
+    // Two escaped 0x1a in the 48MHz timestamp, none in the 12MHz one.
+    EXPECT_EQ(len_48mhz, len_12mhz + 2);
+    EXPECT_EQ(memcmp(frame_48mhz + len_48mhz - 16, frame_12mhz + len_12mhz - 16, 16), 0);  // Same RSSI and data.
+}
+
+TEST(BeastUtils, BuildReceiverInfoFrame) {
+    BeastReporter::ReceiverInfo info;
+    strcpy(info.id, "0bee00038172d18c");
+    info.epoch = 0x3fa2;
+    info.position.source = ReceiverPosition::kSourceGNSS;
+    info.position.latitude_deg = 37.4219983;
+    info.position.longitude_deg = -122.0840575;
+    info.position.height_m = 31.42f;
+    info.position.horizontal_accuracy_m = 2.5f;
+    info.position.vertical_accuracy_m = 4.0f;
+    info.pps.valid = true;
+    info.pps.mlat_48mhz_counts = 0x12f1c0a39b100ULL;  // Wider than 48 bits: sent mod 2^48.
+    info.pps.unix_time_s = 1791936000;
+    strcpy(info.name, "Hilltop");
+    strcpy(info.firmware_version, "adsbee_1090-0.9.1");
+
+    uint8_t buf[BeastReporter::kReceiverInfoFrameMaxLenBytes];
+    uint16_t len = BeastReporter::BuildReceiverInfoFrame(buf, sizeof(buf), info);
+    ASSERT_GT(len, 3);
+    EXPECT_EQ(buf[0], 0x1a);
+    EXPECT_EQ(buf[1], 0xe9);
+    EXPECT_EQ(buf[len - 1], '\n');
+    std::string payload(reinterpret_cast<char*>(buf + 2), len - 3);
+    EXPECT_EQ(payload,
+              "v=1;id=0bee00038172d18c;clk=48000000;ep=3fa2;lat=37.4219983;lon=-122.0840575;alt=31.42;src=gnss;"
+              "hacc=2.50;vacc=4.00;mov=0;pps=2f1c0a39b100@1791936000;name=Hilltop;fw=adsbee_1090-0.9.1");
+    // Printable ASCII only: never the Beast escape Byte.
+    for (char c : payload) {
+        EXPECT_GE(c, 0x20);
+        EXPECT_LE(c, 0x7e);
+    }
+}
+
+TEST(BeastUtils, ReceiverInfoFrameEscapesAndOmissions) {
+    BeastReporter::ReceiverInfo info;
+    strcpy(info.id, "bad id;=\x1a");
+    info.epoch = 1;
+    info.position.moving = true;  // No position source: no lat/lon/alt/src, but mov is sent.
+    strcpy(info.name, "a;b=c\x1a\x7f");
+    uint8_t buf[BeastReporter::kReceiverInfoFrameMaxLenBytes];
+    uint16_t len = BeastReporter::BuildReceiverInfoFrame(buf, sizeof(buf), info);
+    ASSERT_GT(len, 3);
+    std::string payload(reinterpret_cast<char*>(buf + 2), len - 3);
+    EXPECT_EQ(payload, "v=1;id=bad_id___;clk=48000000;ep=1;mov=1;name=a_b_c__");
+
+    // Negative coordinates that round to zero have no sign; unknown accuracies are left out.
+    info.position.source = ReceiverPosition::kSourceFixed;
+    info.position.latitude_deg = -0.00000001;
+    info.position.longitude_deg = 179.99999996;
+    info.position.height_m = -12.345f;
+    info.name[0] = '\0';
+    len = BeastReporter::BuildReceiverInfoFrame(buf, sizeof(buf), info);
+    payload.assign(reinterpret_cast<char*>(buf + 2), len - 3);
+    EXPECT_EQ(payload, "v=1;id=bad_id___;clk=48000000;ep=1;lat=0.0000000;lon=180.0000000;alt=-12.35;src=fixed;mov=1");
+
+    // No ID or no room: no frame.
+    EXPECT_EQ(BeastReporter::BuildReceiverInfoFrame(buf, 20, info), 0);
+    info.id[0] = '\0';
+    EXPECT_EQ(BeastReporter::BuildReceiverInfoFrame(buf, sizeof(buf), info), 0);
+}
+
+TEST(BeastUtils, ReceiverInfoSchedule) {
+    BeastReporter::ReceiverInfoSchedule schedule;
+    EXPECT_TRUE(schedule.Due(0, 7, false));  // First frame of a connection.
+    schedule.MarkSent(1000, 7);
+    EXPECT_FALSE(schedule.Due(1000, 7, false));
+    EXPECT_FALSE(schedule.Due(10999, 7, false));
+    EXPECT_TRUE(schedule.Due(11000, 7, false));  // Every 10 s.
+    EXPECT_TRUE(schedule.Due(2000, 7, true));    // Every second while moving.
+    EXPECT_TRUE(schedule.Due(1001, 8, false));   // Right away on a new epoch.
+    schedule.MarkSent(1001, 8);
+    EXPECT_FALSE(schedule.Due(1002, 8, false));
+    schedule.Restart();
+    EXPECT_TRUE(schedule.Due(1002, 8, false));  // New connection.
+    // Works across the millisecond counter wrapping.
+    schedule.MarkSent(0xFFFFF000u, 8);
+    EXPECT_FALSE(schedule.Due(0x00000100u, 8, false));
+    EXPECT_TRUE(schedule.Due(0xFFFFF000u + 10000u, 8, false));
 }

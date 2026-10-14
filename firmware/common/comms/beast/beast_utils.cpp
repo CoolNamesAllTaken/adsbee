@@ -1,5 +1,8 @@
 #include "beast_utils.hh"
 
+#include <ctype.h>
+#include <stdarg.h>
+
 #include "beast_tables.hh"
 #include "comms.hh"
 #include "macros.hh"
@@ -69,18 +72,18 @@ uint16_t BeastReporter::BuildFeedStartFrame(uint8_t *beast_frame_buf, uint8_t *r
 }
 
 /**
- * Write 12MHz MLAT timestamp to buffer.
+ * Write a 6 Byte MLAT timestamp (12MHz or 48MHz counts) to buffer.
  * @param[in] buf Pointer to output buffer.
- * @param[in] mlat_12mhz_counter MLAT timestamp value.
+ * @param[in] mlat_counter MLAT timestamp value.
  * @retval Number of bytes written to the output buffer, including escapes.
  */
-uint16_t Write12MHzMLATTimestamp(uint8_t *buf, uint64_t mlat_12mhz_counter) {
-    uint8_t mlat_12mhz_counter_buf[6];
+uint16_t WriteMLATTimestamp(uint8_t *buf, uint64_t mlat_counter) {
+    uint8_t mlat_counter_buf[6];
     for (uint16_t i = 0; i < BeastReporter::kBeastMLATTimestampNumBytes; i++) {
-        mlat_12mhz_counter_buf[i] =
-            (mlat_12mhz_counter >> (BeastReporter::kBeastMLATTimestampNumBytes - i - 1) * kBitsPerByte) & 0xFF;
+        mlat_counter_buf[i] =
+            (mlat_counter >> (BeastReporter::kBeastMLATTimestampNumBytes - i - 1) * kBitsPerByte) & 0xFF;
     }
-    return BeastReporter::WriteBufferWithBeastEscapes(buf, mlat_12mhz_counter_buf,
+    return BeastReporter::WriteBufferWithBeastEscapes(buf, mlat_counter_buf,
                                                       BeastReporter::kBeastMLATTimestampNumBytes);
 }
 
@@ -97,7 +100,8 @@ uint16_t WriteRSSIdBmAsBeastPowerLevel(uint8_t *buf, int16_t rssi_dbm) {
     return BeastReporter::WriteBufferWithBeastEscapes(buf, &rssi_byte, 1);
 }
 
-uint16_t BeastReporter::BuildModeSBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet) {
+uint16_t BeastReporter::BuildModeSBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet,
+                                             bool timestamp_48mhz) {
     uint8_t packet_buf[DecodedModeSPacket::kMaxPacketLenWords32 * kBytesPerWord];
     uint16_t data_num_bytes = packet.DumpPacketBuffer(packet_buf);
 
@@ -117,12 +121,105 @@ uint16_t BeastReporter::BuildModeSBeastFrame(uint8_t *beast_frame_buf, const Dec
     }
     uint16_t bytes_written = 2;
 
-    bytes_written += Write12MHzMLATTimestamp(beast_frame_buf + bytes_written, packet.raw.GetMLAT12MHzCounter());
+    bytes_written += WriteMLATTimestamp(
+        beast_frame_buf + bytes_written,
+        timestamp_48mhz ? packet.raw.GetMLAT48MHzCounter() : packet.raw.GetMLAT12MHzCounter());
     bytes_written += WriteRSSIdBmAsBeastPowerLevel(beast_frame_buf + bytes_written, packet.raw.sigs_dbm);
 
     // Write packet buffer with escape characters.
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet_buf, data_num_bytes);
     return bytes_written;
+}
+
+namespace {
+
+// Appends printf output to a receiver info payload. Sets ok to false once the payload no longer fits.
+struct InfoPayloadWriter {
+    char *buf;
+    uint16_t buf_len;
+    uint16_t len = 0;
+    bool ok = true;
+
+    void Append(const char *format, ...) __attribute__((format(printf, 2, 3))) {
+        if (!ok) return;
+        va_list args;
+        va_start(args, format);
+        int n = vsnprintf(buf + len, buf_len - len, format, args);
+        va_end(args);
+        if (n < 0 || n >= buf_len - len) {
+            ok = false;
+            return;
+        }
+        len += n;
+    }
+
+    // Writes value with a fixed number of decimals, rounded, without relying on printf float support.
+    void AppendFixedPoint(const char *key, double value, uint16_t decimals) {
+        uint64_t scale = 1;
+        for (uint16_t i = 0; i < decimals; i++) scale *= 10;
+        bool negative = value < 0.0;
+        uint64_t scaled = static_cast<uint64_t>((negative ? -value : value) * static_cast<double>(scale) + 0.5);
+        const char *sign = negative && scaled != 0 ? "-" : "";
+        if (decimals == 0) {
+            Append("%s=%s%llu;", key, sign, static_cast<unsigned long long>(scaled));
+        } else {
+            Append("%s=%s%llu.%0*llu;", key, sign, static_cast<unsigned long long>(scaled / scale), decimals,
+                   static_cast<unsigned long long>(scaled % scale));
+        }
+    }
+
+    // Appends key=value with characters the payload can't carry replaced by '_'.
+    void AppendText(const char *key, const char *value, uint16_t max_len, bool id_chars_only) {
+        Append("%s=", key);
+        for (uint16_t i = 0; ok && i < max_len && value[i] != '\0'; i++) {
+            char c = value[i];
+            bool allowed = id_chars_only ? (isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '.' || c == '-')
+                                         : (c >= 0x20 && c <= 0x7e && c != ';' && c != '=');
+            Append("%c", allowed ? c : '_');
+        }
+        Append(";");
+    }
+};
+
+}  // namespace
+
+uint16_t BeastReporter::BuildReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, const ReceiverInfo &info) {
+    if (info.id[0] == '\0' || buf_len < 3) {
+        return 0;
+    }
+    buf_len = MIN(buf_len, kReceiverInfoFrameMaxLenBytes);
+    buf[0] = kBeastEscapeChar;
+    buf[1] = kBeastFrameTypeReceiverInfo;
+    // The payload is built in place; one byte is kept back for the terminating newline.
+    InfoPayloadWriter w = {.buf = reinterpret_cast<char *>(buf + 2), .buf_len = static_cast<uint16_t>(buf_len - 3)};
+
+    w.Append("v=1;");
+    w.AppendText("id", info.id, kReceiverInfoIDMaxLen, true);
+    w.Append("clk=%lu;ep=%lx;", static_cast<unsigned long>(info.clock_hz), static_cast<unsigned long>(info.epoch));
+    const ReceiverPosition &position = info.position;
+    if (position.IsValid()) {
+        w.AppendFixedPoint("lat", position.latitude_deg, 7);
+        w.AppendFixedPoint("lon", position.longitude_deg, 7);
+        w.AppendFixedPoint("alt", position.height_m, 2);
+        w.Append("src=%s;", ReceiverPosition::SourceToStr(position.source));
+        if (position.horizontal_accuracy_m > 0.0f) w.AppendFixedPoint("hacc", position.horizontal_accuracy_m, 2);
+        if (position.vertical_accuracy_m > 0.0f) w.AppendFixedPoint("vacc", position.vertical_accuracy_m, 2);
+    }
+    w.Append("mov=%d;", position.moving ? 1 : 0);
+    if (info.pps.valid) {
+        w.Append("pps=%llx@%lu;", static_cast<unsigned long long>(info.pps.mlat_48mhz_counts & 0xFFFFFFFFFFFF),
+                 static_cast<unsigned long>(info.pps.unix_time_s));
+    }
+    if (info.name[0] != '\0') w.AppendText("name", info.name, kReceiverInfoNameMaxLen, false);
+    if (info.firmware_version[0] != '\0') {
+        w.AppendText("fw", info.firmware_version, kReceiverInfoFirmwareVersionMaxLen, false);
+    }
+    if (!w.ok) {
+        return 0;
+    }
+    w.len--;  // Drop the trailing ';'.
+    buf[2 + w.len] = '\n';
+    return 2 + w.len + 1;
 }
 
 uint16_t BeastReporter::BuildModeSIngestBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet,
@@ -178,7 +275,7 @@ uint16_t BeastReporter::BuildUATADSBBeastFrame(uint8_t *beast_frame_buf, const R
     beast_frame_buf[bytes_written++] = BeastFrameType::kBeastFrameTypeUAT;
     beast_frame_buf[bytes_written++] = uat_message_type_char;
 
-    bytes_written += Write12MHzMLATTimestamp(beast_frame_buf + bytes_written, packet.GetMLAT12MHzCounter());
+    bytes_written += WriteMLATTimestamp(beast_frame_buf + bytes_written, packet.GetMLAT12MHzCounter());
     bytes_written += WriteRSSIdBmAsBeastPowerLevel(beast_frame_buf + bytes_written, packet.sigs_dbm);
 
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet.buffer,
@@ -199,7 +296,7 @@ uint16_t BeastReporter::BuildUATUplinkBeastFrame(uint8_t *beast_frame_buf, const
     beast_frame_buf[bytes_written++] = BeastFrameType::kBeastFrameTypeUAT;
     beast_frame_buf[bytes_written++] = kUATMessageTypeUplink;
 
-    bytes_written += Write12MHzMLATTimestamp(beast_frame_buf + bytes_written, packet.GetMLAT12MHzCounter());
+    bytes_written += WriteMLATTimestamp(beast_frame_buf + bytes_written, packet.GetMLAT12MHzCounter());
     bytes_written += WriteRSSIdBmAsBeastPowerLevel(beast_frame_buf + bytes_written, packet.sigs_dbm);
 
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet.encoded_message,

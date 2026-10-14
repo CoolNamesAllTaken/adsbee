@@ -2,6 +2,7 @@
 
 #include "aircraft_dictionary_config.hh"
 #include "at_console_guard.hh"
+#include "beast_utils.hh"  // For BeastReporter::ReceiverInfo.
 #include "composite_array.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
@@ -92,6 +93,7 @@ class CommsManager {
 #endif
     CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
+    CPP_AT_CALLBACK(ATAntennaPositionCallback);
     CPP_AT_CALLBACK(ATAutoUpdateCallback);
     CPP_AT_CALLBACK(ATFeedEnableCallback);
     CPP_AT_CALLBACK(ATRemoteIDCallback);

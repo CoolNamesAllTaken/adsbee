@@ -521,7 +521,7 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t wifi = dump.find("AT+WIFI_STA=");
     size_t ip_mode = dump.find("AT+IP_MODE=");
     size_t auto_update = dump.find("AT+AUTO_UPDATE=1");
-    size_t antenna_position = dump.find("AT+ANTENNA_POSITION=NONE,,,,,,0");
+    size_t antenna_position = dump.find("AT+ANTENNA_POSITION=NONE,0.0000000,0.0000000,0.00,0.00,0.00,0");
     ASSERT_NE(wifi, std::string::npos);
     ASSERT_NE(ip_mode, std::string::npos);
     ASSERT_NE(auto_update, std::string::npos);
@@ -608,7 +608,7 @@ TEST(Settings, AntennaPositionATArgs) {
     EXPECT_EQ(position.source, ReceiverPosition::kSourceNone);
     EXPECT_TRUE(position.moving);
     ReceiverPosition::PrintATArgs(buf, sizeof(buf), position);
-    EXPECT_STREQ(buf, "NONE,,,,,,1");
+    EXPECT_STREQ(buf, "NONE,0.0000000,0.0000000,0.00,0.00,0.00,1");
     const char* only_moving[] = {"", "", "", "", "", "", "0"};
     ASSERT_TRUE(ReceiverPosition::ApplyATArgs(only_moving, 7, position, error));
     EXPECT_FALSE(position.moving);

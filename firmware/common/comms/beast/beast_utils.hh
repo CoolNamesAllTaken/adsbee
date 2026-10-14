@@ -1,6 +1,9 @@
 #pragma once
 
+#include <stdio.h>
+
 #include "mode_s_packet.hh"
+#include "receiver_position.hh"
 #include "uat_packet.hh"
 
 namespace BeastReporter {
@@ -49,7 +52,8 @@ enum BeastFrameType {
         0xec,  // Used for encapsulated UAT ADSB short messages, UAT ADSB long messages, and UAT uplink messages.
     kBeastFrameTypeModeAC = 0x31,  // Note: This is not used, since I'm assuming it does NOT refer to DF 4,5.
     kBeastFrameTypeModeSShort = 0x32,
-    kBeastFrameTypeModeSLong = 0x33
+    kBeastFrameTypeModeSLong = 0x33,
+    kBeastFrameTypeReceiverInfo = 0xe9  // ADSBee MLAT feed (software/adsbee_mlat/PROTOCOL.md).
 };
 
 enum UATMessageTypeChar : char {
@@ -81,9 +85,77 @@ uint16_t BuildFeedStartFrame(uint8_t *beast_frame_buf, uint8_t *receiver_id);
  * Converts a DecodedModeSPacket payload to a data buffer in Mode S Beast output format.
  * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
  * @param[in] packet Reference to DecodedModeSPacket to convert.
+ * @param[in] timestamp_48mhz Send the 48MHz timestamp (MLAT feed) instead of the 12MHz one (classic Beast).
  * @retval Number of bytes written to beast_frame_buf.
  */
-uint16_t BuildModeSBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet);
+uint16_t BuildModeSBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet,
+                              bool timestamp_48mhz = false);
+
+constexpr uint32_t kMLATFeedClockHz = 48000000;  // Timestamp clock of the MLAT feed.
+constexpr uint16_t kReceiverInfoFrameMaxLenBytes = 512;
+constexpr uint16_t kReceiverInfoIDMaxLen = 32;
+constexpr uint16_t kReceiverInfoNameMaxLen = 32;
+constexpr uint16_t kReceiverInfoFirmwareVersionMaxLen = 40;
+
+/**
+ * Contents of an MLAT feed receiver info frame (0x1a 0xe9 <key=value;...> 0x0a).
+ */
+struct ReceiverInfo {
+    char id[kReceiverInfoIDMaxLen + 1] = {0};  // Characters outside [0-9A-Za-z_.-] are sent as '_'.
+    uint32_t clock_hz = kMLATFeedClockHz;
+    uint32_t epoch = 0;  // Changes whenever the timestamp counter restarts.
+    ReceiverPosition position;
+    ReceiverPPS pps;
+    char name[kReceiverInfoNameMaxLen + 1] = {0};  // Optional. ';' '=' and non-printable characters are sent as '_'.
+    char firmware_version[kReceiverInfoFirmwareVersionMaxLen + 1] = {0};  // Optional, same rule as name.
+};
+
+/**
+ * Writes a firmware version as in release tags: <product>-M.m.p, with -rcN for a release candidate.
+ */
+inline void FormatFirmwareVersion(char *buf, uint16_t buf_len, const char *product, uint8_t major, uint8_t minor,
+                                  uint8_t patch, uint8_t release_candidate) {
+    int n = snprintf(buf, buf_len, "%s-%u.%u.%u", product, major, minor, patch);
+    if (release_candidate != 0 && n > 0 && n < buf_len) {
+        snprintf(buf + n, buf_len - n, "-rc%u", release_candidate);
+    }
+}
+
+/**
+ * Writes a receiver info frame. The payload is printable ASCII, so it needs no Beast escapes.
+ * @param[out] buf Buffer to write to.
+ * @param[in] buf_len Size of buf. kReceiverInfoFrameMaxLenBytes is always enough.
+ * @param[in] info Values to send. Position fields are left out when info.position has no source.
+ * @retval Number of bytes written, or 0 if the frame didn't fit or info.id is empty.
+ */
+uint16_t BuildReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, const ReceiverInfo &info);
+
+/**
+ * When an MLAT feed sink sends its next receiver info frame: first on each connection, then every 10 seconds, every
+ * second while the receiver may move, and right away when the clock epoch changes.
+ */
+class ReceiverInfoSchedule {
+   public:
+    static constexpr uint32_t kIntervalMs = 10000;
+    static constexpr uint32_t kMovingIntervalMs = 1000;
+
+    bool Due(uint32_t timestamp_ms, uint32_t epoch, bool moving) const {
+        return !sent_ || epoch != epoch_ ||
+               timestamp_ms - last_sent_timestamp_ms_ >= (moving ? kMovingIntervalMs : kIntervalMs);
+    }
+    void MarkSent(uint32_t timestamp_ms, uint32_t epoch) {
+        sent_ = true;
+        epoch_ = epoch;
+        last_sent_timestamp_ms_ = timestamp_ms;
+    }
+    // Call when the sink's connection (re)starts.
+    void Restart() { sent_ = false; }
+
+   private:
+    bool sent_ = false;
+    uint32_t epoch_ = 0;
+    uint32_t last_sent_timestamp_ms_ = 0;
+};
 
 /**
  * Sends an Ingest Beast frame (0xe3) with a 16-Byte receiver ID prepended. This type of frame is used by readsb when

@@ -198,6 +198,12 @@ bool ADSBee::ApplyReceiverConfigInner() {
         if (!lr2021.Init()) {
             return false;
         }
+        if (mlat_epoch == 0) {
+            LR2021::RandomNumberRsp random;
+            if (lr2021.GetRandomNumber(&random)) {
+                mlat_epoch = random.value;
+            }
+        }
         if (lr2021.SetOokADSB(r1090_preamble_mode_, r1090_gain_, r1090_rx_boost_)) {
             break;
         }

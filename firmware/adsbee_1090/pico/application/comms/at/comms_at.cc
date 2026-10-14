@@ -93,6 +93,27 @@ int32_t CommsManager::ATReadConsole(char* buf, uint16_t max_len, uint32_t timeou
 
 /** AT Command Callback Functions **/
 
+CPP_AT_CALLBACK(CommsManager::ATAntennaPositionCallback) {
+    switch (op) {
+        case '?': {
+            char position_args[96];
+            ReceiverPosition::PrintATArgs(position_args, sizeof(position_args),
+                                          settings_manager.settings.antenna_position);
+            CPP_AT_CMD_PRINTF("=%s,%s", position_args, ReceiverPosition::SourceToStr(adsbee.receiver_position.source));
+            CPP_AT_SILENT_SUCCESS();
+        }
+        case '=': {
+            const char* error = "";
+            if (!ReceiverPosition::ApplyATArgs(args, num_args, settings_manager.settings.antenna_position, error)) {
+                CPP_AT_ERROR("%s", error);
+            }
+            settings_manager.SyncToCoprocessors();
+            CPP_AT_SUCCESS();
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATAutoUpdateCallback) {
     switch (op) {
         case '?':
@@ -1594,6 +1615,15 @@ static void PrintSettingsJSON() {
     const SettingsManager::Settings::CoreNetworkSettings& cns = s.core_network_settings;
 
     CPP_AT_PRINTF("SETTINGS={");
+    {
+        const ReceiverPosition& antenna = s.antenna_position;
+        char position_args[96];
+        ReceiverPosition::PrintATArgs(position_args, sizeof(position_args), antenna);
+        // Same values as AT+ANTENNA_POSITION?, as a JSON array: the source string, then numbers.
+        char* numbers = strchr(position_args, ',');
+        CPP_AT_PRINTF("\"ANTENNA_POSITION\":[\"%.*s\"%s,\"%s\"],", static_cast<int>(numbers - position_args),
+                      position_args, numbers, ReceiverPosition::SourceToStr(adsbee.receiver_position.source));
+    }
     CPP_AT_PRINTF("\"AUTO_UPDATE\":[%d],", s.auto_update_enabled);
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu,%lu],",
                   (unsigned long)s.baud_rates[SettingsManager::SerialInterface::kCommsUART],
@@ -1992,6 +2022,17 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTANetworkCallback) {
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command = "ANTENNA_POSITION",
+     .min_args = 0,
+     .max_args = 7,
+     .help_string =
+         "AT+ANTENNA_POSITION=<NONE|FIXED>,<lat_deg>,<lon_deg>,<height_m>,<hacc_m>,<vacc_m>,<moving>\r\n\tAntenna "
+         "position reported to MLAT and other feeds when there is no GNSS fix. Height is above the WGS84 ellipsoid "
+         "(GNSS height, not height above sea level). hacc_m and vacc_m are one sigma accuracies (empty if unknown). "
+         "moving is 1 for a receiver in a vehicle (position sent every second). NONE clears the position; an empty "
+         "argument keeps moving as it is.\r\n\tAT+ANTENNA_POSITION?\r\n\tQuery the stored position, followed by "
+         "the source in use (none, fixed or gnss).",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATAntennaPositionCallback, comms_manager)},
     {.command = "AUTO_UPDATE",
      .min_args = 0,
      .max_args = 1,

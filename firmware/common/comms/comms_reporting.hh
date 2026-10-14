@@ -98,6 +98,30 @@ bool ReportBeast(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::Ra
                  SettingsManager::ReportingProtocol protocol = SettingsManager::kBeast);
 
 /**
+ * Sends the MLAT feed: Mode S Beast frames with 48MHz timestamps, preceded by a receiver info frame whenever the
+ * sink's ReceiverInfoSchedule says one is due. UAT packets are not sent.
+ * @param[in] sinks Array of ReportSinks to send the feed on.
+ * @param[in] num_sinks Number of ReportSinks in the sinks array.
+ * @param[in] packets Packets to report, or nullptr to only send receiver info frames that are due.
+ * @retval True if successful, false if something broke.
+ */
+bool ReportMLAT(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets* packets);
+
+/**
+ * Makes the next MLAT feed report on a sink start with a receiver info frame. Call when its connection starts.
+ * @param[in] sink ReportSink whose connection (re)started.
+ */
+void RestartMLATReceiverInfo(ReportSink sink);
+
+/**
+ * Fills in the receiver info frame contents for an MLAT feed sink. Defined per platform.
+ * @param[in] sink ReportSink the frame goes to (the receiver ID can differ per feed).
+ * @param[out] info Receiver info to fill in.
+ * @retval True if info is complete enough to send.
+ */
+bool GetMLATReceiverInfo(ReportSink sink, BeastReporter::ReceiverInfo& info);
+
+/**
  * Sends out comma separated aircraft information for each aircraft in the aircraft dictionary.
  * @param[in] sinks Array of ReportSinks to broadcast aircraft information on.
  * @param[in] num_sinks Number of ReportSinks in the sinks array.

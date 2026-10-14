@@ -51,6 +51,28 @@ int CppAT::cpp_at_printf(const char* format, ...) {
 
 /** AT Command Callback Functions **/
 
+CPP_AT_CALLBACK(CommsManager::ATAntennaPositionCallback) {
+    switch (op) {
+        case '?': {
+            char position_args[96];
+            ReceiverPosition::PrintATArgs(position_args, sizeof(position_args),
+                                          settings_manager.settings.antenna_position);
+            ReceiverPosition in_use;
+            GetReceiverPosition(in_use);
+            CPP_AT_CMD_PRINTF("=%s,%s", position_args, ReceiverPosition::SourceToStr(in_use.source));
+            CPP_AT_SILENT_SUCCESS();
+        }
+        case '=': {
+            const char* error = "";
+            if (!ReceiverPosition::ApplyATArgs(args, num_args, settings_manager.settings.antenna_position, error)) {
+                CPP_AT_ERROR("%s", error);
+            }
+            CPP_AT_SUCCESS();
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
     switch (op) {
         case '?':
@@ -862,6 +884,17 @@ static void PrintSettingsJSON() {
     }
 
     CPP_AT_PRINTF("SETTINGS={");
+    {
+        ReceiverPosition antenna = s.antenna_position;  // Copy: Settings is packed.
+        ReceiverPosition in_use;
+        GetReceiverPosition(in_use);
+        char position_args[96];
+        ReceiverPosition::PrintATArgs(position_args, sizeof(position_args), antenna);
+        // Same values as AT+ANTENNA_POSITION?, as a JSON array: the source string, then numbers.
+        char* numbers = strchr(position_args, ',');
+        CPP_AT_PRINTF("\"ANTENNA_POSITION\":[\"%.*s\"%s,\"%s\"],", static_cast<int>(numbers - position_args),
+                      position_args, numbers, ReceiverPosition::SourceToStr(in_use.source));
+    }
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu],", (unsigned long)comms_manager.GetBaudRate());
     CPP_AT_PRINTF("\"BOOTLOADER_PIN\":[%d],", CcfgBootloader::BackdoorEnabled(CcfgBootloader::ReadBlConfig()));
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
@@ -1305,6 +1338,17 @@ CPP_AT_CALLBACK(CommsManager::ATRxCWCallback) {
 #endif
 
 const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command = "ANTENNA_POSITION",
+     .min_args = 0,
+     .max_args = 7,
+     .help_string =
+         "AT+ANTENNA_POSITION=<NONE|FIXED>,<lat_deg>,<lon_deg>,<height_m>,<hacc_m>,<vacc_m>,<moving>\r\n\tAntenna "
+         "position sent in the MLAT protocol's receiver info frame. Height is above the WGS84 ellipsoid (GNSS "
+         "height, not height above sea level). hacc_m and vacc_m are one sigma accuracies (empty if unknown). moving "
+         "is 1 for a receiver in a vehicle (position sent every second). NONE clears the position; an empty argument "
+         "keeps moving as it is. AT+SETTINGS=SAVE stores it.\r\n\tAT+ANTENNA_POSITION?\r\n\tQuery the stored "
+         "position, followed by the source in use (none or fixed).",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATAntennaPositionCallback, comms_manager)},
     {.command = "BAUD_RATE",
      .min_args = 0,
      .max_args = 2,

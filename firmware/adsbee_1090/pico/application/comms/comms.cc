@@ -3,7 +3,10 @@
 #include <cstdarg>  // For debug printf.
 #include <cstdio>   // Regular pico/stdio.h doesn't support vprint functions.
 
+#include "adsbee.hh"  // For the receiver position and MLAT epoch.
+#include "object_dictionary.hh"
 #include "pico/stdlib.h"
+#include "pico/unique_id.h"
 #include "spi_coprocessor.hh"
 
 static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kConsole,
@@ -296,5 +299,39 @@ bool CommsManager::network_console_puts(const char* buf, uint16_t len) {
             return false;
         }
     }
+    return true;
+}
+
+bool GetReceiverPosition(ReceiverPosition& position) {
+    position = adsbee.receiver_position;
+    return position.IsValid();
+}
+
+bool CommsManager::GetMLATReceiverInfo(ReportSink sink, BeastReporter::ReceiverInfo& info) {
+    (void)sink;  // Every serial output carries this device's receiver ID.
+    static char receiver_id[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes + 1] = {0};
+    if (receiver_id[0] == '\0') {
+        // The default feed receiver ID from the part code, else the RP2040 flash unique ID.
+        uint8_t id[SettingsManager::Settings::kFeedReceiverIDNumBytes];
+        SettingsManager::DeviceInfo device_info;
+        if (SettingsManager::GetDeviceInfo(device_info)) {
+            device_info.GetDefaultFeedReceiverID(id);
+        } else {
+            pico_unique_board_id_t unique_id;
+            pico_get_unique_board_id(&unique_id);
+            memcpy(id, unique_id.id, sizeof(id));
+        }
+        SettingsManager::ReceiverIDToStr(id, receiver_id);
+    }
+    strncpy(info.id, receiver_id, sizeof(info.id) - 1);
+    info.epoch = adsbee.mlat_epoch;
+    info.position = adsbee.receiver_position;
+    info.pps = adsbee.receiver_pps;
+    strncpy(info.name, settings_manager.settings.core_network_settings.hostname, sizeof(info.name) - 1);
+    BeastReporter::FormatFirmwareVersion(info.firmware_version, sizeof(info.firmware_version), "adsbee_1090",
+                                         ObjectDictionary::kFirmwareVersionMajor,
+                                         ObjectDictionary::kFirmwareVersionMinor,
+                                         ObjectDictionary::kFirmwareVersionPatch,
+                                         ObjectDictionary::kFirmwareVersionReleaseCandidate);
     return true;
 }

@@ -541,11 +541,39 @@ bool CommsManager::FinishFeedSocketConnect(uint16_t feed_index) {
             }
             break;
         }
+        case SettingsManager::ReportingProtocol::kMLAT:
+            // The next report starts the stream with a receiver info frame.
+            RestartMLATReceiverInfo(feed_index);
+            break;
         default:
             // No start of connections actions required for other protocols.
             break;
     }
     return true;
+}
+
+bool CommsManager::GetMLATReceiverInfo(ReportSink sink, BeastReporter::ReceiverInfo& info) {
+    if (sink >= SettingsManager::Settings::kMaxNumFeeds) {
+        return false;
+    }
+    const ObjectDictionary::RP2040DeviceStatus& rp2040 = object_dictionary.composite_device_status.rp2040;
+    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[sink], info.id);
+    info.epoch = rp2040.mlat_epoch;
+    info.position = rp2040.receiver_position;
+    info.pps = rp2040.receiver_pps;
+    strncpy(info.name, settings_manager.settings.core_network_settings.hostname, sizeof(info.name) - 1);
+    BeastReporter::FormatFirmwareVersion(info.firmware_version, sizeof(info.firmware_version), "adsbee_1090",
+                                         ObjectDictionary::kFirmwareVersionMajor,
+                                         ObjectDictionary::kFirmwareVersionMinor,
+                                         ObjectDictionary::kFirmwareVersionPatch,
+                                         ObjectDictionary::kFirmwareVersionReleaseCandidate);
+    // Until the RP2040's status arrives there is no epoch for the timestamps yet.
+    return rp2040.timestamp_ms != 0;
+}
+
+bool GetReceiverPosition(ReceiverPosition& position) {
+    position = object_dictionary.composite_device_status.rp2040.receiver_position;
+    return position.IsValid();
 }
 
 bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, uint16_t num_msgs) {
