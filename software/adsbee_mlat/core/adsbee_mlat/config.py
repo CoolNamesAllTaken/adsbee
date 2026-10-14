@@ -1,5 +1,6 @@
 """Server configuration: a TOML file plus environment variables."""
 
+import logging
 import os
 import tomllib
 from dataclasses import dataclass, field
@@ -45,9 +46,11 @@ def load(path=None, env=os.environ):
     cfg = Config()
     path = path or env.get("MLAT_CONFIG")
     data = {}
-    if path:
+    if path and os.path.exists(path):
         with open(path, "rb") as f:
             data = tomllib.load(f)
+    elif path:
+        logging.getLogger("adsbee_mlat").info("no configuration file at %s, using defaults", path)
     server = data.get("server", {})
     if "listen" in server:
         cfg.listen_host, cfg.listen_port = _host_port(server["listen"], cfg.listen_port)

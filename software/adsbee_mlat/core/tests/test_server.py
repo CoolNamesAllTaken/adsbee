@@ -37,6 +37,11 @@ alt = 30.0
     assert cfg.receivers[0].uuid.startswith("38366a5c") and cfg.receivers[0].clock_hz == 12_000_000
 
 
+def test_missing_config_file(tmp_path):
+    cfg = config.load(env={"MLAT_CONFIG": str(tmp_path / "absent.toml")})
+    assert cfg.receivers == [] and cfg.listen_port == 31090
+
+
 def test_publish_and_receiver_config():
     async def run():
         redis = fakeredis.aioredis.FakeRedis()
