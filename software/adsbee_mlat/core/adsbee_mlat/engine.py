@@ -52,6 +52,9 @@ class Engine:
         self.dispatch = None  # If set, dispatch(groups, now) receives closed groups instead of processing them here.
         self.on_fix = on_fix
         self.on_mlat = on_mlat  # Optional on_mlat(aircraft, track, extra) for every accepted MLAT update.
+        # Optional on_measurement(aircraft, rx_ecef, times, sigmas, alt, t_unix): every set of synchronized arrival
+        # times before the tracker uses it (times on one clock, atmosphere delay removed), for studies.
+        self.on_measurement = None
         self.clock = clock
         self.stats = dict(frames=0, unstamped=0, groups=0, bad_parity=0, sync_events=0, solves=0, solve_ok=0,
                           tdoa_updates=0, tdoa_rejects=0, ambiguous=0, mlat_fixes=0, adsb_fixes=0, no_sync=0)
@@ -336,6 +339,8 @@ class Engine:
             return
         tr.predict(t_unix)
         times = times - geo.tropo_excess_m(rx_ecef, rx_surface, tr.x[:3]) / C
+        if self.on_measurement is not None:
+            self.on_measurement(ac, rx_ecef, times, sigmas, alt, t_unix)
         if not tr.update_tdoa(rx_ecef, times, sigmas, alt):
             self.stats["tdoa_rejects"] += 1
             return
