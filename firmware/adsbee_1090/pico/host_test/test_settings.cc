@@ -54,7 +54,8 @@ TEST(SettingsMigration, LayoutLockedSizes) {
     EXPECT_EQ(sizeof(settings_v13::RxPosition), sizeof(SettingsManager::RxPosition));
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
-    EXPECT_EQ(sizeof(settings_v17::Settings), sizeof(SettingsManager::Settings));
+    EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1344u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -500,6 +501,37 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_FALSE(out.feeds_enabled);
     EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+}
+
+TEST(SettingsMigration, V18ToV19KeepsEverythingAndDefaultsASTERIXIDs) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    // 0xFF past the v18 struct, as Load() reads erased EEPROM there.
+    uint8_t blob[sizeof(SettingsManager::Settings)];
+    memset(blob, 0xFF, sizeof(blob));
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv6;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
+    v18.auto_update_enabled = true;
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.asterix_sac = 0x55;
+    out.asterix_sic = 0x66;
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_EQ(out.asterix_sac, 0);
+    EXPECT_EQ(out.asterix_sic, 0);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
 }
 
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
