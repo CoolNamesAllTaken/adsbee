@@ -69,7 +69,7 @@ services:
       context: .
       dockerfile: simfeed/Dockerfile
     profiles: ["sim"]
-    restart: "no"
+    restart: unless-stopped  # Starts over (new traffic) when the core restarts.
     command: ["--host", "core", "--port", "31090"]
     depends_on:
       - core
