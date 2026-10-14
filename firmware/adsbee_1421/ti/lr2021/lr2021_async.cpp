@@ -36,8 +36,10 @@
 
 #include <ti/drivers/dpl/HwiP.h>
 
+#include "cycle_counter.hh"
 #include "hal.hh"
 #include "lr2021.hh"
+#include "mlat/mlat_capture.hh"
 
 void LR2021::SPICallback(SPI_Handle handle, SPI_Transaction* transaction) {
     (void)handle;
@@ -88,6 +90,9 @@ bool LR2021::PostAsyncFrame(const uint8_t* tx_buf, size_t len, uint8_t* rx_buf) 
         .status = SPI_TRANSFER_QUEUED,
     };
     status_tracker_.OnFrame(FrameOpcode(tx_buf, len));  // Which command the next Stat word reports on.
+    if (mlat_sweep_enabled_) {
+        mlat_nss_counter_ = mlat_capture::Counter();  // GetTimestampValue counts back from the NSS edge.
+    }
     SetNSS(false);
     async_in_flight_ = true;
     if (!SPI_transfer(spi_handle_, &async_txn_)) {
@@ -157,7 +162,10 @@ bool LR2021::StartRxDrain() {
         HwiP_restore(key);
         return false;
     }
-    EnterBusyWait(DrainState::kLevelCmdWait);
+    // The SyncwordValid latch is set: clear it first, so the next sync event raises an edge on DIO5. Not in dense
+    // traffic, where no read holds a single packet: the command would only cost reception.
+    const bool clear_sync = mlat_sweep_enabled_ && !mlat_traffic_dense_ && mlat_capture::PinHigh();
+    EnterBusyWait(clear_sync ? DrainState::kSyncClearWait : DrainState::kLevelCmdWait);
     HwiP_restore(key);
     // Field resets after the claim: if the chain steals the drain before they matter, they are
     // re-initialized by the next StartRxDrain anyway.
@@ -165,7 +173,20 @@ bool LR2021::StartRxDrain() {
     drain_fifo_level_ = 0;
     drain_fifo_full_ = false;
     drain_error_str_ = nullptr;
+    mlat_sweep_ = MlatSweep();
     return true;
+}
+
+bool LR2021::MlatSweepWait(DrainState s, bool wait_done) {
+    if (!mlat_sweep_enabled_ || s >= DrainState::kFifoRead) {
+        return false;
+    }
+    const uint32_t start_cycles = CycleCounter::Now();
+    bool done = false;
+    while (!(done = wait_done ? async_done_ : !IsBusy()) &&
+           CycleCounter::Since(start_cycles) < kMlatSweepWaitMaxUs * (CycleCounter::kCpuHz / 1000000)) {
+    }
+    return done;
 }
 
 LR2021::DrainResult LR2021::ServiceRxDrain() {
@@ -230,6 +251,9 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
 
             // BUSY-wait states: post the next frame once the chip is ready. Post + transition are
             // HwiP-guarded so a chain steal can't interleave.
+            case DrainState::kSyncClearWait:
+            case DrainState::kTimestampCmdWait:
+            case DrainState::kTimestampRspWait:
             case DrainState::kLevelCmdWait:
             case DrainState::kLevelRspWait:
             case DrainState::kFifoWait:
@@ -237,7 +261,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             case DrainState::kClearFifoRspWait:
             case DrainState::kIrqCmdWait:
             case DrainState::kIrqRspWait: {
-                if (IsBusy()) {
+                if (IsBusy() && !MlatSweepWait(s, false)) {
                     if (get_time_since_boot_ms() - busy_wait_start_ms_ > kBusyTimeoutMs) {
                         return EnterDrainError(s, "BUSY timeout");
                     }
@@ -251,13 +275,29 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                 bool posted = false;
                 DrainState next = s;
                 switch (s) {
+                    case DrainState::kSyncClearWait:
+                        posted = PostAsyncFrame(mlat_clear_tx_buf_, sizeof(mlat_clear_tx_buf_), mlat_rx_buf_);
+                        next = DrainState::kSyncClear;
+                        break;
+                    case DrainState::kTimestampCmdWait:
+                        posted = PostAsyncFrame(mlat_timestamp_tx_buf_, sizeof(mlat_timestamp_tx_buf_), mlat_rx_buf_);
+                        mlat_sweep_.timestamp_request_counter = mlat_nss_counter_;
+                        next = DrainState::kTimestampCmd;
+                        break;
+                    case DrainState::kTimestampRspWait:
+                        posted = PostAsyncFrame(nullptr, 6, mlat_rx_buf_);  // 2 (stat) + 4 (ticks).
+                        next = DrainState::kTimestampRsp;
+                        break;
                     case DrainState::kLevelCmdWait:
                         PackU16(async_tx_buf_, kOpcodeGetRxFifoLevel);
                         posted = PostAsyncFrame(async_tx_buf_, 2);
+                        mlat_sweep_.level_request_counter = mlat_nss_counter_;
                         next = DrainState::kLevelCmd;
                         break;
                     case DrainState::kLevelRspWait:
+                        // BUSY is low, so the LR2021 has sampled the level.
                         posted = PostAsyncFrame(nullptr, 4);  // 2 (stat) + 2 (level).
+                        mlat_sweep_.level_answer_counter = mlat_nss_counter_;
                         next = DrainState::kLevelRsp;
                         break;
                     case DrainState::kFifoWait:
@@ -296,13 +336,43 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                 if (!posted) {
                     return EnterDrainError(s, "SPI_transfer post failed");
                 }
+                if (mlat_sweep_enabled_ && next < DrainState::kFifoRead) {
+                    break;  // MLAT sweep: wait for this short frame here.
+                }
                 return DrainResult::kInProgress;
             }
 
             // DMA-in-flight states: parse and advance on completion. Transitions are HwiP-guarded
             // (once async_in_flight_ drops, the chain may steal this drain).
+            case DrainState::kSyncClear:
+            case DrainState::kTimestampCmd:
+            case DrainState::kTimestampRsp: {
+                if (!async_done_ && !MlatSweepWait(s, true)) {
+                    return AsyncStillInFlight();
+                }
+                if (!async_ok_) {
+                    return EnterDrainError(s, "MLAT frame failed");
+                }
+                DrainState next = DrainState::kLevelCmdWait;  // After the clear.
+                if (s == DrainState::kTimestampCmd) {
+                    next = DrainState::kTimestampRspWait;
+                } else if (s == DrainState::kTimestampRsp) {
+                    // A failed read leaves the packets unstamped; the FIFO read goes ahead.
+                    const uint8_t command_status = (UnpackU16(mlat_rx_buf_) >> 9) & 0x7;
+                    mlat_sweep_.has_timestamp =
+                        command_status == CommandStatus::kOk || command_status == CommandStatus::kDat;
+                    mlat_sweep_.timestamp_value = static_cast<int32_t>(UnpackU32(mlat_rx_buf_ + 2));
+                    next = DrainState::kFifoWait;
+                }
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ == s) {
+                    EnterBusyWait(next);
+                }
+                HwiP_restore(key);
+                break;
+            }
             case DrainState::kLevelCmd: {
-                if (!async_done_) {
+                if (!async_done_ && !MlatSweepWait(s, true)) {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
@@ -317,7 +387,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                 break;  // Loop: BUSY may already be low, or we were stolen.
             }
             case DrainState::kLevelRsp: {
-                if (!async_done_) {
+                if (!async_done_ && !MlatSweepWait(s, true)) {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
@@ -348,8 +418,13 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                 if (drain_state_ == s) {
                     drain_fifo_full_ = full;
                     drain_fifo_level_ = read_len;
+                    mlat_traffic_dense_ = read_len > kMlatDenseReadPackets * kOokFifoPacketLenBytes;
                     if (read_len > 0) {
-                        EnterBusyWait(DrainState::kFifoWait);
+                        // Only a packet alone in its read can be stamped. The timestamp is read after the
+                        // level: it then names that packet, or a packet that is still on its way.
+                        EnterBusyWait(mlat_sweep_enabled_ && read_len == kOokFifoPacketLenBytes
+                                          ? DrainState::kTimestampCmdWait
+                                          : DrainState::kFifoWait);
                     } else if (IrqLineHigh()) {
                         // Nothing (whole) to read but the latched IRQ line is asserted: run the clear
                         // tail so edge generation recovers, then finish as kNoData.
@@ -380,6 +455,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     if (IrqLineHigh()) {
                         // Payload is parked in async_rx_buf_ while the tail frames run into the
                         // dedicated tail buffers; kDataReady is entered at tail completion.
+                        mlat_sweep_.clear_tail_ran = true;
                         EnterBusyWait(DrainState::kClearFifoWait);
                     } else {
                         drain_state_ = DrainState::kDataReady;
@@ -512,4 +588,18 @@ void LR2021::CancelAsync() {
     drain_state_ = DrainState::kIdle;
     HwiP_restore(key);
     SetNSS(true);  // Harmless DOUT update if the pin was tri-stated by the SYNC ISR.
+}
+
+bool LR2021::ConfigMlatSources(bool enabled) {
+    PackU16(mlat_clear_tx_buf_, kOpcodeClearIrq);
+    PackU32(mlat_clear_tx_buf_ + 2, HostIrqs::kIrqLoRaHeaderValid);  // Valid sync word.
+    PackU16(mlat_timestamp_tx_buf_, kOpcodeGetTimestampValue);
+    mlat_timestamp_tx_buf_[2] = TimestampIndex::kTs0;
+    // DIO5 accepts no other pull setting.
+    return SetDioFunction(DioNum::kDio5, enabled ? DioFunc::kDioFuncIrq : DioFunc::kDioFuncNone, PullDrive::kPullUp) &&
+           SetDioIrqConfig(DioNum::kDio5, enabled ? static_cast<uint32_t>(HostIrqs::kIrqLoRaHeaderValid) : 0) &&
+           ClearIrq(HostIrqs::kIrqLoRaHeaderValid) &&
+           SetTimestampSource(TimestampIndex::kTs0,
+                              enabled ? TimestampSource::kTsSync : TimestampSource::kTsNone) &&
+           CheckLastCommandStatus("LR2021::ConfigMlatSources");
 }

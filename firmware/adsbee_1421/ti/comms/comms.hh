@@ -136,6 +136,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATLREnableCallback);
     CPP_AT_CALLBACK(ATMAVLINKIDCallback);
+    CPP_AT_CALLBACK(ATMLATCallback);
     CPP_AT_CALLBACK(ATR1090PreambleCallback);
     CPP_AT_CALLBACK(ATR1090RxBoostCallback);
     CPP_AT_CALLBACK(ATProtocolOutCallback);

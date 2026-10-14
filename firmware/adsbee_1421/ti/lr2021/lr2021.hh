@@ -278,6 +278,28 @@ class LR2021 {
     void FinishRxDrain();
     bool DrainIdle() const { return drain_state_ == DrainState::kIdle; }
 
+    // MLAT timestamps (mlat/mlat_pairing.hh)
+    //
+    // Routes SyncwordValid to DIO5 as a latched level and selects the sync event for timestamp 0, or releases
+    // both. Synchronous; call with the drain idle.
+    bool ConfigMlatSources(bool enabled);
+    // While enabled, a loop drain sweep clears the SyncwordValid latch when DIO5 reads high, and reads the
+    // LR2021's sync timestamp before it reads a FIFO that holds one packet. It also waits for its short frames in place
+    // (kMlatSweepWaitMaxUs each at most) and posts the FIFO read in the pass it started in: a stamp needs the
+    // level read close to the packet. Enable only with the MLAT capture timer running.
+    void SetMlatSweepEnabled(bool enabled) { mlat_sweep_enabled_ = enabled; }
+    // Capture timer values of the sweep that just returned kDataReady or kNoData.
+    struct MlatSweep {
+        uint32_t level_request_counter = 0;  // Just before the NSS falling edge of the GetRxFifoLevel request.
+        uint32_t level_answer_counter = 0;   // After the LR2021 sampled the level.
+        bool has_timestamp = false;
+        uint32_t timestamp_request_counter = 0;  // Just before the NSS falling edge of the GetTimestampValue request.
+        // 32 MHz ticks from the latest sync event to that NSS edge. Negative: the event came after the edge.
+        int32_t timestamp_value = 0;
+        bool clear_tail_ran = false;  // LR_IRQ was high: the FIFO held 9 packets or more at some point.
+    };
+    const MlatSweep& mlat_sweep() const { return mlat_sweep_; }
+
     // IRQ-paced RX drain chain (lr2021_irq_drain.cpp)
     //
     // The LR2021 raises its DIO6 IRQ line (-> CC1314 LR_IRQ pin, rising edge) when the RX FIFO crosses
@@ -1507,6 +1529,20 @@ class LR2021 {
     // async_rx_buf_, so its frames must not touch the async buffers (would clobber the unparsed
     // payload / break the async_tx_buf_ "[2..] zeros" invariant).
     uint8_t tail_tx_buf_[4] = {};
+    // MLAT sweep frames: ClearIrq(SyncwordValid) and GetTimestampValue(0), built by ConfigMlatSources().
+    uint8_t mlat_clear_tx_buf_[6] = {};
+    uint8_t mlat_timestamp_tx_buf_[3] = {};
+    uint8_t mlat_rx_buf_[6] = {};
+    volatile bool mlat_sweep_enabled_ = false;
+    MlatSweep mlat_sweep_;
+    static constexpr uint32_t kMlatSweepWaitMaxUs = 200;
+    // MLAT sweep, frames ahead of the FIFO read: waits for the frame in flight (wait_done) or for BUSY low.
+    // False: not an MLAT sweep, or still waiting after kMlatSweepWaitMaxUs.
+    bool MlatSweepWait(DrainState s, bool wait_done);
+    // A read with more packets than this marks the traffic as dense until a read holds fewer.
+    static constexpr uint16_t kMlatDenseReadPackets = 2;
+    bool mlat_traffic_dense_ = false;
+    uint32_t mlat_nss_counter_ = 0;  // Capture timer just before the NSS falling edge of the last posted frame.
     uint8_t tail_rx_buf_[8] = {};
     volatile bool async_ok_ = false;         // Transfer status; written by SPICallback before async_done_.
     volatile bool async_done_ = false;       // Set last by SPICallback; cleared when posting a frame.

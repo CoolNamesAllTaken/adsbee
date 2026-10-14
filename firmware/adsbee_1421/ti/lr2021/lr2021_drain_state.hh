@@ -7,6 +7,14 @@
 
 enum class LR2021DrainState : uint8_t {
     kIdle = 0,
+    // MLAT timestamp frames of the loop drain (LR2021::SetMlatSweepEnabled): the clear runs ahead of the level
+    // read, the timestamp read between the level read and the FIFO read.
+    kSyncClearWait,     // Waiting for BUSY low to post ClearIrq(SyncwordValid).
+    kSyncClear,         // ClearIrq frame (6 B) DMA in flight.
+    kTimestampCmdWait,  // Waiting for BUSY low to post the GetTimestampValue opcode frame.
+    kTimestampCmd,      // GetTimestampValue frame 1 (3 B) DMA in flight.
+    kTimestampRspWait,  // Waiting for BUSY low to post the GetTimestampValue response frame.
+    kTimestampRsp,      // GetTimestampValue frame 2 (6 B) DMA in flight.
     // Thread-paced loop drain (advanced by ServiceRxDrain): unconditional level-read sweep, then a
     // conditional IRQ-latch clear tail whenever the LR_IRQ line reads high.
     kLevelCmdWait,   // Waiting for BUSY low to post the GetRxFifoLevel opcode frame.
@@ -76,6 +84,7 @@ constexpr bool LR2021ChainTakesLoopTail(LR2021DrainState s, bool frame_ok, bool 
 // the main loop is done parsing). Only where nothing was popped from the FIFO since the edge, so the chain's read of
 // a full threshold still holds: not after a ReadRxFifo frame.
 constexpr bool LR2021ChainRetriesSkippedEdge(LR2021DrainState s) {
-    return s == LR2021DrainState::kLevelCmd || s == LR2021DrainState::kLevelRsp || s == LR2021DrainState::kIrqRsp ||
-           s == LR2021DrainState::kDataReady;
+    return s == LR2021DrainState::kSyncClear || s == LR2021DrainState::kTimestampCmd ||
+           s == LR2021DrainState::kTimestampRsp || s == LR2021DrainState::kLevelCmd ||
+           s == LR2021DrainState::kLevelRsp || s == LR2021DrainState::kIrqRsp || s == LR2021DrainState::kDataReady;
 }

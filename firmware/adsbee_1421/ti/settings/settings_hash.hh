@@ -13,7 +13,7 @@ enum Scope : uint8_t {
 
 // Left out of kScopeFleet: the receiver position values.
 inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) {
-    static_assert(kSettingsVersion == 5 && sizeof(SettingsManager::Settings) == 62,
+    static_assert(kSettingsVersion == 6 && sizeof(SettingsManager::Settings) == 63,
                   "Settings changed: add the new fields below, then update this check.");
     ConfigHasher hasher;
 
@@ -25,6 +25,7 @@ inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) 
     hasher.AddU8(settings.r1090_gain);
     hasher.AddU8(settings.r1090_rx_boost);
     hasher.AddBool(settings.lr2021_enabled);
+    hasher.AddBool(settings.r1090_mlat_enabled);
 
     hasher.AddU16(settings.log_level);
     for (uint16_t i = 0; i < SettingsManager::SerialInterface::kNumSerialInterfaces; i++) {

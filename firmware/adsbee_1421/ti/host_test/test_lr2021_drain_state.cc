@@ -8,10 +8,10 @@ using S = LR2021DrainState;
 
 static constexpr uint16_t kOnePacket = 14;
 
-// Loop drain states in order, kLevelCmdWait to kError.
+// Loop drain states in order, kSyncClearWait to kError.
 static std::vector<S> LoopStates() {
     std::vector<S> states;
-    for (uint8_t i = static_cast<uint8_t>(S::kLevelCmdWait); i <= static_cast<uint8_t>(S::kError); i++) {
+    for (uint8_t i = static_cast<uint8_t>(S::kSyncClearWait); i <= static_cast<uint8_t>(S::kError); i++) {
         states.push_back(static_cast<S>(i));
     }
     return states;
@@ -54,7 +54,8 @@ TEST(LR2021DrainState, ChainTakesTheClearTailAfterAGoodReadWithTheLineHigh) {
 
 TEST(LR2021DrainState, SkippedEdgeIsRetriedOnlyWhereNothingWasPoppedSince) {
     for (S s : LoopStates()) {
-        bool retried = (s == S::kLevelCmd || s == S::kLevelRsp || s == S::kIrqRsp || s == S::kDataReady);
+        bool retried = (s == S::kSyncClear || s == S::kTimestampCmd || s == S::kTimestampRsp || s == S::kLevelCmd ||
+                        s == S::kLevelRsp || s == S::kIrqRsp || s == S::kDataReady);
         EXPECT_EQ(LR2021ChainRetriesSkippedEdge(s), retried) << static_cast<int>(s);
     }
     // A completed ReadRxFifo frame goes to LR2021ChainTakesLoopTail() instead.
@@ -65,7 +66,8 @@ TEST(LR2021DrainState, SkippedEdgeIsRetriedOnlyWhereNothingWasPoppedSince) {
 
 TEST(LR2021DrainState, StolenBeforeTheReadIsPosted) {
     // Nothing popped from the FIFO yet: the chain reads it instead.
-    for (S s : {S::kLevelCmdWait, S::kLevelCmd, S::kLevelRspWait, S::kLevelRsp, S::kFifoWait}) {
+    for (S s : {S::kSyncClearWait, S::kSyncClear, S::kLevelCmdWait, S::kLevelCmd, S::kLevelRspWait, S::kLevelRsp,
+                S::kTimestampCmdWait, S::kTimestampCmd, S::kTimestampRspWait, S::kTimestampRsp, S::kFifoWait}) {
         EXPECT_EQ(LR2021ChainStealCheck(s, false, kOnePacket), LR2021DrainSteal::kAllowed) << static_cast<int>(s);
     }
 }

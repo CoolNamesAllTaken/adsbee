@@ -259,6 +259,28 @@ CPP_AT_CALLBACK(CommsManager::ATLREnableCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATMLATCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", adsbee.MLATIsEnabled());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires an argument: AT+MLAT=<enabled [1,0]>.");
+            }
+            bool enabled;
+            CPP_AT_TRY_ARG2NUM(0, enabled);
+            if (!adsbee.SetMLATEnabled(enabled)) {
+                CPP_AT_ERROR("Failed to reconfigure the 1090MHz receiver.");
+            }
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATR1090GainCallback) {
     switch (op) {
         case '?': {
@@ -365,7 +387,9 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 "dma_timeouts=%lu,report_q_ovf=%lu,"
                 "validity_reconfigs=%lu,stale_edges=%lu,uat_len_mismatch=%lu,uat_report_q_ovf=%lu,"
                 "parse_max_cyc=%lu,decode_max_cyc=%lu,loop_max_cyc=%lu,loop_avg_cyc=%lu,cpu_1090_pm=%lu,"
-                "cfg_perrs=%lu,rx_cfg_error=%u,irq_kept_reads=%lu",
+                "cfg_perrs=%lu,rx_cfg_error=%u,irq_kept_reads=%lu,"
+                "mlat_stamped=%lu,mlat_no_event=%lu,mlat_ambiguous=%lu,mlat_multiple=%lu,mlat_disagree=%lu,"
+                "mlat_orphans=%lu,mlat_edge_drops=%lu,mlat_overruns=%lu,mlat_restarts=%lu",
                 stats.pkt_rx, stats.crc_error, stats.len_error, stats.pbl_det, stats.sync_ok, stats.sync_fail,
                 stats.timeout, (unsigned long)adsbee.lr2021_fifo_full_count,
                 (unsigned long)packet_decoder.raw_queue_overflow_count,
@@ -392,7 +416,14 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                                     ? adsbee.rx1090_total_cycles * 1000 / adsbee.loop_total_cycles
                                     : 0),
                 (unsigned long)adsbee.lr2021_config_perr_count, adsbee.ReceiverConfigRejected() ? 1u : 0u,
-                (unsigned long)adsbee.lr2021.irq_drain_kept_reads);
+                (unsigned long)adsbee.lr2021.irq_drain_kept_reads, (unsigned long)adsbee.mlat_counters().stamped,
+                (unsigned long)adsbee.mlat_counters().unstamped_no_event,
+                (unsigned long)adsbee.mlat_counters().unstamped_ambiguous,
+                (unsigned long)adsbee.mlat_counters().unstamped_multiple,
+                (unsigned long)adsbee.mlat_counters().unstamped_disagree,
+                (unsigned long)adsbee.mlat_counters().orphan_events,
+                (unsigned long)adsbee.mlat_counters().dropped_edges, (unsigned long)adsbee.mlat_capture_overruns,
+                (unsigned long)adsbee.mlat_timebase_restarts);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -404,6 +435,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 CPP_AT_ERROR("Failed to reset LR2021 Rx stats.");
             }
             adsbee.lr2021_fifo_full_count = 0;
+            adsbee.ResetMlatCounters();
             packet_decoder.raw_queue_overflow_count = 0;
             packet_decoder.bitflips_fixed_count = 0;
             subg_radio.rx_error_restart_count = 0;
@@ -867,6 +899,7 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
     CPP_AT_PRINTF("\"LR_ENABLE\":[%d],", adsbee.LR2021IsEnabled());
     CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
+    CPP_AT_PRINTF("\"MLAT\":[%d],", adsbee.MLATIsEnabled());
     CPP_AT_PRINTF("\"PROTOCOL_OUT\":[\"%s\"],",
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kConsole]]);
     CPP_AT_PRINTF("\"R1090_GAIN\":[%s],", gain_str);
@@ -1369,6 +1402,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
                     "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
+    {.command = "MLAT",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string =
+         "AT+MLAT=<enabled [1,0]>\r\n\t0 (default): every 1090MHz packet is reported with the time its batch was "
+         "read from the LR2021, about 1 ms coarse. Do not use these for MLAT.\r\n\t1: a packet whose arrival was "
+         "timed for certain is reported with that time (48 MHz counter, about 40 ns RMS); every other packet is "
+         "reported with no timestamp (0 in BEAST and RAW). The share of timed packets falls as traffic rises. No "
+         "packet is timed in the DF17 preamble mode. Takes effect immediately; persist with "
+         "AT+SETTINGS=SAVE.\r\n\tAT+MLAT?\r\n\tMLAT=<enabled>\r\n\tQuery whether MLAT timestamps are enabled.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMLATCallback, comms_manager)},
     {.command = "PROTOCOL_OUT",
      .min_args = 0,
      .max_args = 2,
@@ -1427,7 +1471,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "max/avg; cpu_1090_pm = per mille of main loop time in the 1090 receive and decode path; "
                     "cfg_perrs = receiver config attempts the LR2021 answered with CMD_PERR, each followed by "
                     "a hard reset and a retry of the same config; rx_cfg_error = 1 while the selected config "
-                    "is rejected and the 1090 MHz receiver is down).\r\n\tAT+RX_STATS=RESET\r\n\t"
+                    "is rejected and the 1090 MHz receiver is down; mlat_* with AT+MLAT=1 = packets given an "
+                    "MLAT timestamp, packets left without one by reason (no sync event known / event too close "
+                    "to a FIFO read / several packets in a read / the two event sources disagree), sync events "
+                    "without a packet, edges dropped, capture ring overflows, time base restarts)."
+                    "\r\n\tAT+RX_STATS=RESET\r\n\t"
                     "Reset all Rx stats counters.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxStatsCallback, comms_manager)},
     {.command = "SETTINGS",

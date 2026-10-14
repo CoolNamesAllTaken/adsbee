@@ -37,8 +37,8 @@ TEST(Settings, R1090PreambleModeNamesSelectTheirModes) {
 }
 
 TEST(Settings, VersionNumberingModesIsCurrent) {
-    // Version 5 numbers R1090PreambleMode as above.
-    EXPECT_EQ(kSettingsVersion, 5u);
+    // Version 5 numbers R1090PreambleMode as above; version 6 adds r1090_mlat_enabled.
+    EXPECT_EQ(kSettingsVersion, 6u);
     SM::Settings settings;
     settings.Stamp();
     EXPECT_TRUE(settings.IsValid());

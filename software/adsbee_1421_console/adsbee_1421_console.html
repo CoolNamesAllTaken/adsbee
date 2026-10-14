@@ -6409,6 +6409,13 @@ function makeRxEnableEntry() {
                 fields: [{ id: 'boost', label: 'Boost Level', type: 'int', min: 0, max: 7 }],
             },
             {
+                cmd: 'MLAT', label: '1090 MHz MLAT Timestamps', group: 'Radio',
+                help: 'When enabled, a packet whose arrival was timed for certain is reported with that time '
+                    + 'and every other packet with no timestamp. When disabled (default), timestamps are '
+                    + 'about 1 ms coarse and must not be used for MLAT.',
+                fields: [{ id: 'enabled', label: 'MLAT timestamps enabled', type: 'bool' }],
+            },
+            {
                 cmd: 'SUBG_MODE', label: 'Sub-GHz Mode', group: 'Radio',
                 fields: [{
                     id: 'mode', label: 'Mode', type: 'enum',

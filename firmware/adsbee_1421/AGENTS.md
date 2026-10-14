@@ -183,6 +183,22 @@ LR2021 before the `Resume()` calls.
 > ([`adsbee_1421.syscfg`](ti/syscfg/adsbee_1421.syscfg) `GPIO7.pull` and the generated `ti_drivers_config.c`;
 > keep them in sync) covers the time before `ADSBee::Init()`.
 
+## MLAT timestamps
+
+`AT+MLAT=1` (off by default) timestamps 1090 MHz packets; see [`ti/mlat/mlat_pairing.hh`](ti/mlat/mlat_pairing.hh) for the
+rule and [`ti/mlat/mlat_capture.cpp`](ti/mlat/mlat_capture.cpp) for the timer.
+
+- Two sources mark a packet's sync event: the LR2021's SyncwordValid IRQ on DIO5 (CC1314 DIO_13), timed by GPT0A
+  at 48 MHz, and the LR2021's own sync timestamp. The loop drain sweep clears the IRQ latch and reads the timestamp.
+- A packet is stamped only when its FIFO read holds that packet alone and both sources name one event that is
+  surely in the read. Every other packet gets `RawModeSPacket::no_mlat_timestamp` and a coarse receive time; BEAST
+  and RAW report its timestamp as 0.
+- uDMA moves the timer captures to a ring, so nothing runs in interrupt context per packet.
+- The 64-bit count starts at the system time and then follows the 48 MHz crystal. It restarts after SYNC sleep
+  (the timer stops in STANDBY) and after a main-loop stall of more than 2 s.
+- Nothing is stamped in the DF17 preamble mode: its sync event is not at a fixed place in the frame.
+- Off, no LR2021 command, timer or pin is touched.
+
 ## Repo ↔ container layout
 
 `compose.yml` bind-mounts the host tree into the container, which is why the CMake
