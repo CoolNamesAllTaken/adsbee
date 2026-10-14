@@ -9,6 +9,8 @@
 // Reconnect interval of an MQTT client after its broker connection drops.
 static const int kMQTTReconnectIntervalMs = 10000;
 static const uint32_t kMQTTMetricsIntervalMs = 10000;
+// Longest a publish may block the feed task on a slow broker before the client drops the connection.
+static const int kMQTTNetworkTimeoutMs = 2000;
 // Unsent messages kept per MQTT feed. Messages are dropped while the outbox is larger.
 static const int kMQTTOutboxMaxBytesPSRAM = 32768;
 static const int kMQTTOutboxMaxBytesInternal = 8192;
@@ -67,6 +69,7 @@ bool CommsManager::ConnectFeedMQTT(uint16_t feed_index) {
     config.session.last_will.qos = 1;
     config.session.last_will.retain = 1;
     config.network.reconnect_timeout_ms = kMQTTReconnectIntervalMs;
+    config.network.timeout_ms = kMQTTNetworkTimeoutMs;
 
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&config);
     if (client == nullptr) {
@@ -172,8 +175,9 @@ bool CommsManager::PublishFeedMQTT(uint16_t feed_index, const char* buf, uint16_
     while (buf_len > 0 && (buf[buf_len - 1] == '\n' || buf[buf_len - 1] == '\r')) {
         buf_len--;
     }
+    // Published from this task: the client task sends only one queued message per poll interval, too few for a feed.
     int qos = settings_manager.settings.feed_mqtt[feed_index].qos;
-    if (esp_mqtt_client_enqueue(client, topic, buf, buf_len, qos, 0, true) < 0) {
+    if (esp_mqtt_client_publish(client, topic, buf, buf_len, qos, 0) < 0) {
         feed_num_dropped_msgs_[feed_index] += num_msgs;
         return true;
     }
