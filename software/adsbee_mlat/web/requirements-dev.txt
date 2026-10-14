@@ -3,4 +3,5 @@ fakeredis~=2.31
 pytest~=8.4
 pytest-django~=4.11
 pytest-asyncio~=1.1
+daphne~=4.2  # channels.testing needs it.
 playwright~=1.54

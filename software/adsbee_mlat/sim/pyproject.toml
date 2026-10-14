@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
-test = ["pytest", "pyModeS>=2.13"]
+test = ["pytest", "pyModeS>=2.13,<3"]  # pyModeS 3 dropped the functions the tests use.
 study = ["matplotlib", "scipy"]
 
 [tool.setuptools]
