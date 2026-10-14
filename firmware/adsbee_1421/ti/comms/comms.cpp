@@ -71,6 +71,14 @@ void CommsManager::uart_write_callback(UART2_Handle handle, void* buf, size_t co
     // HWI context. Retire the bytes the driver actually consumed (count can be short if the write was canceled),
     // then chain the next contiguous ring segment straight from here so the wire never idles between segments. The
     // UART2CC26X2 driver clears its writeInUse flag before invoking this callback, so a nested UART2_write is accepted.
+    // When nothing more is queued, the UART2 driver enables the end-of-transmission (EOT) interrupt right after this
+    // callback without clearing the EOT flag latched by an earlier transmission. That stale flag fires at once, and the
+    // driver's handler spins in interrupt context until the TX FIFO drains (up to ~320 us at 1 Mbaud), delaying the
+    // UAT receive callback past its CMD_PROP_SET_LEN deadline. Clear it while bytes are still shifting out; the real
+    // EOT follows when the line goes idle.
+    if (HWREG(UART0_BASE + UART_O_FR) & UART_FR_BUSY) {
+        HWREG(UART0_BASE + UART_O_ICR) = UART_INT_EOT;
+    }
     CommsManager* self = static_cast<CommsManager*>(userArg);
     self->uart_tx_head_ = static_cast<uint16_t>((self->uart_tx_head_ + count) & (kUartTxRingBytes - 1));
     self->uart_tx_in_progress_ = false;
