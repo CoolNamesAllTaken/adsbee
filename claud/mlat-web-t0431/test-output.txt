@@ -1,0 +1,42 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-8.4.2, pluggy-1.6.0 -- /workspace/agents/worker-7/t0431/venv/bin/python3.12
+django: version: 5.2.18, settings: mlat_web.test_settings (from ini)
+rootdir: /workspace/projects/adsbee-t0431/software/adsbee_mlat/web
+configfile: pytest.ini
+testpaths: tests, e2e
+plugins: django-4.14.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 22 items
+tests/test_receivers.py::test_fixed_position_needs_lat_and_lon Creating test database for alias 'default'...
+PASSED
+tests/test_receivers.py::test_config_contents PASSED
+tests/test_receivers.py::test_publish_config_sets_key_and_notifies PASSED
+tests/test_receivers.py::test_publish_config_survives_redis_down Could not publish receiver config: down
+PASSED
+tests/test_receivers.py::test_save_and_delete_publish PASSED
+tests/test_receivers.py::test_admin_list_and_edit PASSED
+tests/test_receivers.py::test_admin_requires_login PASSED
+tests/test_views.py::test_map_page PASSED
+tests/test_views.py::test_map_page_without_start PASSED
+tests/test_views.py::test_healthz PASSED
+tests/test_views.py::test_healthz_redis_down Service Unavailable: /healthz
+PASSED
+tests/test_relay.py::test_websocket_snapshot_then_live Could not publish receiver config: Error 111 connecting to localhost:6379. Connection refused.
+PASSED
+tests/test_relay.py::test_bad_messages_are_ignored Could not publish receiver config: Error 111 connecting to localhost:6379. Connection refused.
+Bad message on b'mlat:aircraft': Expecting value: line 1 column 1 (char 0)
+PASSED
+tests/test_relay.py::test_relay_reconnects_after_redis_error Redis relay error, retrying in 0.5 s: FakeRedis is emulating a connection error.
+PASSED
+tests/test_relay.py::test_compact_aircraft_format PASSED
+tests/test_relay.py::test_compact_aircraft_skips_bad_rows PASSED
+tests/test_relay.py::test_enrich_receivers_applies_admin_config PASSED
+tests/test_relay.py::test_client_queue_drops_oldest PASSED
+tests/test_static.py::test_collectstatic_with_production_storage PASSED
+e2e/test_map.py::test_fix_rates_and_motion median fix rate: ADS-B 2.00 Hz, MLAT 5.00 Hz
+aircraft moved in 100% of frames
+PASSED
+e2e/test_map.py::test_hover_tooltip_and_toggles PASSED
+e2e/test_map.py::test_load_1000_aircraft_at_10hz load: fps 20 with 1000 aircraft, 21 with none drawn; frame 0.8 ms avg, 1.9 ms p95; messages 21 ms/s; 9650 fixes/s; 10.0 Hz per aircraft
+PASSEDDestroying test database for alias 'default'...
+============================= 22 passed in 35.02s ==============================
