@@ -15,7 +15,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 5;
+static constexpr uint32_t kSettingsVersion = 6;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -170,6 +170,10 @@ class SettingsManager {
 
         // Receiver position settings
         RxPosition rx_position;
+
+        // ASTERIX data source identifier (I021/010, I023/010): System Area Code and System Identification Code.
+        uint8_t asterix_sac = 0;
+        uint8_t asterix_sic = 0;
 
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
         uint32_t crc = 0;
