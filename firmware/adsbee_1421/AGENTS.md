@@ -194,6 +194,9 @@ rule and [`ti/mlat/mlat_capture.cpp`](ti/mlat/mlat_capture.cpp) for the timer.
   surely in the read. Every other packet gets `RawModeSPacket::no_mlat_timestamp` and a coarse receive time; BEAST
   and RAW report its timestamp as 0.
 - uDMA moves the timer captures to a ring, so nothing runs in interrupt context per packet.
+- While MLAT is on, the sweep waits for its short SPI frames in place (one main-loop pass per sweep), starts every
+  500 us, and holds back while a sync event is younger than 145 us. It skips the timestamp read when the FIFO
+  holds more than one packet, and the latch clear after a read of more than two.
 - The 64-bit count starts at the system time and then follows the 48 MHz crystal. It restarts after SYNC sleep
   (the timer stops in STANDBY) and after a main-loop stall of more than 2 s.
 - Nothing is stamped in the DF17 preamble mode: its sync event is not at a fixed place in the frame.
