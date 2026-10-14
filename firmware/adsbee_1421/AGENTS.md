@@ -186,21 +186,30 @@ LR2021 before the `Resume()` calls.
 ## MLAT timestamps
 
 `AT+MLAT=1` (off by default) timestamps 1090 MHz packets; see [`ti/mlat/mlat_pairing.hh`](ti/mlat/mlat_pairing.hh) for the
-rule and [`ti/mlat/mlat_capture.cpp`](ti/mlat/mlat_capture.cpp) for the timer.
+rule, [`ti/mlat/mlat_clear_dma.cpp`](ti/mlat/mlat_clear_dma.cpp) for the latch clear and
+[`ti/mlat/mlat_capture.cpp`](ti/mlat/mlat_capture.cpp) for the timer.
 
-- Two sources mark a packet's sync event: the LR2021's SyncwordValid IRQ on DIO5 (CC1314 DIO_13), timed by GPT0A
-  at 48 MHz, and the LR2021's own sync timestamp. The loop drain sweep clears the IRQ latch and reads the timestamp.
-- A packet is stamped only when its FIFO read holds that packet alone and both sources name one event that is
-  surely in the read. Every other packet gets `RawModeSPacket::no_mlat_timestamp` and a coarse receive time; BEAST
-  and RAW report its timestamp as 0.
-- uDMA moves the timer captures to a ring, so nothing runs in interrupt context per packet.
+- The LR2021's SyncwordValid IRQ on DIO5 (CC1314 DIO_13) is latched until cleared. GPT0A times its edge at 48 MHz
+  (uDMA moves the captures to a ring). GPT0B captures the same edge and starts a uDMA chain (channels 10 and 11,
+  memory scatter-gather) that sends ClearIrq on SPI0 with no CPU per packet: NSS high 15 to 20 us after the edge.
+- Every sync event therefore raises an edge unless it comes while the latch is still set. Each FIFO read is paired
+  by count: the edges surely in the read (at least 145 us before the level request, after the previous read) must
+  equal its packets; then every packet gets its edge in order. Otherwise the whole read stays unstamped: a packet
+  without an edge, an edge without a packet, a read the IRQ-paced chain made, a FIFO overflow.
+- Bus sharing: the chain runs only while armed. Every other SPI user disarms it first (`BeginTransaction`, the drain
+  sweep, the IRQ-paced chain, the SYNC handoff), which waits for a chain in progress. It is armed at the end of
+  `UpdateLR2021` with the bus idle and BUSY low, and from the BUSY-fall interrupt right after the sweep's FIFO read.
+  An edge that came while disarmed leaves DIO5 latched; arming then starts its clear by software request. The
+  sweep runs such a pending clear ahead of its command frames, never between a command and its response frame.
+- The SPI driver keeps SPI0 enabled while idle with its RX DMA off: the chain pops its own RX bytes and `Disarm()`
+  flushes the RX FIFO, or the next transfer would shift.
 - While MLAT is on, the sweep waits for its short SPI frames in place (one main-loop pass per sweep), starts every
-  500 us, and holds back while a sync event is younger than 145 us. It skips the timestamp read when the FIFO
-  holds more than one packet, and the latch clear after a read of more than two.
+  500 us, and holds back while a sync edge is younger than 145 us.
 - The 64-bit count starts at the system time and then follows the 48 MHz crystal. It restarts after SYNC sleep
-  (the timer stops in STANDBY) and after a main-loop stall of more than 2 s.
+  (the timer stops in STANDBY) and after a main-loop stall of more than 2 s. `PollMlat` reads the capture ring
+  before the counter, so every capture is older than the value it is extended against.
 - Nothing is stamped in the DF17 preamble mode: its sync event is not at a fixed place in the frame.
-- Off, no LR2021 command, timer or pin is touched.
+- Off, no LR2021 command, timer, uDMA channel or pin is touched.
 
 ## Repo ↔ container layout
 
