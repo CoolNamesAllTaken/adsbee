@@ -1,0 +1,6 @@
+-r requirements.txt
+fakeredis~=2.31
+pytest~=8.4
+pytest-django~=4.11
+pytest-asyncio~=1.1
+playwright~=1.54

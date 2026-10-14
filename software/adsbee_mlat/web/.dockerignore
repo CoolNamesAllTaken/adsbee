@@ -1,0 +1,5 @@
+data/
+staticfiles/
+**/__pycache__/
+.pytest_cache/
+e2e/media/
