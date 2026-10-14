@@ -17,6 +17,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
     // goes high after kSPIHandshakeLockoutUs. Does not apply in bootloader mode, since we wait for acks.
     static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
+    static constexpr uint32_t kRawPacketPollIntervalMs = 20;  // Poll interval while UAT packets are arriving.
     static constexpr uint32_t kSPIHandshakeLockoutUs =
         200;  // How long to wait after a transaction to allow the handshake pin to override the post transmit lockout.
               // Used to override the stock value since the CC1312 is slow.
@@ -208,7 +209,12 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     inline bool DeInit() { return true; };
 
     bool Update();
-    bool UpdateIsDue() override { return more_raw_packets_pending_; }
+    // Poll sooner than the default interval while UAT packets are arriving, so the CC1312 queues don't fill up.
+    bool UpdateIsDue() override {
+        return more_raw_packets_pending_ ||
+               (raw_packets_arriving_ &&
+                get_time_since_boot_ms() - last_update_timestamp_ms_ >= kRawPacketPollIntervalMs);
+    }
 
     /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA
@@ -561,6 +567,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     uint32_t application_crc_ = 0;
     uint32_t ccfg_crc_ = 0;
     bool more_raw_packets_pending_ = false;  // The CC1312 had more packets queued than the last Update() could read.
+    bool raw_packets_arriving_ = false;      // The last Update() read packets.
 
     // Clock config struct used to set the SPI peripheral to the correct clock rate.
     struct SPIClkConfig {
