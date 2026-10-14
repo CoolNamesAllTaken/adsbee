@@ -182,6 +182,7 @@ class ObjectDictionary {
         uint8_t hardware_capabilities = 0;
         uint16_t psram_total_kb = 0;  // PSRAM heap size (0 if no PSRAM).
         uint16_t psram_free_kb = 0;   // Free PSRAM heap (0 if no PSRAM).
+        uint8_t num_network_console_clients = 0;  // Connected /console WebSocket clients.
     };
 
     enum ESP32HardwareCapability : uint8_t {

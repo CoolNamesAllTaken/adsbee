@@ -4,6 +4,7 @@
 #include <cstdio>   // Regular pico/stdio.h doesn't support vprint functions.
 
 #include "pico/stdlib.h"
+#include "esp32.hh"
 #include "spi_coprocessor.hh"
 
 static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kConsole,
@@ -181,7 +182,7 @@ bool CommsManager::iface_putc(SettingsManager::SerialInterface iface, char c) {
             return true;  // Function is void so we won't know if it succeeds.
             break;
         case SettingsManager::kConsole:
-            return putchar(c) >= 0 && (!esp32.IsEnabled() || network_console_putc(c) >= 0);
+            return putchar(c) >= 0 && (!MirrorToNetworkConsole() || network_console_putc(c) >= 0);
             break;
         case SettingsManager::kNumSerialInterfaces:
         default:
@@ -201,7 +202,7 @@ bool CommsManager::iface_write(SettingsManager::SerialInterface iface, const cha
         return true;
     }
     stdio_put_string(buf, len, false, false);
-    if (esp32.IsEnabled()) {
+    if (MirrorToNetworkConsole()) {
         for (uint16_t i = 0; i < len; i++) {
             network_console_putc(buf[i]);
         }
@@ -255,7 +256,7 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
             break;
         case SettingsManager::kConsole:
             // Note: Using fputs instead of standard puts, since puts adds a line feed.
-            return fputs(buf, stdout) >= 0 && (!esp32.IsEnabled() || network_console_puts(buf) >= 0);
+            return fputs(buf, stdout) >= 0 && (!MirrorToNetworkConsole() || network_console_puts(buf) >= 0);
             break;
         case SettingsManager::kNumSerialInterfaces:
         default:
@@ -265,6 +266,8 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
     }
     return false;  // Should never get here.
 }
+
+bool CommsManager::MirrorToNetworkConsole() { return esp32.IsEnabled() && esp32_ll.NetworkConsoleHasConsumers(); }
 
 bool CommsManager::network_console_putc(char c) {
     static bool recursion_alert = false;
