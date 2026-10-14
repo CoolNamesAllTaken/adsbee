@@ -26,6 +26,9 @@ inline void main_core1() {
         if (adsbee.Receiver1090IsEnabled() != adsbee.Receiver1090IRQIsEnabled()) {
             adsbee.SyncReceiver1090IRQEnable();
         }
+        if (!adsbee.PPSCaptureIRQIsSynced()) {
+            adsbee.SyncPPSCaptureIRQEnable();
+        }
 #endif  // ISRS_ON_CORE1
 #ifdef HARDWARE_UNIT_TESTS
         RunPendingTestFunctionOnCore1();  // Lets hardware unit tests read core 1 state, e.g. its SysTick.
