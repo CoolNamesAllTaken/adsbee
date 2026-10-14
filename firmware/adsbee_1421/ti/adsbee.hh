@@ -3,6 +3,7 @@
 #include "aircraft_dictionary.hh"
 #include "bsp.hh"
 #include "lr2021.hh"
+#include "mlat/mlat_clear_dma.hh"
 #include "mlat/mlat_pairing.hh"
 #include "settings.hh"
 
@@ -54,6 +55,7 @@ class ADSBee {
         mlat_pairer_.ResetCounters();
         mlat_capture_overruns = 0;
         mlat_timebase_restarts = 0;
+        mlat_clear_dma::ResetCounters();
     }
     // Bracket code that drives the LR2021 directly (e.g. the AT+TEST hardware unit tests). Begin disarms the LR2021
     // interrupts. End re-applies the receiver config (honoring AT+LR_ENABLE and AT+RX_ENABLE) and returns false if
@@ -159,10 +161,11 @@ class ADSBee {
     bool UpdateLR2021();
     // Splits a drained LR2021 RX FIFO payload into per-packet Mode S frames and enqueues them for
     // decoding. rx_buf points at the drain payload (valid until FinishRxDrain() / ReleaseSlot()).
-    // Every packet in the batch gets mlat_48mhz_64bit_counts and no_mlat_timestamp. With MLAT timestamps off
-    // the counts are the IRQ-edge time for chain slots and the parse time for loop-drain payloads.
+    // Every packet in the batch gets mlat_48mhz_64bit_counts and no_mlat_timestamp, except packet i with
+    // stamped[i], which gets stamps[i] as its MLAT timestamp. With MLAT timestamps off the counts are the IRQ-edge
+    // time for chain slots and the parse time for loop-drain payloads.
     void ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes, uint64_t mlat_48mhz_64bit_counts,
-                           bool no_mlat_timestamp);
+                           bool no_mlat_timestamp, const uint64_t* stamps = nullptr, const bool* stamped = nullptr);
     // (Re)applies the current receiver configuration (sync mode, gain, CRC filter) to the LR2021.
     bool ApplyReceiverConfig();
 
@@ -187,15 +190,19 @@ class ADSBee {
     // never drives it at boot.
     bool lr2021_enabled_ = true;
 
-    // MLAT timestamps. mlat_active_: the capture timer runs and the loop drain sweep reads both sync event sources.
+    // MLAT timestamps. mlat_active_: the capture timer and the uDMA clear run, and the loop drain sweep is paired.
     // Enabled but not active: receiver down, or DF17 preamble mode (its sync event is not at a fixed place in the
     // frame); every packet is then marked no_mlat_timestamp.
     bool mlat_enabled_ = false;
     bool mlat_active_ = false;
-    // Shortest time between sweep starts while MLAT is active. Only a packet alone in its FIFO read can be
-    // stamped, so a shorter interval stamps more packets, and costs reception: the LR2021 can miss a preamble
+    // Shortest time between sweep starts while MLAT is active. Edges that arrive while a sweep holds the bus wait
+    // for their clear, and a sync event in that wait makes a packet without an edge, which leaves its read
+    // unstamped. A shorter interval stamps more often per read and costs reception: the LR2021 can miss a preamble
     // while it serves a command.
     static constexpr uint32_t kMlatSweepIntervalUs = 500;
+    // After a sweep, how long to wait for the BUSY pulse of its last frame to end before arming the uDMA clear,
+    // instead of a whole main-loop pass.
+    static constexpr uint32_t kMlatArmBusyWaitUs = 30;
     bool mlat_clock_was_crystal_ = false;
     MlatTimebase mlat_timebase_;
     MlatPairer mlat_pairer_;
@@ -205,9 +212,9 @@ class ADSBee {
     void RestartMlatTimebase();
     // Advances the 64-bit count and moves captured edges to the pairer. Call before every use of either.
     void PollMlat();
-    // Pairs the loop drain sweep that just completed with num_packets packets. True: its one packet gets
-    // *stamp_ticks.
-    bool PairMlatSweep(uint16_t num_packets, uint64_t* stamp_ticks);
+    // Pairs the loop drain sweep that just completed with its num_packets packets. Returns how many got stamps
+    // (stamped[i], stamps[i]; MlatPairer::kMaxReadPackets entries each).
+    uint16_t PairMlatSweep(uint16_t num_packets, uint64_t* stamps, bool* stamped);
     // A FIFO read that is never paired: marks its packets and keeps earlier sync events from later packets.
     void BreakMlat(uint16_t num_packets);
     // Receive time for a packet without an MLAT timestamp, on the time base the stamped packets use.

@@ -7,6 +7,7 @@
 #include "adsbee.hh"
 #include "ccfg_bootloader_flash.hh"
 #include "comms.hh"
+#include "mlat/mlat_clear_dma.hh"
 #include "object_dictionary.hh"
 #include "packet_decoder.hh"
 #include "flash_utils.hh"
@@ -388,8 +389,9 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 "validity_reconfigs=%lu,stale_edges=%lu,uat_len_mismatch=%lu,uat_report_q_ovf=%lu,"
                 "parse_max_cyc=%lu,decode_max_cyc=%lu,loop_max_cyc=%lu,loop_avg_cyc=%lu,cpu_1090_pm=%lu,"
                 "cfg_perrs=%lu,rx_cfg_error=%u,irq_kept_reads=%lu,"
-                "mlat_stamped=%lu,mlat_no_event=%lu,mlat_ambiguous=%lu,mlat_multiple=%lu,mlat_disagree=%lu,"
-                "mlat_orphans=%lu,mlat_edge_drops=%lu,mlat_overruns=%lu,mlat_restarts=%lu",
+                "mlat_stamped=%lu,mlat_more_pkts=%lu,mlat_more_edges=%lu,mlat_unpaired=%lu,mlat_orphans=%lu,"
+                "mlat_edge_drops=%lu,mlat_overruns=%lu,mlat_restarts=%lu,mlat_kicks=%lu,mlat_pending_clears=%lu,"
+                "mlat_clear_timeouts=%lu",
                 stats.pkt_rx, stats.crc_error, stats.len_error, stats.pbl_det, stats.sync_ok, stats.sync_fail,
                 stats.timeout, (unsigned long)adsbee.lr2021_fifo_full_count,
                 (unsigned long)packet_decoder.raw_queue_overflow_count,
@@ -417,13 +419,14 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                                     : 0),
                 (unsigned long)adsbee.lr2021_config_perr_count, adsbee.ReceiverConfigRejected() ? 1u : 0u,
                 (unsigned long)adsbee.lr2021.irq_drain_kept_reads, (unsigned long)adsbee.mlat_counters().stamped,
-                (unsigned long)adsbee.mlat_counters().unstamped_no_event,
-                (unsigned long)adsbee.mlat_counters().unstamped_ambiguous,
-                (unsigned long)adsbee.mlat_counters().unstamped_multiple,
-                (unsigned long)adsbee.mlat_counters().unstamped_disagree,
+                (unsigned long)adsbee.mlat_counters().unstamped_more_packets,
+                (unsigned long)adsbee.mlat_counters().unstamped_more_edges,
+                (unsigned long)adsbee.mlat_counters().unstamped_unpaired,
                 (unsigned long)adsbee.mlat_counters().orphan_events,
                 (unsigned long)adsbee.mlat_counters().dropped_edges, (unsigned long)adsbee.mlat_capture_overruns,
-                (unsigned long)adsbee.mlat_timebase_restarts);
+                (unsigned long)adsbee.mlat_timebase_restarts, (unsigned long)mlat_clear_dma::counters().kicks,
+                (unsigned long)mlat_clear_dma::counters().pending_clears,
+                (unsigned long)mlat_clear_dma::counters().wait_timeouts);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -1472,9 +1475,10 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "cfg_perrs = receiver config attempts the LR2021 answered with CMD_PERR, each followed by "
                     "a hard reset and a retry of the same config; rx_cfg_error = 1 while the selected config "
                     "is rejected and the 1090 MHz receiver is down; mlat_* with AT+MLAT=1 = packets given an "
-                    "MLAT timestamp, packets left without one by reason (no sync event known / event too close "
-                    "to a FIFO read / several packets in a read / the two event sources disagree), sync events "
-                    "without a packet, edges dropped, capture ring overflows, time base restarts)."
+                    "MLAT timestamp, packets left without one by reason (read with more packets than sync edges / "
+                    "more edges than packets / read never paired: IRQ-paced or FIFO overflow), sync edges without "
+                    "a packet, edges dropped, capture ring overflows, time base restarts, latch clears started late "
+                    "/ run between sweep frames / that did not end in time)."
                     "\r\n\tAT+RX_STATS=RESET\r\n\t"
                     "Reset all Rx stats counters.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxStatsCallback, comms_manager)},

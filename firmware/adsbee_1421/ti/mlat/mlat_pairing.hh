@@ -3,12 +3,10 @@
 // MLAT timestamps for LR2021 packets: 64-bit time base and the rule that pairs a sync event with a packet.
 // Header-only and SDK-free for the host tests.
 //
-// Two sources mark a packet's sync event:
-//   - Edge: SyncwordValid on LR2021 DIO5, latched until cleared, timed by a 48 MHz capture timer. One edge per
-//     clear, and the loop drain sweep clears once.
-//   - Timestamp: the LR2021's own time of its latest sync event, read by the sweep after the FIFO level.
-// A packet is stamped only when its FIFO read holds that packet alone and both sources name one event that is
-// surely in the read. Every other packet stays unstamped.
+// SyncwordValid on LR2021 DIO5 is latched until cleared and timed by a 48 MHz capture timer. A uDMA chain clears the
+// latch after every edge (mlat/mlat_clear_dma.hh), so every sync event raises an edge unless it comes while the
+// latch is still set. Packets are paired with edges by count, per FIFO read: when the edges surely in the read
+// equal its packets, the n-th edge is the n-th packet. Otherwise no packet of the read is stamped.
 
 #include <cstdint>
 
@@ -76,29 +74,23 @@ class MlatPairer {
     static constexpr uint32_t kLaterTicks = 125 * kTicksPerUs;
     // Edges older than this are dropped. Must stay under one counter period, less the longest gap between polls.
     static constexpr uint32_t kStaleTicks = 100000 * kTicksPerUs;
-    // Edge time minus timestamp time for one event, in half ticks (1/96 us): 0.83 us on the bench. Two events
-    // are at least a packet (120 us) apart.
-    static constexpr int32_t kAgreeCenterHalfTicks = 80;
-    static constexpr int32_t kAgreeToleranceHalfTicks = 96;
 
-    static constexpr uint16_t kMaxPendingEdges = 16;
+    static constexpr uint16_t kMaxPendingEdges = 32;
+    static constexpr uint16_t kMaxReadPackets = 20;  // A full FIFO holds 18.
 
     struct Counters {
         uint32_t stamped = 0;
-        uint32_t unstamped_no_event = 0;   // No edge, or no timestamp, surely in the read.
-        uint32_t unstamped_ambiguous = 0;  // An edge may belong to this read or to a neighbor.
-        uint32_t unstamped_multiple = 0;   // Several packets in the read, or a read that is never paired.
-        uint32_t unstamped_disagree = 0;   // Edge and timestamp name different events.
-        uint32_t orphan_events = 0;        // An edge surely in a read with fewer packets than edges.
-        uint32_t dropped_edges = 0;        // Pending queue full.
+        uint32_t unstamped_more_packets = 0;  // Packets of reads with fewer edges than packets (a sync without an edge).
+        uint32_t unstamped_more_edges = 0;    // Packets of reads with more edges than packets.
+        uint32_t unstamped_unpaired = 0;      // Packets of reads that are never paired (IRQ-paced chain, FIFO overflow).
+        uint32_t orphan_events = 0;           // Edges surely in a read that had no packet for them.
+        uint32_t dropped_edges = 0;           // Pending queue full.
     };
 
     // One loop drain sweep. Times are 64-bit ticks.
     struct Sweep {
         uint64_t level_request_ticks = 0;  // NSS falling edge of the GetRxFifoLevel request.
         uint64_t level_answer_ticks = 0;   // The level was sampled before this.
-        bool has_timestamp = false;
-        int64_t timestamp_half_ticks = 0;  // Time of the LR2021's latest sync event, in half ticks.
     };
 
     void AddEdge(uint64_t ticks) {
@@ -118,71 +110,72 @@ class MlatPairer {
         boundary_ticks_ = now_ticks;
     }
 
-    // True while a pending edge is younger than kHereTicks: a sweep started now could not place its packet. The
-    // caller holds the sweep back, for one edge at most (the next edge needs a clear, which only a sweep sends).
+    // True while a pending edge is younger than kHereTicks: a sweep started now could not count its packet.
     bool HasYoungEdge(uint64_t now_ticks) const {
         return num_pending_ > 0 && now_ticks - pending_[num_pending_ - 1] < kHereTicks;
     }
 
     // Packets of a read that is never paired (IRQ-paced chain, FIFO overflow).
-    void CountUnpaired(uint16_t num_packets) { counters_.unstamped_multiple += num_packets; }
+    void CountUnpaired(uint16_t num_packets) { counters_.unstamped_unpaired += num_packets; }
 
-    // Call for every completed sweep, with the number of whole packets it read (0: none). True: the read's one
-    // packet gets *stamp_ticks. now_ticks is the current time.
-    bool Pair(const Sweep& sweep, uint16_t num_packets, uint64_t now_ticks, uint64_t* stamp_ticks) {
-        // Sort the pending edges by where their packet is.
+    // Call for every completed sweep, with the number of whole packets it read (0: none) and now_ticks the current
+    // time. Every edge surely in the read has its packet in the read: the packet was in the FIFO at the level sample,
+    // and not in an earlier read. So when the counts agree, the read's packets are exactly those edges' packets, in
+    // order. Returns how many packets got stamps: stamped[i] says which, stamps[i] holds them (num_packets entries).
+    uint16_t Pair(const Sweep& sweep, uint16_t num_packets, uint64_t now_ticks, uint64_t* stamps, bool* stamped) {
+        for (uint16_t i = 0; i < num_packets && i < kMaxReadPackets; i++) {
+            stamped[i] = false;
+        }
+        uint64_t here[kMaxReadPackets];
         uint16_t num_here = 0, num_kept = 0;
-        bool ambiguous = false;
-        uint64_t here_ticks = 0;
+        uint64_t oldest_ambiguous = 0;
+        bool has_ambiguous = false;
         for (uint16_t i = 0; i < num_pending_; i++) {
             const uint64_t t = pending_[i];
             if (now_ticks - t > kStaleTicks || t + kLaterTicks <= boundary_ticks_) {
                 continue;  // Too old, or possibly in an earlier read.
             }
             if (t + kHereTicks <= sweep.level_request_ticks) {
-                if (num_here++ == 0) {
-                    here_ticks = t;
+                if (num_here < kMaxReadPackets) {
+                    here[num_here] = t;
                 }
-            } else if (t + kLaterTicks > sweep.level_answer_ticks) {
-                pending_[num_kept++] = t;  // Surely not read yet.
+                num_here++;
             } else {
-                ambiguous = true;
-                if (num_packets == 0) {
-                    pending_[num_kept++] = t;  // Nothing was read, so its packet is still to come.
+                // Surely later, or ambiguous (its packet may or may not be in this read): kept, resolved below.
+                if (t + kLaterTicks <= sweep.level_answer_ticks && !has_ambiguous) {
+                    has_ambiguous = true;
+                    oldest_ambiguous = t;
                 }
+                pending_[num_kept++] = t;
             }
         }
         num_pending_ = num_kept;
-        if (num_here > num_packets) {
-            counters_.orphan_events += num_here - num_packets;
-        }
         if (num_packets == 0) {
-            return false;  // Nothing was popped: the boundary stays.
+            counters_.orphan_events += num_here;
+            return 0;  // Nothing was popped: the boundary stays.
         }
+        // When the counts agree, the ambiguous edges' packets are surely not in this read: they stay usable for the
+        // next one. Otherwise they may be, and the boundary drops them.
+        const bool match = num_here == num_packets && num_packets <= kMaxReadPackets;
         boundary_ticks_ = sweep.level_answer_ticks;
-        if (num_packets > 1) {
-            counters_.unstamped_multiple += num_packets;
-            return false;
+        if (match && has_ambiguous && oldest_ambiguous + kLaterTicks - 1 < boundary_ticks_) {
+            boundary_ticks_ = oldest_ambiguous + kLaterTicks - 1;
         }
-        if (ambiguous) {
-            counters_.unstamped_ambiguous++;
-            return false;
+        if (!match) {
+            if (num_here < num_packets) {
+                counters_.unstamped_more_packets += num_packets;
+            } else {
+                counters_.unstamped_more_edges += num_packets;
+                counters_.orphan_events += num_here - num_packets;
+            }
+            return 0;
         }
-        if (num_here != 1 || !sweep.has_timestamp) {
-            counters_.unstamped_no_event++;
-            return false;
+        for (uint16_t i = 0; i < num_packets; i++) {
+            stamps[i] = here[i];
+            stamped[i] = true;
         }
-        // The edge is the first event after a clear and the timestamp is the latest event of all. When they are
-        // one event, no other event came between the clear and the read, so the read's packet is this event's.
-        const int64_t diff_half_ticks = static_cast<int64_t>(here_ticks * 2) - sweep.timestamp_half_ticks;
-        if (diff_half_ticks < kAgreeCenterHalfTicks - kAgreeToleranceHalfTicks ||
-            diff_half_ticks > kAgreeCenterHalfTicks + kAgreeToleranceHalfTicks) {
-            counters_.unstamped_disagree++;
-            return false;
-        }
-        counters_.stamped++;
-        *stamp_ticks = here_ticks;
-        return true;
+        counters_.stamped += num_packets;
+        return num_packets;
     }
 
     const Counters& counters() const { return counters_; }

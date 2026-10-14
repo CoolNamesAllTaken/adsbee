@@ -43,6 +43,7 @@
 
 #include "hal.hh"
 #include "lr2021.hh"
+#include "mlat/mlat_clear_dma.hh"
 
 // Minimal Stat validation for ISR context: command-status field (bits 11:9) must be CMD_OK / CMD_DAT.
 // last_stat_ is thread-owned and must not be written from here.
@@ -168,6 +169,7 @@ void LR2021::HandleIrqLine() {
         // dropped a pending read-response, the chip discards it when the next command frame arrives
         // (pipelined protocol).
     }
+    mlat_clear_dma::Disarm();  // Waits a few microseconds at most; StartChainSegment checks BUSY after it.
     irq_drain_count = irq_drain_count + 1;
     slot.timestamp_us = get_time_since_boot_us();
     StartChainSegment();
@@ -204,7 +206,8 @@ void LR2021::RetrySkippedEdge() {
 }
 
 void LR2021::HandleBusyFall() {
-    // GPIO HWI (0xC0): fires only while armed, i.e. a chain frame is pending. Post it.
+    // GPIO HWI (0xC0): fires only while armed: a chain frame is pending (post it), or the loop drain's FIFO read
+    // ended with MLAT on (arm the uDMA clear).
     DisarmBusyInterrupt();
     if (abort_requested_) {
         AbortChainFromIsr();
@@ -219,6 +222,13 @@ void LR2021::HandleBusyFall() {
             PostChainFrame();
             break;
         default:
+            if (mlat_arm_on_busy_fall_) {
+                // The loop drain's FIFO read ended and BUSY fell: the bus is free until the next frame.
+                mlat_arm_on_busy_fall_ = false;
+                if (drain_state_ == DrainState::kFifoRead || drain_state_ == DrainState::kDataReady) {
+                    mlat_clear_dma::Arm();
+                }
+            }
             break;  // Disarmed late / state already advanced (thread assist): nothing to do.
     }
 }
