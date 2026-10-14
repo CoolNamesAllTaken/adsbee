@@ -603,18 +603,18 @@ bool CommsManager::ReportMLAT(ReportSink* sinks, uint16_t num_sinks, const Compo
         BeastReporter::ReceiverInfoSchedule& schedule = mlat_receiver_info_schedules[sinks[i]];
         info = BeastReporter::ReceiverInfo();
         bool have_info = GetMLATReceiverInfo(sinks[i], info);
-        // The epoch must be announced before any frame stamped in it, so a sink without a sent info frame waits.
-        if (have_info && schedule.Due(timestamp_ms, info.epoch, info.position.moving)) {
+        // The epoch must be announced before any frame stamped in it, so frames wait while an info frame is due.
+        if (have_info && schedule.Due(timestamp_ms, info)) {
             uint16_t info_len = BeastReporter::BuildReceiverInfoFrame(info_frame_buf, sizeof(info_frame_buf), info);
             if (info_len == 0) {
                 mlat_tally.num_build_failures++;
             } else if (SendBufToSinks(&sinks[i], 1, reinterpret_cast<char*>(info_frame_buf), info_len, mlat_tally)) {
-                schedule.MarkSent(timestamp_ms, info.epoch);
+                schedule.MarkSent(timestamp_ms, info);
             } else {
                 ret = false;
             }
         }
-        if (batch_len > 0 && have_info && !schedule.Due(timestamp_ms, info.epoch, info.position.moving)) {
+        if (batch_len > 0 && have_info && !schedule.Due(timestamp_ms, info)) {
             ret &= SendBufToSinks(&sinks[i], 1, reinterpret_cast<char*>(mlat_batch_buf), batch_len, mlat_tally,
                                   num_mode_s_packets);
         }

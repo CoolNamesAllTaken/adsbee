@@ -132,20 +132,24 @@ uint16_t BuildReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, const ReceiverIn
 
 /**
  * When an MLAT feed sink sends its next receiver info frame: first on each connection, then every 10 seconds, every
- * second while the receiver may move, and right away when the clock epoch changes.
+ * second while the receiver may move, and right away when the clock epoch, the moving flag or the position source
+ * changes.
  */
 class ReceiverInfoSchedule {
    public:
     static constexpr uint32_t kIntervalMs = 10000;
     static constexpr uint32_t kMovingIntervalMs = 1000;
 
-    bool Due(uint32_t timestamp_ms, uint32_t epoch, bool moving) const {
-        return !sent_ || epoch != epoch_ ||
-               timestamp_ms - last_sent_timestamp_ms_ >= (moving ? kMovingIntervalMs : kIntervalMs);
+    bool Due(uint32_t timestamp_ms, const ReceiverInfo &info) const {
+        return !sent_ || info.epoch != epoch_ || info.position.moving != moving_ ||
+               info.position.source != source_ ||
+               timestamp_ms - last_sent_timestamp_ms_ >= (moving_ ? kMovingIntervalMs : kIntervalMs);
     }
-    void MarkSent(uint32_t timestamp_ms, uint32_t epoch) {
+    void MarkSent(uint32_t timestamp_ms, const ReceiverInfo &info) {
         sent_ = true;
-        epoch_ = epoch;
+        epoch_ = info.epoch;
+        moving_ = info.position.moving;
+        source_ = info.position.source;
         last_sent_timestamp_ms_ = timestamp_ms;
     }
     // Call when the sink's connection (re)starts.
@@ -154,6 +158,8 @@ class ReceiverInfoSchedule {
    private:
     bool sent_ = false;
     uint32_t epoch_ = 0;
+    bool moving_ = false;
+    ReceiverPosition::Source source_ = ReceiverPosition::kSourceNone;
     uint32_t last_sent_timestamp_ms_ = 0;
 };
 

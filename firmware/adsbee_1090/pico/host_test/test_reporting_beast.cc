@@ -311,19 +311,34 @@ TEST(BeastUtils, ReceiverInfoFrameEscapesAndOmissions) {
 
 TEST(BeastUtils, ReceiverInfoSchedule) {
     BeastReporter::ReceiverInfoSchedule schedule;
-    EXPECT_TRUE(schedule.Due(0, 7, false));  // First frame of a connection.
-    schedule.MarkSent(1000, 7);
-    EXPECT_FALSE(schedule.Due(1000, 7, false));
-    EXPECT_FALSE(schedule.Due(10999, 7, false));
-    EXPECT_TRUE(schedule.Due(11000, 7, false));  // Every 10 s.
-    EXPECT_TRUE(schedule.Due(2000, 7, true));    // Every second while moving.
-    EXPECT_TRUE(schedule.Due(1001, 8, false));   // Right away on a new epoch.
-    schedule.MarkSent(1001, 8);
-    EXPECT_FALSE(schedule.Due(1002, 8, false));
+    BeastReporter::ReceiverInfo info;
+    info.epoch = 7;
+    info.position.source = ReceiverPosition::kSourceFixed;
+    EXPECT_TRUE(schedule.Due(0, info));  // First frame of a connection.
+    schedule.MarkSent(1000, info);
+    EXPECT_FALSE(schedule.Due(1000, info));
+    EXPECT_FALSE(schedule.Due(10999, info));
+    EXPECT_TRUE(schedule.Due(11000, info));  // Every 10 s.
+
+    BeastReporter::ReceiverInfo changed = info;
+    changed.epoch = 8;
+    EXPECT_TRUE(schedule.Due(1001, changed));  // Right away on a new epoch,
+    changed = info;
+    changed.position.source = ReceiverPosition::kSourceGNSS;
+    EXPECT_TRUE(schedule.Due(1001, changed));  // a new position source,
+    changed = info;
+    changed.position.moving = true;
+    EXPECT_TRUE(schedule.Due(1001, changed));  // or a change of the moving flag.
+    schedule.MarkSent(1001, changed);
+    EXPECT_FALSE(schedule.Due(1500, changed));
+    EXPECT_TRUE(schedule.Due(2001, changed));  // Every second while moving.
+    EXPECT_TRUE(schedule.Due(1500, info));     // Stopped moving: tell the server now.
+
+    schedule.MarkSent(1501, info);
     schedule.Restart();
-    EXPECT_TRUE(schedule.Due(1002, 8, false));  // New connection.
+    EXPECT_TRUE(schedule.Due(1502, info));  // New connection.
     // Works across the millisecond counter wrapping.
-    schedule.MarkSent(0xFFFFF000u, 8);
-    EXPECT_FALSE(schedule.Due(0x00000100u, 8, false));
-    EXPECT_TRUE(schedule.Due(0xFFFFF000u + 10000u, 8, false));
+    schedule.MarkSent(0xFFFFF000u, info);
+    EXPECT_FALSE(schedule.Due(0x00000100u, info));
+    EXPECT_TRUE(schedule.Due(0xFFFFF000u + 10000u, info));
 }
