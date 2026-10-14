@@ -36,6 +36,7 @@ class Receiver:
         self.connected = False
         self.enabled = True
         self.fixed_override = None  # (lat, lon, alt) set by an operator; wins over reported positions.
+        self.own_position = None
         self.peer = None
         self.jitter_s = DEFAULT_JITTER_S.get(clock_hz, 70e-9)
         self.jitter_estimated = False
@@ -67,7 +68,12 @@ class Receiver:
     def has_position(self) -> bool:
         return self.ecef is not None
 
-    def set_position(self, lat: float, lon: float, alt: float, src: str, hacc=None, vacc=None):
+    def set_position(self, lat: float, lon: float, alt: float, src: str, hacc=None, vacc=None, own=True):
+        """Sets the antenna position. own: reported by the receiver or its config (an override wins over it)."""
+        if own:
+            self.own_position = (lat, lon, alt, src, hacc, vacc)
+            if self.fixed_override is not None:
+                return
         self.lat, self.lon, self.alt = float(lat), float(lon), float(alt)
         self.ecef = geo.llh_to_ecef(self.lat, self.lon, self.alt)
         self.radius_surface = float(np.linalg.norm(self.ecef)) - self.alt
@@ -76,6 +82,19 @@ class Receiver:
         dh, dv = DEFAULT_ACCURACY_M.get(src, (5.0, 10.0))
         self.hacc = float(hacc) if hacc is not None else dh
         self.vacc = float(vacc) if vacc is not None else dv
+
+    def set_override(self, fixed):
+        """Operator position (lat, lon, alt or None) that wins over reported ones; None restores the reported one."""
+        if fixed is None:
+            self.fixed_override = None
+            if self.own_position is not None:
+                self.set_position(*self.own_position)
+            return
+        lat, lon, alt = fixed
+        if alt is None:
+            alt = self.own_position[2] if self.own_position is not None else 0.0
+        self.fixed_override = (float(lat), float(lon), float(alt))
+        self.set_position(*self.fixed_override, "fixed", own=False)
 
     def set_clock_hz(self, hz: int):
         if hz != self.clock_hz:
@@ -100,7 +119,7 @@ class Receiver:
                 self.reset_clock()
                 reset = True
             self.epoch = info["ep"]
-        if all(k in info for k in ("lat", "lon", "alt")) and self.fixed_override is None:
+        if all(k in info for k in ("lat", "lon", "alt")):
             self.set_position(info["lat"], info["lon"], info["alt"], info.get("src", "gnss"), info.get("hacc"),
                               info.get("vacc"))
         if "mov" in info:

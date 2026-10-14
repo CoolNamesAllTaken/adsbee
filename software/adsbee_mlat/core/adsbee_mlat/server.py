@@ -149,11 +149,10 @@ class Server:
             if rc.get("name"):
                 rx.name = rc["name"]
             fixed = rc.get("fixed")
-            if fixed:
-                rx.fixed_override = (float(fixed["lat"]), float(fixed["lon"]), float(fixed.get("alt_m", 0.0)))
-                rx.set_position(*rx.fixed_override, "fixed")
-            else:
-                rx.fixed_override = None
+            if fixed and fixed.get("lat") is not None and fixed.get("lon") is not None:
+                rx.set_override((fixed["lat"], fixed["lon"], fixed.get("alt_m")))
+            elif rx.fixed_override is not None:
+                rx.set_override(None)
 
     async def _watch_receiver_config(self):
         redis = self.publisher.redis
