@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adsbee_mlat_sim"
+version = "0.1.0"
+description = "Synthetic Mode S traffic with receiver timestamps for multilateration testing"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+test = ["pytest", "pyModeS>=2.13"]
+study = ["matplotlib", "scipy"]
+
+[tool.setuptools]
+packages = ["adsbee_mlat_sim"]
