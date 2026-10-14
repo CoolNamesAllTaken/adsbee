@@ -37,18 +37,21 @@ TEST(Settings, R1090PreambleModeNamesSelectTheirModes) {
 }
 
 TEST(Settings, VersionNumberingModesIsCurrent) {
-    // Version 5 numbers R1090PreambleMode as above.
-    EXPECT_EQ(kSettingsVersion, 5u);
+    // Version 6 numbers R1090PreambleMode as above (since version 5).
+    EXPECT_EQ(kSettingsVersion, 6u);
     SM::Settings settings;
     settings.Stamp();
     EXPECT_TRUE(settings.IsValid());
 }
 
 TEST(Settings, BlobFromAnOlderVersionIsRejected) {
-    // A valid version 4 blob (0.3.11-rc4) fails the check, so Load() resets to factory defaults.
+    // A valid version 4 blob (0.3.11-rc4) or 5 fails the check, so Load() resets to factory defaults.
     SM::Settings settings;
     settings.Stamp();
     settings.settings_version = 4;
+    settings.crc = settings.ComputeCRC();
+    EXPECT_FALSE(settings.IsValid());
+    settings.settings_version = 5;
     settings.crc = settings.ComputeCRC();
     EXPECT_FALSE(settings.IsValid());
 }

@@ -72,6 +72,10 @@ bool SettingsManager::Apply() {
     if (settings.rx_position.source >= RxPosition::kNumPositionSources) {
         settings.rx_position.source = RxPosition::kPositionSourceLowestAircraft;
     }
+    ReceiverPosition antenna_position = settings.antenna_position;
+    if (ReceiverPosition::SanitizeStoredFixed(antenna_position)) {
+        settings.antenna_position = antenna_position;
+    }
 
     // All of these can fail if the radio fails to open/close or the RX command can't be restarted; fold that
     // into the return value so boot/LOAD callers can see it.
@@ -245,6 +249,10 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tMAVLink System ID: %u\r\n", settings.mavlink_system_id);
     CONSOLE_PRINTF("\tMAVLink Component ID: %u\r\n", settings.mavlink_component_id);
 
+    char antenna_args[96];
+    ReceiverPosition::PrintATArgs(antenna_args, sizeof(antenna_args), settings.antenna_position);
+    CONSOLE_PRINTF("\tAntenna Position: %s\r\n", antenna_args);
+
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
     CONSOLE_PRINTF("\t\tSource: %s [%s]\r\n", RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
@@ -321,4 +329,9 @@ void SettingsManager::PrintAT() {
 
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", adsbee.GetWatchdogTimeoutSec());
+
+    // AT+ANTENNA_POSITION: last, since older firmware stops replaying at the first command it doesn't know.
+    char antenna_args[96];
+    ReceiverPosition::PrintATArgs(antenna_args, sizeof(antenna_args), settings.antenna_position);
+    CONSOLE_PRINTF("AT+ANTENNA_POSITION=%s\r\n", antenna_args);
 }

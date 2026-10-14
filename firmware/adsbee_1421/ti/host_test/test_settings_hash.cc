@@ -15,8 +15,8 @@ TEST(SettingsHash, SameSettingsSameHash) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Changes only with the Settings struct or its defaults.
     SM::Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x7215D7D8u);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x7215D7D8u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x12516FADu);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x12516FADu);
 }
 
 TEST(SettingsHash, MagicAndStoredCRCDoNotCount) {
@@ -55,6 +55,17 @@ TEST(SettingsHash, EverySettingChangesBothHashes) {
     ExpectChangesBoth("mavlink_component_id", [](SM::Settings& s) { s.mavlink_component_id++; });
     ExpectChangesBoth("rx_position.source",
                       [](SM::Settings& s) { s.rx_position.source = SM::RxPosition::kPositionSourceGNSS; });
+    ExpectChangesBoth("antenna_position.source",
+                      [](SM::Settings& s) { s.antenna_position.source = ReceiverPosition::kSourceFixed; });
+    ExpectChangesBoth("antenna_position.moving", [](SM::Settings& s) { s.antenna_position.moving = true; });
+}
+
+TEST(SettingsHash, AntennaCoordinatesChangeOnlyTheFullHash) {
+    SM::Settings a, b;
+    a.antenna_position.source = b.antenna_position.source = ReceiverPosition::kSourceFixed;
+    b.antenna_position.latitude_deg = 47.5;
+    EXPECT_EQ(SettingsHash::Compute(a, kScopeFleet), SettingsHash::Compute(b, kScopeFleet));
+    EXPECT_NE(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 }
 
 TEST(SettingsHash, ReceiverPositionCountsOnlyWhenItIsASetting) {

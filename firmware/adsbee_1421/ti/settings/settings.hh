@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "receiver_position.hh"
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
 #include "string.h"  // for memset
@@ -15,7 +16,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 5;
+static constexpr uint32_t kSettingsVersion = 6;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -55,6 +56,7 @@ class SettingsManager {
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
+        kMLAT,  // Beast Mode S with 48 MHz timestamps and receiver info frames (software/adsbee_mlat/PROTOCOL.md).
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -170,6 +172,9 @@ class SettingsManager {
 
         // Receiver position settings
         RxPosition rx_position;
+
+        // Antenna position entered by the operator for MLAT (source kSourceFixed, or kSourceNone if not set).
+        ReceiverPosition antenna_position;
 
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
         uint32_t crc = 0;
