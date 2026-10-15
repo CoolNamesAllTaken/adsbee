@@ -394,13 +394,18 @@ bool ADSBeeServer::Update() {
         }
     }
 
-    // Broadcast aircraft JSON to connected /aircraft WebSocket clients.
-    if (timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
+    // Broadcast aircraft JSON to connected /aircraft WebSocket clients. A report starts once the last one is done.
+    if (aircraft_json_next_uid_ >= aircraft_json_num_uids_ &&
+        timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
         last_aircraft_json_report_timestamp_ms_ = timestamp_ms;
-        if (network_aircraft.GetNumClients() > 0) {
-            SendAircraftJSONMessages();
-        }
+        aircraft_json_num_uids_ =
+            network_aircraft.GetNumClients() > 0
+                ? ListAircraftJSONLiveMapUIDs(aircraft_dictionary, timestamp_ms, aircraft_json_uids_,
+                                              kAircraftDictionaryMaxNumAircraft)
+                : 0;
+        aircraft_json_next_uid_ = 0;
     }
+    SendAircraftJSONMessages();
 
     // Prune inactive WebSocket clients and other housekeeping.
     // Broadcast RP2040 console output queued by the SPI receive task.
@@ -1158,7 +1163,23 @@ void ADSBeeServer::LabSendAircraftJSONMessages() {
     // each) cost ~100 TCP segments per second per client at a busy site; on the W5500 Ethernet board the network tasks
     // doing that outrank the SPI receive task, which then missed RP2040 handshakes until the RP2040 reset the board.
     // Frames of up to kNonBlockingMessageMaxLen always fit a writable socket whole.
+    if (aircraft_json_next_uid_ >= aircraft_json_num_uids_) {
+        return;
+    }
+    if (network_aircraft.GetNumClients() == 0) {
+        aircraft_json_next_uid_ = aircraft_json_num_uids_;  // Nobody left to send the rest to.
+        return;
+    }
     char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
-    WriteAircraftJSONLiveMapArrays(aircraft_dictionary, get_time_since_boot_ms(), batch_buf, sizeof(batch_buf),
-                                   [this](const char* buf, uint16_t len) { lab_aircraft_json_frames++; network_aircraft.BroadcastMessage(buf, len); });
+    uint64_t start_us = get_time_since_boot_us();
+    while (get_time_since_boot_us() - start_us < kAircraftJSONPassBudgetUs) {
+        uint16_t len =
+            WriteAircraftJSONLiveMapArray(aircraft_dictionary, get_time_since_boot_ms(), aircraft_json_uids_,
+                                          aircraft_json_num_uids_, aircraft_json_next_uid_, batch_buf, sizeof(batch_buf));
+        if (len == 0) {
+            break;
+        }
+        lab_aircraft_json_frames++;
+        network_aircraft.BroadcastMessage(batch_buf, len);
+    }
 }

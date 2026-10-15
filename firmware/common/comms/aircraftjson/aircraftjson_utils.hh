@@ -518,29 +518,56 @@ inline int16_t WriteAircraftJSONRemoteIDAircraftStr(char buf[], const RemoteIDAi
 }
 
 /**
- * Serializes aircraft for the Live Map websocket as JSON arrays of whole objects, passing each array to
- * emit(const char* buf, uint16_t len). Only the preferred entry per ICAO address is sent (one target per aircraft).
- * @param[in] dictionary Aircraft dictionary to serialize.
- * @param[in] timestamp_ms Current local time (get_time_since_boot_ms()), for preference and "seen_pos".
- * @param[in] buf Scratch buffer for one array; each emitted array fits in buf_len bytes.
- * @param[in] buf_len Length of buf. Must hold at least one aircraft object plus the brackets.
- * @param[in] emit Called once per array.
+ * Lists the aircraft the Live Map websocket reports: the preferred entry per ICAO address (one target per aircraft).
+ * @param[in] dictionary Aircraft dictionary to list.
+ * @param[in] timestamp_ms Current local time (get_time_since_boot_ms()), for preference.
+ * @param[out] uids UIDs of the aircraft to report.
+ * @param[in] max_uids Length of uids.
+ * @retval Number of UIDs written.
  */
-template <typename EmitFn>
-inline void WriteAircraftJSONLiveMapArrays(const AircraftDictionary& dictionary, uint32_t timestamp_ms, char buf[],
-                                           uint16_t buf_len, EmitFn emit) {
+inline uint16_t ListAircraftJSONLiveMapUIDs(const AircraftDictionary& dictionary, uint32_t timestamp_ms,
+                                            uint32_t uids[], uint16_t max_uids) {
+    uint16_t num_uids = 0;
+    for (const auto& itr : dictionary.dict) {
+        if (num_uids >= max_uids) {
+            break;
+        }
+        if (dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
+            uids[num_uids++] = itr.first;
+        }
+    }
+    return num_uids;
+}
+
+/**
+ * Serializes the next Live Map JSON array: whole aircraft objects from uids[next] on, until buf is full. UIDs no
+ * longer in the dictionary are skipped, so the list can be written out over several calls while the dictionary
+ * changes.
+ * @param[in] dictionary Aircraft dictionary to serialize from.
+ * @param[in] timestamp_ms Current local time (get_time_since_boot_ms()), for "seen_pos".
+ * @param[in] uids UIDs from ListAircraftJSONLiveMapUIDs().
+ * @param[in] num_uids Number of UIDs in uids.
+ * @param[in,out] next Index of the next UID to write; advanced past the UIDs written or skipped.
+ * @param[out] buf Buffer for the array.
+ * @param[in] buf_len Length of buf. Must hold at least one aircraft object plus the brackets.
+ * @retval Length of the array in buf, or 0 once no aircraft remain.
+ */
+inline uint16_t WriteAircraftJSONLiveMapArray(const AircraftDictionary& dictionary, uint32_t timestamp_ms,
+                                              const uint32_t uids[], uint16_t num_uids, uint16_t& next, char buf[],
+                                              uint16_t buf_len) {
     char json_buf[kAircraftJSONMessageStrMaxLen];
     uint16_t len_used = 0;
-    for (const auto& itr : dictionary.dict) {
-        if (!dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
-            continue;  // Another entry is reported for this ICAO address.
+    for (; next < num_uids; next++) {
+        auto itr = dictionary.dict.find(uids[next]);
+        if (itr == dictionary.dict.end()) {
+            continue;  // Removed since the list was made.
         }
         int16_t len = -1;
-        if (const ModeSAircraft* ac = std::get_if<ModeSAircraft>(&itr.second); ac) {
+        if (const ModeSAircraft* ac = std::get_if<ModeSAircraft>(&itr->second); ac) {
             len = WriteAircraftJSONModeSAircraftStr(json_buf, *ac, timestamp_ms);
-        } else if (const UATAircraft* ac = std::get_if<UATAircraft>(&itr.second); ac) {
+        } else if (const UATAircraft* ac = std::get_if<UATAircraft>(&itr->second); ac) {
             len = WriteAircraftJSONUATAircraftStr(json_buf, *ac, timestamp_ms);
-        } else if (const RemoteIDAircraft* ac = std::get_if<RemoteIDAircraft>(&itr.second); ac) {
+        } else if (const RemoteIDAircraft* ac = std::get_if<RemoteIDAircraft>(&itr->second); ac) {
             len = WriteAircraftJSONRemoteIDAircraftStr(json_buf, *ac);
         }
         if (len <= 0 || len + 2 > buf_len) {
@@ -548,9 +575,7 @@ inline void WriteAircraftJSONLiveMapArrays(const AircraftDictionary& dictionary,
         }
         // "[" or "," before the object, "]" after the array.
         if (len_used > 0 && len_used + 1 + len + 1 > buf_len) {
-            buf[len_used++] = ']';
-            emit(buf, len_used);
-            len_used = 0;
+            break;  // Starts the next array.
         }
         char separator = len_used == 0 ? '[' : ',';
         buf[len_used++] = separator;
@@ -559,6 +584,6 @@ inline void WriteAircraftJSONLiveMapArrays(const AircraftDictionary& dictionary,
     }
     if (len_used > 0) {
         buf[len_used++] = ']';
-        emit(buf, len_used);
     }
+    return len_used;
 }
