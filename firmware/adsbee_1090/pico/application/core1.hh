@@ -7,9 +7,8 @@
 
 extern CPUMonitor core_1_monitor;
 
-// Core 1 load is the time its loop spends demodulating, decoding or held up by interrupts. A loop pass with nothing to
-// do takes well under this.
-static constexpr uint32_t kCore1IdlePassMaxUs = 2;
+// Core 1 load is the time of the loop passes that demodulated or decoded something, including interrupts during them.
+// Interrupts during idle passes are not counted; they are a small share of the core.
 
 #ifdef HARDWARE_UNIT_TESTS
 void RunPendingTestFunctionOnCore1();  // Defined in target_test/hardware_unit_tests.cc.
@@ -38,9 +37,8 @@ inline void main_core1() {
         bool did_work = adsbee.DemodulateCaptures();
         did_work |= decoder.raw_mode_s_packet_in_queue.Length() > 0;
         decoder.UpdateDecoderLoop();
-        uint32_t iteration_us = time_us_32() - iteration_start_us;
-        if (did_work || iteration_us >= kCore1IdlePassMaxUs) {
-            core_1_monitor.AddBusyTimeUs(iteration_us);
+        if (did_work) {
+            core_1_monitor.AddBusyTimeUs(time_us_32() - iteration_start_us);
         }
     }
 }
