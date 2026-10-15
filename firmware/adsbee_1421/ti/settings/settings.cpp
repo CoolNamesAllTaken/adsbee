@@ -127,6 +127,11 @@ bool SettingsManager::Load() {
     // was interrupted after the leading words leaves a blob that passes a version-only check on every
     // boot forever, and whose remaining fields are erased flash (0xFF).
     if (!settings.IsValid()) {
+        if (MigrateFromVersion5((const uint8_t*)kFlashSettingsStartAddr, settings)) {
+            CONSOLE_INFO("SettingsManager::Load", "Migrated settings from version 5 to %lu.",
+                         (unsigned long)kSettingsVersion);
+            return WriteSettingsToFlash(settings);
+        }
         CONSOLE_ERROR("SettingsManager::Load",
                       "Settings integrity check failed (magic 0x%08lx/0x%08lx, version %lu/%lu, crc "
                       "0x%08lx/0x%08lx). Resetting to defaults.",
@@ -244,6 +249,12 @@ void SettingsManager::Print() {
     // MAVLINK settings
     CONSOLE_PRINTF("\tMAVLink System ID: %u\r\n", settings.mavlink_system_id);
     CONSOLE_PRINTF("\tMAVLink Component ID: %u\r\n", settings.mavlink_component_id);
+    uint32_t max_distance_m = settings.max_distance_m;
+    if (max_distance_m == 0) {
+        CONSOLE_PRINTF("\tMax Distance: OFF\r\n");
+    } else {
+        CONSOLE_PRINTF("\tMax Distance: %lu m\r\n", (unsigned long)max_distance_m);
+    }
 
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
@@ -277,6 +288,9 @@ void SettingsManager::PrintAT() {
 
     // AT+MAVLINK_ID
     CONSOLE_PRINTF("AT+MAVLINK_ID=%u,%u\r\n", settings.mavlink_system_id, settings.mavlink_component_id);
+
+    // AT+MAX_DISTANCE
+    CONSOLE_PRINTF("AT+MAX_DISTANCE=%lu\r\n", (unsigned long)settings.max_distance_m);
 
     // AT+PROTOCOL_OUT
     for (uint16_t i = 0; i < SerialInterface::kNumSerialInterfaces; i++) {

@@ -69,8 +69,8 @@ TEST(SettingsHash, SameSettingsSameHashWhateverThePadding) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Host defaults (no device info, access point channel 1). Changes only with the Settings struct or its defaults.
     Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x9140FC1Eu);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xACA3E2C5u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x7A06F6BFu);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xE0FA1275u);
 }
 
 TEST(SettingsHash, StoredCRCDoesNotCount) {

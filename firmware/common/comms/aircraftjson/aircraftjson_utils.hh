@@ -25,6 +25,23 @@ static inline bool EmitterCategoryToStr(char* buf, size_t buf_len, ADSBTypes::Em
 }
 
 /**
+ * Appends readsb's "r_dst" (distance from the receiver, nautical miles) and "r_dir" (bearing from the receiver,
+ * degrees) when the aircraft's distance is known.
+ * @retval New length of buf, clamped to max.
+ */
+inline int16_t AppendAircraftJSONDistanceAndBearing(char buf[], int16_t n, int16_t max, const Aircraft& aircraft) {
+    if (aircraft.distance_m == Aircraft::kDistanceUnknown) {
+        return n;
+    }
+    uint32_t distance_milli_nm = static_cast<uint32_t>((static_cast<uint64_t>(aircraft.distance_m) * 1000 + 926) / 1852);
+    uint32_t bearing_decideg = ((static_cast<uint32_t>(aircraft.bearing_bam16) * 3600 + 32768) >> 16) % 3600;
+    n += snprintf(buf + n, max - n, ",\"r_dst\":%lu.%03lu,\"r_dir\":%lu.%lu", (unsigned long)(distance_milli_nm / 1000),
+                  (unsigned long)(distance_milli_nm % 1000), (unsigned long)(bearing_decideg / 10),
+                  (unsigned long)(bearing_decideg % 10));
+    return n < max ? n : max;
+}
+
+/**
  * Serializes a ModeSAircraft to a single-line readsb-compatible JSON object.
  * @param[out] buf Character array of at least kAircraftJSONMessageStrMaxLen bytes.
  * @param[in] aircraft Aircraft to serialize.
@@ -82,6 +99,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                       aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_baro
     if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid)) {
@@ -285,6 +303,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                       aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_baro
     if (aircraft.HasBitFlag(UATAircraft::kBitFlagBaroAltitudeValid)) {
@@ -450,6 +469,7 @@ inline int16_t WriteAircraftJSONRemoteIDAircraftStr(char buf[], const RemoteIDAi
         n += snprintf(buf + n, max - n, ",\"lat\":%.5f,\"lon\":%.5f", aircraft.latitude_deg, aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_geom (geometric / WGS84 altitude)
     if (aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagGNSSAltitudeValid)) {
@@ -525,15 +545,20 @@ inline int16_t WriteAircraftJSONRemoteIDAircraftStr(char buf[], const RemoteIDAi
  * @param[in] buf Scratch buffer for one array; each emitted array fits in buf_len bytes.
  * @param[in] buf_len Length of buf. Must hold at least one aircraft object plus the brackets.
  * @param[in] emit Called once per array.
+ * @param[in] max_distance_m Leave out aircraft known to be farther than this from the receiver, in meters. 0 keeps all.
  */
 template <typename EmitFn>
 inline void WriteAircraftJSONLiveMapArrays(const AircraftDictionary& dictionary, uint32_t timestamp_ms, char buf[],
-                                           uint16_t buf_len, EmitFn emit) {
+                                           uint16_t buf_len, EmitFn emit, uint32_t max_distance_m = 0) {
     char json_buf[kAircraftJSONMessageStrMaxLen];
     uint16_t len_used = 0;
     for (const auto& itr : dictionary.dict) {
         if (!dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
             continue;  // Another entry is reported for this ICAO address.
+        }
+        if (std::visit([max_distance_m](const Aircraft& a) { return a.IsBeyondDistance(max_distance_m); },
+                       itr.second)) {
+            continue;
         }
         int16_t len = -1;
         if (const ModeSAircraft* ac = std::get_if<ModeSAircraft>(&itr.second); ac) {

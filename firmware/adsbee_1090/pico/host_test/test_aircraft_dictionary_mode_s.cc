@@ -1857,3 +1857,65 @@ TEST(AircraftDictionary, SingleCorruptCPRPacketCannotConfirmItself) {
         EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
     }
 }
+
+// Ingests the even/odd pair from FilterCPRLocations, which decodes to 48.5977 N, 18.70521 E.
+static ModeSAircraft* IngestPositionPair(AircraftDictionary& dictionary) {
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8D48922358C387D91DF354DCCCB8");  // even
+    inc_time_since_boot_ms(1000);
+    packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    packet = DecodedModeSPacket((char*)"8D48922358C38066020D8401D571");  // odd
+    inc_time_since_boot_ms(1000);
+    packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    return dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(packet.icao_address, Aircraft::kAircraftTypeModeS),
+                                                    false);
+}
+
+TEST(AircraftDictionary, DistanceAndBearingFromReceiver) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    ModeSAircraft* aircraft = IngestPositionPair(dictionary);
+    ASSERT_TRUE(aircraft);
+    uint32_t uid = aircraft->GetUID();
+    // WGS-84 geodesic from 48 N 18 E: 84585 m at 37.95 deg.
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 37.95f, 0.2f);
+    EXPECT_EQ(dictionary.GetDistanceM(uid), aircraft->distance_m);
+
+    // Distance filter: 0 is off, aircraft beyond the limit are dropped.
+    EXPECT_FALSE(dictionary.IsBeyondDistance(uid, 0));
+    EXPECT_FALSE(dictionary.IsBeyondDistance(uid, 100000));
+    EXPECT_TRUE(dictionary.IsBeyondDistance(uid, 50000));
+    EXPECT_TRUE(aircraft->IsBeyondDistance(50000));
+    EXPECT_FALSE(dictionary.IsBeyondDistance(0x123456, 50000));  // Not tracked: unknown distance.
+
+    // Moving the receiver by less than kReferenceMoveThresholdMeters keeps the distances; moving it farther makes
+    // Update() recompute them.
+    dictionary.SetReferencePosition(48.0005f, 18.0f);  // 56 m.
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+    dictionary.SetReferencePosition(48.5f, 18.6f);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 13356, 10);  // Geodesic: 13355.6 m at 35.52 deg.
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 35.52f, 0.2f);
+
+    // Without a receiver position the distance is unknown and the filter keeps the aircraft.
+    dictionary.ClearReferencePosition();
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_EQ(aircraft->distance_m, Aircraft::kDistanceUnknown);
+    EXPECT_FALSE(dictionary.IsBeyondDistance(uid, 1));
+}
+
+TEST(AircraftDictionary, DistanceUnknownWithoutReceiverPosition) {
+    AircraftDictionary dictionary;
+    ModeSAircraft* aircraft = IngestPositionPair(dictionary);
+    ASSERT_TRUE(aircraft);
+    EXPECT_TRUE(aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid));
+    EXPECT_EQ(aircraft->distance_m, Aircraft::kDistanceUnknown);
+
+    // Once the receiver position arrives, the next Update() fills in the distance.
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+}

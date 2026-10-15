@@ -15,7 +15,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 5;
+static constexpr uint32_t kSettingsVersion = 6;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -171,6 +171,10 @@ class SettingsManager {
         // Receiver position settings
         RxPosition rx_position;
 
+        // Aircraft known to be farther than this from the receiver are left out of reports, in meters. 0 turns the
+        // filter off. Aircraft at an unknown distance are always kept. Added in version 6.
+        uint32_t max_distance_m = 0;
+
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
         uint32_t crc = 0;
 
@@ -212,6 +216,33 @@ class SettingsManager {
     // trailing padding. Trips if the packed attribute is ever dropped or a member is added after `crc`.
     static_assert(offsetof(Settings, crc) == sizeof(Settings) - sizeof(uint32_t),
                   "Settings::crc must be the last member, with no trailing padding.");
+
+    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended max_distance_m.
+    static constexpr uint16_t kVersion5SettingsSize = 62;
+    static_assert(kSettingsVersion == 6 && offsetof(Settings, max_distance_m) == kVersion5SettingsSize - sizeof(uint32_t),
+                  "Settings changed: update MigrateFromVersion5 or add a migration from version 6.");
+
+    /**
+     * Converts a version 5 settings blob, so a firmware update keeps the user's settings.
+     * @param[in] blob Stored bytes, at least kVersion5SettingsSize long.
+     * @param[out] out Migrated and stamped settings. Untouched unless the blob is an intact version 5 blob.
+     * @retval True if the blob was an intact version 5 blob.
+     */
+    static bool MigrateFromVersion5(const uint8_t *blob, Settings &out) {
+        constexpr uint16_t kFieldBytes = kVersion5SettingsSize - sizeof(uint32_t);  // Everything before the CRC.
+        uint32_t magic, version, crc;
+        memcpy(&magic, blob, sizeof(magic));
+        memcpy(&version, blob + sizeof(magic), sizeof(version));
+        memcpy(&crc, blob + kFieldBytes, sizeof(crc));
+        if (magic != kSettingsMagic || version != 5 || crc != crc32_ieee_802_3(blob, kFieldBytes)) {
+            return false;
+        }
+        out = Settings();
+        memcpy(static_cast<void *>(&out), blob, kFieldBytes);
+        out.max_distance_m = 0;
+        out.Stamp();
+        return true;
+    }
 
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {

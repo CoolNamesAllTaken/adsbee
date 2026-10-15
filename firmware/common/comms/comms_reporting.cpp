@@ -272,10 +272,13 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         gdl90_overrun_reported_ = false;
         aircraftjson_overrun_reported_ = false;
 
-        // Snapshot current aircraft UIDs. All protocols will walk this same array.
+        // Snapshot current aircraft UIDs, minus those beyond the distance filter. All protocols walk this same array.
         report_uids_count_ = 0;
+        uint32_t max_distance_m = settings_manager.settings.max_distance_m;
         for (auto& itr : aircraft_dictionary.dict) {
-            if (report_uids_count_ < kMaxReportUIDs) {
+            if (report_uids_count_ < kMaxReportUIDs &&
+                !std::visit([max_distance_m](const Aircraft& a) { return a.IsBeyondDistance(max_distance_m); },
+                            itr.second)) {
                 report_uids_[report_uids_count_++] = itr.first;
             }
         }

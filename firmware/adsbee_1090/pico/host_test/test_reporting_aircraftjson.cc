@@ -602,3 +602,46 @@ TEST_F(PreferredReportForAddress, LiveMapArraysSplitAtObjectBoundaries) {
     }
     EXPECT_EQ(records, 40u);
 }
+
+TEST(AircraftJSON, DistanceAndBearingFromReceiver) {
+    char buf[kAircraftJSONMessageStrMaxLen];
+    ModeSAircraft mode_s(0xA41090);
+    mode_s.WriteBitFlag(ModeSAircraft::kBitFlagPositionValid, true);
+    ASSERT_GT(WriteAircraftJSONModeSAircraftStr(buf, mode_s), 0);
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dst"), "");  // Unknown distance: left out.
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dir"), "");
+
+    mode_s.distance_m = 84585;      // 45.672 nm.
+    mode_s.bearing_bam16 = 0xFFFF;  // 359.995 deg rounds to 0.0.
+    ASSERT_GT(WriteAircraftJSONModeSAircraftStr(buf, mode_s), 0);
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dst"), "45.672");
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dir"), "0.0");
+
+    UATAircraft uat(0xA41090);
+    uat.WriteBitFlag(UATAircraft::kBitFlagPositionValid, true);
+    uat.distance_m = 926;           // 0.5 nm.
+    uat.bearing_bam16 = 0x4000;     // 90 deg.
+    ASSERT_GT(WriteAircraftJSONUATAircraftStr(buf, uat), 0);
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dst"), "0.500");
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dir"), "90.0");
+}
+
+// The Live Map leaves out aircraft beyond the distance filter and keeps those at an unknown distance.
+TEST_F(PreferredReportForAddress, LiveMapArraysApplyMaxDistance) {
+    ModeSAircraft* near = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00001));
+    near->distance_m = 10000;
+    ModeSAircraft* far = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00002));
+    far->distance_m = 90000;
+    dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00003));  // Unknown distance.
+
+    for (uint32_t max_distance_m : {0u, 50000u}) {
+        std::string all;
+        char buf[4000];
+        WriteAircraftJSONLiveMapArrays(
+            dictionary, kNowMs, buf, sizeof(buf), [&](const char* b, uint16_t len) { all.append(b, len); },
+            max_distance_m);
+        EXPECT_NE(all.find("\"hex\":\"b00001\""), std::string::npos);
+        EXPECT_EQ(all.find("\"hex\":\"b00002\"") != std::string::npos, max_distance_m == 0);
+        EXPECT_NE(all.find("\"hex\":\"b00003\""), std::string::npos);
+    }
+}

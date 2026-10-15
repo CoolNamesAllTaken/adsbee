@@ -1238,6 +1238,25 @@ CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATMaxDistanceCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%lu", static_cast<unsigned long>(settings_manager.settings.max_distance_m));
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                uint32_t max_distance_m;
+                CPP_AT_TRY_ARG2NUM(0, max_distance_m);
+                settings_manager.settings.max_distance_m = max_distance_m;
+                settings_manager.SyncToCoprocessors();  // The ESP32 filters its feeds and web UI too.
+                CPP_AT_SUCCESS();
+            }
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 // Prints an interface's IPv6 addresses from ESP32NetworkInfo, if it has any.
 static void PrintIP6Addrs(char* link_local, char* global) {
     link_local[ObjectDictionary::kIP6AddrStrLen] = '\0';
@@ -1609,6 +1628,7 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"LED_ENABLE\":[%d],", s.led_enabled);
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
     CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
+    CPP_AT_PRINTF("\"MAX_DISTANCE\":[%lu],", static_cast<unsigned long>(s.max_distance_m));
     CPP_AT_PRINTF("\"PROTOCOL_OUT\":[\"%s\",\"%s\"],",
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kConsole]],
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kCommsUART]]);
@@ -2136,6 +2156,14 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
                     "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
+    {.command = "MAX_DISTANCE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "AT+MAX_DISTANCE=<max_distance_m>\r\n\tLeave aircraft farther than max_distance_m meters from the "
+                    "receiver out of reports and feeds. 0 (default) turns the filter off. Aircraft at an unknown distance "
+                    "(no position yet, or no receiver position, see AT+RX_POSITION) are always kept.\r\n\t"
+                    "AT+MAX_DISTANCE?\r\n\tQuery the maximum distance.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMaxDistanceCallback, comms_manager)},
     {.command = "NETWORK_INFO",
      .min_args = 0,
      .max_args = 0,

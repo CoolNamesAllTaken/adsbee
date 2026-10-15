@@ -749,8 +749,12 @@ void ADSBee::IngestAndForwardPackets() {
             //              aircraft_dictionary.GetNumAircraft());
         }
         // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
-        // dictionary didn't know what to do with them.
-        if (decoded_packet.is_valid) {
+        // dictionary didn't know what to do with them. Packets from aircraft beyond AT+MAX_DISTANCE are dropped here,
+        // which also keeps them from the ESP32's feeds and web interface.
+        if (decoded_packet.is_valid &&
+            !aircraft_dictionary.IsBeyondDistance(
+                Aircraft::ICAOToUID(decoded_packet.icao_address, Aircraft::kAircraftTypeModeS),
+                settings_manager.settings.max_distance_m)) {
             if (comms_manager.mode_s_packet_reporting_queue.IsFull()) {
                 comms_manager.ForceFlushRawPackets();
             }
@@ -780,7 +784,12 @@ void ADSBee::IngestAndForwardPackets() {
                          aircraft_dictionary.GetNumAircraft());
         }
         // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do
-        // with them.
+        // with them, except those from aircraft beyond AT+MAX_DISTANCE.
+        if (aircraft_dictionary.IsBeyondDistance(
+                Aircraft::ICAOToUID(decoded_uat_adsb_packet.GetICAOAddress(), Aircraft::kAircraftTypeUAT),
+                settings_manager.settings.max_distance_m)) {
+            continue;
+        }
         if (comms_manager.uat_adsb_packet_reporting_queue.IsFull()) {
             comms_manager.ForceFlushRawPackets();
         }

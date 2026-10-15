@@ -253,9 +253,13 @@ bool ADSBeeServer::Update() {
     }
     if (received_rp2040_metrics ||
         timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateFallbackIntervalMs) {
-        aircraft_dictionary.SetReferencePosition(
-            object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
-            object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
+        if (object_dictionary.composite_device_status.rp2040.rx_position_available) {
+            aircraft_dictionary.SetReferencePosition(
+                object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
+                object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
+        } else {
+            aircraft_dictionary.ClearReferencePosition();
+        }
 
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
@@ -481,6 +485,10 @@ bool ADSBeeServer::ReportGDL90() {
         aircraft_index++;
         if (!aircraft_dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
             continue;  // Another entry (e.g. the aircraft's own ADS-B) is reported for this ICAO address.
+        }
+        if (std::visit([](const Aircraft& a) { return a.IsBeyondDistance(settings_manager.settings.max_distance_m); },
+                       itr.second)) {
+            continue;
         }
 
         if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
@@ -1150,5 +1158,6 @@ void ADSBeeServer::SendAircraftJSONMessages() {
     // Frames of up to kNonBlockingMessageMaxLen always fit a writable socket whole.
     char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
     WriteAircraftJSONLiveMapArrays(aircraft_dictionary, get_time_since_boot_ms(), batch_buf, sizeof(batch_buf),
-                                   [this](const char* buf, uint16_t len) { network_aircraft.BroadcastMessage(buf, len); });
+                                   [this](const char* buf, uint16_t len) { network_aircraft.BroadcastMessage(buf, len); },
+                                   settings_manager.settings.max_distance_m);
 }

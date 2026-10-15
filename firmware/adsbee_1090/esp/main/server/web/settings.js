@@ -762,6 +762,16 @@ function makeMavlinkIdEntry() {
     };
 }
 
+// MAX_DISTANCE is identical on both products.
+function makeMaxDistanceEntry() {
+    return {
+        cmd: 'MAX_DISTANCE', label: 'Max Distance', group: 'Reporting',
+        help: 'Leave aircraft farther than this from the receiver out of reports. 0 turns the filter off.',
+        tip: 'Needs a receiver position (Position settings). Aircraft without a known position are always reported.',
+        fields: [{ id: 'm', label: 'Max distance (meters)', type: 'int', min: 0, max: 4294967295 }],
+    };
+}
+
 // RX_ENABLE is identical on both products.
 function makeRxEnableEntry() {
     return {
@@ -922,6 +932,7 @@ const SETTINGS_SCHEMA_1090 = [
         build(v, dirty) { return [...dirty].map(iface => `AT+PROTOCOL_OUT=${iface},${v[iface]}`); },
     },
     makeMavlinkIdEntry(),
+    makeMaxDistanceEntry(),
     // ── Position ──
     makeRxPositionEntry(),
     {

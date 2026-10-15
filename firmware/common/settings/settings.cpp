@@ -210,6 +210,11 @@ void SettingsManager::Print() {
                               "\tAutomatic Updates: %s\r\n", settings.auto_update_enabled ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("%s", print_buf);
     print_buf_len = 0;
+    if (settings.max_distance_m == 0) {
+        CONSOLE_PRINTF("\tMax Distance: OFF\r\n");
+    } else {
+        CONSOLE_PRINTF("\tMax Distance: %lu m\r\n", static_cast<unsigned long>(settings.max_distance_m));
+    }
 
 #ifdef ON_PICO
     // Only print serial reporting protocols on master, where we aren't constrained by log message size.
@@ -386,4 +391,7 @@ void SettingsManager::PrintAT() {
 
     // AT+AUTO_UPDATE
     CONSOLE_PRINTF("AT+AUTO_UPDATE=%d\r\n", settings.auto_update_enabled);
+
+    // AT+MAX_DISTANCE
+    CONSOLE_PRINTF("AT+MAX_DISTANCE=%lu\r\n", static_cast<unsigned long>(settings.max_distance_m));
 }
