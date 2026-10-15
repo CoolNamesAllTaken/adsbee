@@ -7,9 +7,8 @@
 
 extern CPUMonitor core_1_monitor;
 
-// Core 1 load is the time its loop spends demodulating, decoding or held up by interrupts. A loop pass with nothing to
-// do takes well under this.
-static constexpr uint32_t kCore1IdlePassMaxUs = 2;
+// Core 1 load is the time of the loop passes that demodulated or decoded something, including interrupts during them.
+// Interrupts during idle passes are not counted; they are a small share of the core.
 
 // LAB: core 1 loop pass statistics.
 struct LabCore1Stats {
@@ -60,7 +59,7 @@ inline void main_core1() {
             uint8_t b = c < 125 ? 0 : c < 250 ? 1 : c < 375 ? 2 : c < 500 ? 3 : c < 1000 ? 4 : 5;
             lab_core1_stats.idle_hist[b]++;
         }
-        if (did_work || iteration_us >= kCore1IdlePassMaxUs) {
+        if (did_work) {
             core_1_monitor.AddBusyTimeUs(iteration_us);
         }
     }
