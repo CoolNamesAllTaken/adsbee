@@ -503,7 +503,9 @@ class ADSBee {
     uint32_t pulse_sampler_sm_[BSP::kMaxNumDemodStateMachines];
     uint32_t pulse_sampler_offset_ = 0;
 
-    uint32_t mlat_jitter_dma_channel_[BSP::kMaxNumDemodStateMachines];
+    // Claimed once (InitISRs()) and kept across core 1 restarts, like sample_dma_channel_. Unclaimed on each restart,
+    // core 0 could claim one (the OTA CRC did) while core 1's ISRs still abort and restart it.
+    int mlat_jitter_dma_channel_[BSP::kMaxNumDemodStateMachines] = {-1, -1, -1, -1};
 
     // One DMA channel and capture buffer per pulse sampler (one spare word for bit windows that end in the last one).
     int sample_dma_channel_[BSP::kMaxNumDemodStateMachines] = {-1, -1, -1, -1};
