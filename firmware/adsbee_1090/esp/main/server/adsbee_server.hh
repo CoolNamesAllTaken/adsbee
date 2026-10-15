@@ -178,6 +178,7 @@ class ADSBeeServer {
      * Broadcasts one JSON object per tracked aircraft to all connected /aircraft websocket clients.
      */
     void SendAircraftJSONMessages();
+    void LabSendAircraftJSONMessages();
 
     /**
      * Queues a UAT uplink for /uplink clients. Does nothing while no client is connected.

@@ -11,6 +11,14 @@ extern CPUMonitor core_1_monitor;
 // do takes well under this.
 static constexpr uint32_t kCore1IdlePassMaxUs = 2;
 
+// LAB: core 1 loop pass statistics.
+struct LabCore1Stats {
+    volatile uint32_t passes = 0, work_passes = 0, work_us = 0, idle_us = 0;
+    volatile uint64_t idle_counts = 0;  // 125 MHz PWM counts in idle passes.
+    volatile uint32_t idle_hist[6] = {};  // Idle pass length: <1, <2, <3, <4, <8, >=8 us.
+};
+inline LabCore1Stats lab_core1_stats;
+
 #ifdef HARDWARE_UNIT_TESTS
 void RunPendingTestFunctionOnCore1();  // Defined in target_test/hardware_unit_tests.cc.
 #endif
@@ -25,6 +33,7 @@ inline void main_core1() {
 
     while (true) {
         uint32_t iteration_start_us = time_us_32();
+        uint16_t lab_start_counts = adsbee.GetMLATJitterPWMSliceCounts();
 #ifdef ISRS_ON_CORE1
         // Core 0 may try to toggle the 1090 receiver on and off. Keep an eye on it and turn it on and off here, since
         // it can't be toggle from core 0 without accidentally duplicating all the ISR stuff on that core.
@@ -39,6 +48,18 @@ inline void main_core1() {
         did_work |= decoder.raw_mode_s_packet_in_queue.Length() > 0;
         decoder.UpdateDecoderLoop();
         uint32_t iteration_us = time_us_32() - iteration_start_us;
+        uint16_t lab_counts = adsbee.GetMLATJitterPWMSliceCounts() - lab_start_counts;
+        lab_core1_stats.passes++;
+        if (did_work) {
+            lab_core1_stats.work_passes++;
+            lab_core1_stats.work_us += iteration_us;
+        } else {
+            lab_core1_stats.idle_us += iteration_us;
+            lab_core1_stats.idle_counts += iteration_us > 400 ? iteration_us * 125 : lab_counts;
+            uint32_t c = iteration_us > 400 ? 999999 : lab_counts;
+            uint8_t b = c < 125 ? 0 : c < 250 ? 1 : c < 375 ? 2 : c < 500 ? 3 : c < 1000 ? 4 : 5;
+            lab_core1_stats.idle_hist[b]++;
+        }
         if (did_work || iteration_us >= kCore1IdlePassMaxUs) {
             core_1_monitor.AddBusyTimeUs(iteration_us);
         }

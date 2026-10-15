@@ -66,10 +66,19 @@ constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
 ADSBee* isr_access = nullptr;
 
+// LAB: ISR counts and time in 125 MHz PWM counts, per handler.
+volatile uint32_t lab_isr_count[4] = {};
+volatile uint64_t lab_isr_counts[4] = {};
+#define LAB_ISR_BEGIN uint16_t lab_t0 = isr_access->GetMLATJitterPWMSliceCounts();
+#define LAB_ISR_END(i)                                                                            \
+    lab_isr_counts[i] += (uint16_t)(isr_access->GetMLATJitterPWMSliceCounts() - lab_t0);           \
+    lab_isr_count[i]++;
+
 /** Begin pass-through functions for public access **/
 void __time_critical_func(on_systick_exception)() { isr_access->OnSysTickWrap(); }
 
 void __time_critical_func(on_demod_pin_change)(uint gpio, uint32_t event_mask) {
+    LAB_ISR_BEGIN
     switch (event_mask) {
         case GPIO_IRQ_EDGE_RISE:
             isr_access->OnDemodBegin(gpio);
@@ -80,13 +89,14 @@ void __time_critical_func(on_demod_pin_change)(uint gpio, uint32_t event_mask) {
             break;
     }
     gpio_acknowledge_irq(gpio, event_mask);
+    LAB_ISR_END(0)
 }
 
-void __time_critical_func(on_demod_mid)() { isr_access->OnDemodMid(); }
+void __time_critical_func(on_demod_mid)() { LAB_ISR_BEGIN isr_access->OnDemodMid(); LAB_ISR_END(1) }
 
-void __time_critical_func(on_capture_complete)() { isr_access->OnCaptureComplete(); }
+void __time_critical_func(on_capture_complete)() { LAB_ISR_BEGIN isr_access->OnCaptureComplete(); LAB_ISR_END(2) }
 
-void __time_critical_func(on_short_capture_alarm)() { isr_access->OnShortCaptureAlarm(); }
+void __time_critical_func(on_short_capture_alarm)() { LAB_ISR_BEGIN isr_access->OnShortCaptureAlarm(); LAB_ISR_END(3) }
 
 /** End pass-through functions for public access **/
 

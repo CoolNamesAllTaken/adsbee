@@ -1143,12 +1143,22 @@ bool ADSBeeServer::TCPServerInit() {
     return true;
 }
 
+uint64_t lab_aircraft_json_us = 0, lab_aircraft_json_max_us = 0;
+uint32_t lab_aircraft_json_frames = 0;
 void ADSBeeServer::SendAircraftJSONMessages() {
+    uint64_t lab_t0 = esp_timer_get_time();
+    LabSendAircraftJSONMessages();
+    uint64_t lab_d = esp_timer_get_time() - lab_t0;
+    lab_aircraft_json_us += lab_d;
+    if (lab_d > lab_aircraft_json_max_us) lab_aircraft_json_max_us = lab_d;
+}
+
+void ADSBeeServer::LabSendAircraftJSONMessages() {
     // Batch aircraft into JSON arrays of up to one websocket message each. One frame per aircraft (two socket writes
     // each) cost ~100 TCP segments per second per client at a busy site; on the W5500 Ethernet board the network tasks
     // doing that outrank the SPI receive task, which then missed RP2040 handshakes until the RP2040 reset the board.
     // Frames of up to kNonBlockingMessageMaxLen always fit a writable socket whole.
     char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
     WriteAircraftJSONLiveMapArrays(aircraft_dictionary, get_time_since_boot_ms(), batch_buf, sizeof(batch_buf),
-                                   [this](const char* buf, uint16_t len) { network_aircraft.BroadcastMessage(buf, len); });
+                                   [this](const char* buf, uint16_t len) { lab_aircraft_json_frames++; network_aircraft.BroadcastMessage(buf, len); });
 }

@@ -107,8 +107,30 @@ extern "C" void app_main(void) {
     uint32_t last_heap_print_timestamp_ms = 0;
 #endif
     uint32_t last_heap_diagnostics_timestamp_ms = 0;
+    uint64_t lab_last_us = esp_timer_get_time();
+    uint32_t lab_passes = 0, lab_over_50ms = 0, lab_over_100ms = 0;
+    uint64_t lab_sum_us = 0, lab_max_us = 0;
     while (1) {
+        uint64_t lab_t0 = esp_timer_get_time();
         adsbee_server.Update();
+        uint64_t lab_d = esp_timer_get_time() - lab_t0;
+        lab_passes++;
+        lab_sum_us += lab_d;
+        if (lab_d > lab_max_us) lab_max_us = lab_d;
+        if (lab_d > 50000) lab_over_50ms++;
+        if (lab_d > 100000) lab_over_100ms++;
+        if (esp_timer_get_time() - lab_last_us > 10000000) {
+            extern uint64_t lab_aircraft_json_us, lab_aircraft_json_max_us;
+            extern uint32_t lab_aircraft_json_frames;
+            CONSOLE_WARNING("LAB esp", "passes=%lu sum_ms=%llu max_ms=%llu >50ms=%lu >100ms=%lu acjson_ms=%llu acjson_max_ms=%llu frames=%lu",
+                            lab_passes, lab_sum_us / 1000, lab_max_us / 1000, lab_over_50ms, lab_over_100ms,
+                            lab_aircraft_json_us / 1000, lab_aircraft_json_max_us / 1000, lab_aircraft_json_frames);
+            lab_passes = lab_over_50ms = lab_over_100ms = 0;
+            lab_sum_us = lab_max_us = 0;
+            lab_aircraft_json_us = lab_aircraft_json_max_us = 0;
+            lab_aircraft_json_frames = 0;
+            lab_last_us = esp_timer_get_time();
+        }
 
         // Yield to the idle task to avoid a watchdog trigger. Note: Delay must be >= 10ms since 100Hz tick is typical.
         vTaskDelay(1);  // Delay 1 tick (10ms).

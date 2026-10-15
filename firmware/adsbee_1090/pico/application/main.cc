@@ -223,8 +223,47 @@ int main() {
     uint32_t esp32_last_successful_comms_ms = get_time_since_boot_ms();
 #endif
 
+    extern volatile uint32_t lab_isr_count[4];
+    extern volatile uint64_t lab_isr_counts[4];
+    uint32_t lab_last_ms = get_time_since_boot_ms();
+    LabCore1Stats lab_last;
+    uint32_t lab_last_isr_count[4] = {};
+    uint64_t lab_last_isr_counts[4] = {};
     while (true) {
         // Loop forever.
+        if (get_time_since_boot_ms() - lab_last_ms >= 10000) {
+            uint32_t now_ms = get_time_since_boot_ms();
+            uint32_t dt_ms = now_ms - lab_last_ms;
+            lab_last_ms = now_ms;
+            LabCore1Stats& c = lab_core1_stats;
+            uint32_t passes = c.passes, work_passes = c.work_passes, work_us = c.work_us, idle_us = c.idle_us;
+            uint64_t idle_counts = c.idle_counts;
+            uint32_t hist[6];
+            for (int i = 0; i < 6; i++) hist[i] = c.idle_hist[i] - lab_last.idle_hist[i];
+            uint32_t isr_n[4], isr_us[4];
+            for (int i = 0; i < 4; i++) {
+                uint32_t n = lab_isr_count[i];
+                uint64_t cnt = lab_isr_counts[i];
+                isr_n[i] = n - lab_last_isr_count[i];
+                isr_us[i] = (uint32_t)((cnt - lab_last_isr_counts[i]) / 125);
+                lab_last_isr_count[i] = n;
+                lab_last_isr_counts[i] = cnt;
+            }
+            CONSOLE_WARNING("LAB core1",
+                            "dt=%lu ms passes=%lu work=%lu work_us=%lu idle_us=%lu idle_cnt_us=%lu hist=%lu,%lu,%lu,%lu,%lu,%lu "
+                            "isr_n=%lu,%lu,%lu,%lu isr_us=%lu,%lu,%lu,%lu load=%u%% c0=%u%%",
+                            dt_ms, passes - lab_last.passes, work_passes - lab_last.work_passes,
+                            work_us - lab_last.work_us, idle_us - lab_last.idle_us,
+                            (uint32_t)((idle_counts - lab_last.idle_counts) / 125), hist[0], hist[1], hist[2], hist[3],
+                            hist[4], hist[5], isr_n[0], isr_n[1], isr_n[2], isr_n[3], isr_us[0], isr_us[1], isr_us[2],
+                            isr_us[3], core_1_monitor.GetUsagePercent(), core_0_monitor.GetUsagePercent());
+            lab_last.passes = passes;
+            lab_last.work_passes = work_passes;
+            lab_last.work_us = work_us;
+            lab_last.idle_us = idle_us;
+            lab_last.idle_counts = idle_counts;
+            for (int i = 0; i < 6; i++) lab_last.idle_hist[i] = c.idle_hist[i];
+        }
         core_0_monitor.Tick();
         core_0_monitor.Update();
         core_1_monitor.Update();
