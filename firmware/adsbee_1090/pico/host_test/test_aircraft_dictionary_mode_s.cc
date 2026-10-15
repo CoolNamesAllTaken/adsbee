@@ -1919,3 +1919,33 @@ TEST(AircraftDictionary, DistanceUnknownWithoutReceiverPosition) {
     dictionary.Update(get_time_since_boot_ms());
     EXPECT_NEAR(aircraft->distance_m, 84585, 30);
 }
+
+TEST(AircraftDictionary, DistanceFollowsMovesOnUpdate) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    auto ingest = [&](const char* hex) {
+        DecodedModeSPacket packet = DecodedModeSPacket((char*)hex);
+        inc_time_since_boot_ms(500);
+        packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+        EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    };
+    // 48.3 N 18.2 E: the first position gets its distance right away (geodesic 36527 m at 23.97 deg).
+    ingest("8DBEE001589B803335F17E3806C1");
+    ingest("8DBEE001589B87A9D1D79C757A00");
+    ModeSAircraft* aircraft =
+        dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(0xBEE001, Aircraft::kAircraftTypeModeS), false);
+    ASSERT_TRUE(aircraft);
+    EXPECT_NEAR(aircraft->distance_m, 36527, 15);
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 23.97f, 0.2f);
+
+    // Moved to 48.4 N: the distance is refreshed by the next Update(), not per position message.
+    for (int i = 0; i < 2; i++) {  // A pair mixing the old and new positions doesn't count; the next ones do.
+        ingest("8DBEE001589B804445F17E39A3D0");
+        ingest("8DBEE001589B87BA99D79C52EE84");
+    }
+    EXPECT_NEAR(aircraft->latitude_deg, 48.4f, 0.001f);
+    EXPECT_NEAR(aircraft->distance_m, 36527, 15);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 46897, 15);  // Geodesic: 46897 m at 18.41 deg.
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 18.41f, 0.2f);
+}

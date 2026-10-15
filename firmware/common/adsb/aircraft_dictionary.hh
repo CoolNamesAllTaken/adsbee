@@ -117,8 +117,8 @@ class Aircraft {
     int32_t baro_vertical_rate_fpm = 0;
     int32_t gnss_vertical_rate_fpm = 0;
 
-    // Distance and bearing from the receiver, kept up to date by the AircraftDictionary. kDistanceUnknown while the
-    // aircraft's or the receiver's position is unknown.
+    // Distance and bearing from the receiver, kept up to date by the AircraftDictionary (at most 1 s behind the
+    // position). kDistanceUnknown while the aircraft's or the receiver's position is unknown.
     static constexpr uint32_t kDistanceUnknown = UINT32_MAX;
     uint32_t distance_m = kDistanceUnknown;
     uint16_t bearing_bam16 = 0;              // Clockwise from north, in 1/65536 turns. See Bam16ToDeg().
@@ -1382,8 +1382,11 @@ class AircraftDictionary {
     uint32_t reference_longitude_awb32_ = 0;
     bool reference_position_valid_ = false;  // Set by SetReferencePosition, cleared by ClearReferencePosition.
     // Receiver position for aircraft distance and bearing. Moving it more than kReferenceMoveThresholdMeters or
-    // clearing it bumps reference_epoch_, and Update() recomputes every aircraft computed in an older epoch.
+    // clearing it bumps reference_epoch_, and Update() recomputes every aircraft computed in an older epoch or marked
+    // stale by a move.
     static constexpr uint32_t kReferenceMoveThresholdMeters = 500;
+    // Epoch value that marks an aircraft's distance as stale; reference_epoch_ never takes it.
+    static constexpr uint16_t kDistanceEpochStale = UINT16_MAX;
     GeoReference distance_reference_;
     uint16_t reference_epoch_ = 0;
 
@@ -1398,14 +1401,22 @@ class AircraftDictionary {
         }
     };
 
+    /**
+     * After a packet: an aircraft's first position (or a lost one) updates its distance at once, so the distance filter
+     * applies to new aircraft right away. Later moves only mark the distance stale, and Update() recomputes it once a
+     * second: the cost follows the number of aircraft, not the position message rate.
+     */
     template <typename T>
     void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before) {
         PositionSnapshot after = PositionSnapshot::Of(aircraft);
-        if (after.valid != before.valid || after.latitude_deg != before.latitude_deg ||
-            after.longitude_deg != before.longitude_deg || aircraft.distance_reference_epoch != reference_epoch_) {
+        if (after.valid != before.valid || (after.valid && aircraft.distance_m == Aircraft::kDistanceUnknown)) {
             UpdateDistanceAndBearing(aircraft, after.valid);
+        } else if (after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg) {
+            aircraft.distance_reference_epoch = kDistanceEpochStale;
         }
     }
+
+    void BumpReferenceEpoch();
 
     /**
      * Recomputes an aircraft's distance and bearing from the receiver.

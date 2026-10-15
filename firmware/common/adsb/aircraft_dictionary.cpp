@@ -2281,14 +2281,21 @@ void AircraftDictionary::SetReferencePosition(float latitude_deg, float longitud
         IsDistanceGreaterThan(distance_reference_.lat_awb, distance_reference_.lon_awb, reference_latitude_awb32_,
                               reference_longitude_awb32_, kReferenceMoveThresholdMeters)) {
         distance_reference_.Set(reference_latitude_awb32_, reference_longitude_awb32_);
-        reference_epoch_++;
+        BumpReferenceEpoch();
     }
     reference_position_valid_ = true;
 }
 
+void AircraftDictionary::BumpReferenceEpoch() {
+    reference_epoch_++;
+    if (reference_epoch_ == kDistanceEpochStale) {
+        reference_epoch_ = 0;
+    }
+}
+
 void AircraftDictionary::ClearReferencePosition() {
     if (reference_position_valid_) {
-        reference_epoch_++;
+        BumpReferenceEpoch();
     }
     reference_position_valid_ = false;
 }
