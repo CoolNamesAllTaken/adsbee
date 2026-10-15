@@ -46,6 +46,7 @@ target_sources(host_test PRIVATE
     test_lr2021_drain_state.cc
     test_lr2021_ook_adsb.cc
     test_lr2021_status_tracker.cc
+    test_mlat_pairing.cc
     test_packet_decoder.cc
     test_settings.cc
     test_settings_hash.cc
