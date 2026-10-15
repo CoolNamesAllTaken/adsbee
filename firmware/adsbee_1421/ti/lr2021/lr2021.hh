@@ -296,7 +296,9 @@ class LR2021 {
     // A healthy chain finishes in ~300 us; a chain stuck longer than this is cancelled by
     // ServiceRxDrain() at thread level.
     static constexpr uint32_t kIrqChainTimeoutMs = 10;
-    static constexpr uint8_t kNumIrqDrainSlots = 2;
+    // Staging slots the chain fills until the main loop parses them, 9 packets each. With the FIFO's own 18 packets,
+    // 6 slots ride out a main loop pass of about 18 ms at 4000 frames/s before the FIFO overflows.
+    static constexpr uint8_t kNumIrqDrainSlots = 6;
 
     // Staging slot: filled by the chain (ISR/SWI context), parsed and released by the main loop.
     // timestamp_us is captured at the IRQ edge -- closer to reception than parse-time stamping.
