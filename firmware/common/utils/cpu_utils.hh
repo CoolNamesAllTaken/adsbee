@@ -31,6 +31,7 @@ class CPUMonitor {
         uint32_t full_usage_update_frequency_hz =
             100;                             // If the loop slows down to this frequency or lower, CPU usage is 100%.
         uint32_t update_interval_ms = 1000;  // Interval at which to update CPU usage percentage.
+        bool use_busy_time = false;          // Usage from AddBusyTimeUs() instead of Tick().
 #endif
     };
 
@@ -59,6 +60,20 @@ class CPUMonitor {
         return static_cast<uint8_t>(100 - (idle_percent > 100 ? 100 : idle_percent));
     }
 
+    /**
+     * Converts busy time over one interval into a CPU usage percentage.
+     * @param[in] busy_delta Time spent working during the interval.
+     * @param[in] total_delta Total time elapsed during the interval, in the same units.
+     * @retval CPU usage percentage (0-100%). 0 if no time has elapsed.
+     */
+    static uint8_t UsagePercentFromBusyDelta(uint32_t busy_delta, uint32_t total_delta) {
+        if (total_delta == 0) {
+            return 0;
+        }
+        uint64_t busy_percent = static_cast<uint64_t>(busy_delta) * 100 / total_delta;
+        return static_cast<uint8_t>(busy_percent > 100 ? 100 : busy_percent);
+    }
+
 #ifdef ON_ESP32
     /** Reads each core's CPU usage since the previous call, from FreeRTOS run time stats. */
     void ReadCPUUsage(uint8_t &core_0_usage_percent, uint8_t &core_1_usage_percent);
@@ -67,6 +82,12 @@ class CPUMonitor {
      * Records an idle tick. Call once per main loop iteration.
      */
     inline void Tick() { ticks_since_last_update_++; }
+
+    /**
+     * Records time the core spent working, for a monitor with use_busy_time. Call only from the monitored core;
+     * Update() may run on the other core.
+     */
+    inline void AddBusyTimeUs(uint32_t busy_us) { busy_us_ += busy_us; }
 
     /**
      * Updates the CPU usage percentage. Self-regulates to run only at the configured CPU usage update interval.
@@ -100,6 +121,12 @@ class CPUMonitor {
     uint32_t ticks_since_last_update_ = 0;
 
     uint8_t cpu_usage_percent_ = 0;
+
+#ifndef ON_ESP32
+    // Free-running busy time, written by the monitored core only, so Update() takes deltas instead of resetting it.
+    volatile uint32_t busy_us_ = 0;
+    uint32_t last_busy_us_ = 0;
+#endif
 
 #ifdef ON_ESP32
     // Run time stats counters at the previous ReadCPUUsage() call.

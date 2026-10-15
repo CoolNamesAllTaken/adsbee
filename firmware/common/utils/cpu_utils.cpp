@@ -87,6 +87,14 @@ void CPUMonitor::Update() {
         return;  // Not enough time has passed since the last update.
     }
 
+    if (config_.use_busy_time) {
+        uint32_t busy_us = busy_us_;
+        cpu_usage_percent_ = UsagePercentFromBusyDelta(busy_us - last_busy_us_, delta_time_ms * kUsPerMs);
+        last_busy_us_ = busy_us;
+        last_update_timestamp_ms_ = current_timestamp_ms;
+        return;
+    }
+
     // Number of ticks that would correspond to 100% CPU usage.
     uint32_t idle_expected_ticks =
         MAX(delta_time_ms * config_.idle_ticks_per_update_interval / config_.update_interval_ms,

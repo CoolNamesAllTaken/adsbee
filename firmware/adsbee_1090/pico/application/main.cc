@@ -42,8 +42,8 @@ BSP bsp = BSP(eeprom.Init());
 
 CPUMonitor core_0_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP2040IdleTicksPerUpdateInterval,
                                         .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
-CPUMonitor core_1_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP2040IdleTicksPerUpdateInterval,
-                                        .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
+CPUMonitor core_1_monitor =
+    CPUMonitor({.update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs, .use_busy_time = true});
 
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});

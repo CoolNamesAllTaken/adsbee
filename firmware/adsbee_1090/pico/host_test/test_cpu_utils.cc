@@ -23,6 +23,15 @@ TEST(CPUMonitor, UsagePercentFromIdleDeltaAcrossCounterWrap) {
     EXPECT_EQ(CPUMonitor::UsagePercentFromIdleDelta(idle - last_idle, total - last_total), 10);
 }
 
+TEST(CPUMonitor, UsagePercentFromBusyDelta) {
+    EXPECT_EQ(CPUMonitor::UsagePercentFromBusyDelta(0, 0), 0);  // No time elapsed.
+    EXPECT_EQ(CPUMonitor::UsagePercentFromBusyDelta(0, 1000000), 0);
+    EXPECT_EQ(CPUMonitor::UsagePercentFromBusyDelta(1000000, 1000000), 100);
+    EXPECT_EQ(CPUMonitor::UsagePercentFromBusyDelta(123000, 1000000), 12);
+    EXPECT_EQ(CPUMonitor::UsagePercentFromBusyDelta(1000100, 1000000), 100);  // Clock sampling skew.
+    EXPECT_EQ(CPUMonitor::UsagePercentFromBusyDelta(3000000000u, 3100000000u), 96);
+}
+
 #ifndef ON_ESP32
 // RP2040 / CC1312 loop-tick estimator: 100e3 ticks per second is idle (0%), 100 ticks per second or fewer is 100%.
 TEST(CPUMonitor, LoopTickUsage) {
@@ -43,5 +52,48 @@ TEST(CPUMonitor, LoopTickUsage) {
     // A loop slower than the full usage rate reads 100%, not an underflowed 0%.
     EXPECT_EQ(run_interval(50), 100);
     EXPECT_EQ(run_interval(0), 100);
+}
+#endif
+
+#ifndef ON_ESP32
+TEST(CPUMonitor, BusyTimeUsage) {
+    CPUMonitor monitor({.update_interval_ms = 1000, .use_busy_time = true});
+    set_time_since_boot_ms(0);
+    monitor.Update();
+
+    auto run_interval = [&](uint32_t busy_us) {
+        monitor.AddBusyTimeUs(busy_us);
+        for (uint32_t i = 0; i < 2000000; i++) monitor.Tick();  // Ignored in busy time mode.
+        inc_time_since_boot_ms(1000);
+        monitor.Update();
+        return monitor.GetUsagePercent();
+    };
+    EXPECT_EQ(run_interval(0), 0);
+    EXPECT_EQ(run_interval(250000), 25);
+    EXPECT_EQ(run_interval(1000000), 100);
+    EXPECT_EQ(run_interval(30000), 3);
+
+    // Not yet an interval: keeps the last value and the busy time counts toward the next one.
+    monitor.AddBusyTimeUs(400000);
+    inc_time_since_boot_ms(500);
+    monitor.Update();
+    EXPECT_EQ(monitor.GetUsagePercent(), 3);
+    inc_time_since_boot_ms(500);
+    monitor.Update();
+    EXPECT_EQ(monitor.GetUsagePercent(), 40);
+}
+
+TEST(CPUMonitor, BusyTimeAcrossCounterWrap) {
+    CPUMonitor monitor({.update_interval_ms = 1000, .use_busy_time = true});
+    set_time_since_boot_ms(0);
+    monitor.Update();
+    monitor.AddBusyTimeUs(0xFFFFFFFFu - 199999u);  // 200 ms short of the wrap.
+    inc_time_since_boot_ms(1000);
+    monitor.Update();
+    EXPECT_EQ(monitor.GetUsagePercent(), 100);
+    monitor.AddBusyTimeUs(500000);  // Wraps past zero.
+    inc_time_since_boot_ms(1000);
+    monitor.Update();
+    EXPECT_EQ(monitor.GetUsagePercent(), 50);
 }
 #endif

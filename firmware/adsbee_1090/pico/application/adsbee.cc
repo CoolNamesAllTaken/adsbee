@@ -635,8 +635,10 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
     }
 }
 
-void __time_critical_func(ADSBee::DemodulateCaptures)() {
+bool __time_critical_func(ADSBee::DemodulateCaptures)() {
+    bool demodulated = false;
     while (const Capture* capture_slot = capture_queue_.Front()) {
+        demodulated = true;
         const Capture& capture = *capture_slot;
         uint16_t sm_index = capture.source;
         aircraft_dictionary.Record1090Demod(sm_index);
@@ -676,6 +678,7 @@ void __time_critical_func(ADSBee::DemodulateCaptures)() {
         }
         capture_queue_.Pop();
     }
+    return demodulated;
 }
 
 void __time_critical_func(ADSBee::OnSysTickWrap)() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }

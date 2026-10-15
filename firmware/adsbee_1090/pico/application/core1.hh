@@ -7,6 +7,10 @@
 
 extern CPUMonitor core_1_monitor;
 
+// Core 1 load is the time its loop spends demodulating, decoding or held up by interrupts. A loop pass with nothing to
+// do takes well under this.
+static constexpr uint32_t kCore1IdlePassMaxUs = 2;
+
 #ifdef HARDWARE_UNIT_TESTS
 void RunPendingTestFunctionOnCore1();  // Defined in target_test/hardware_unit_tests.cc.
 #endif
@@ -20,6 +24,7 @@ inline void main_core1() {
 #endif  // ISRS_ON_CORE1
 
     while (true) {
+        uint32_t iteration_start_us = time_us_32();
 #ifdef ISRS_ON_CORE1
         // Core 0 may try to toggle the 1090 receiver on and off. Keep an eye on it and turn it on and off here, since
         // it can't be toggle from core 0 without accidentally duplicating all the ISR stuff on that core.
@@ -30,9 +35,13 @@ inline void main_core1() {
 #ifdef HARDWARE_UNIT_TESTS
         RunPendingTestFunctionOnCore1();  // Lets hardware unit tests read core 1 state, e.g. its SysTick.
 #endif
-        core_1_monitor.Tick();
-        adsbee.DemodulateCaptures();
+        bool did_work = adsbee.DemodulateCaptures();
+        did_work |= decoder.raw_mode_s_packet_in_queue.Length() > 0;
         decoder.UpdateDecoderLoop();
+        uint32_t iteration_us = time_us_32() - iteration_start_us;
+        if (did_work || iteration_us >= kCore1IdlePassMaxUs) {
+            core_1_monitor.AddBusyTimeUs(iteration_us);
+        }
     }
 }
 
