@@ -1,4 +1,5 @@
 #include "lr2021.hh"
+#include "mlat/mlat_clear_dma.hh"
 
 #include <ti/drivers/dpl/HwiP.h>
 
@@ -159,6 +160,11 @@ bool LR2021::AcquireBus() {
         }
         uintptr_t key = HwiP_disable();
         bool acquired = sync_bus_.TryAcquire(drain_state_);
+        if (acquired) {
+            // A loop-drain FIFO read can leave the BUSY-fall interrupt armed to arm the uDMA clear: that fall could
+            // come between this command's request and response frames. UpdateLR2021 arms the clear again.
+            mlat_arm_on_busy_fall_ = false;
+        }
         HwiP_restore(key);
         if (acquired) {
             return true;
@@ -189,6 +195,7 @@ bool LR2021::BeginTransaction() {
         }
         frame_holds_bus_ = true;
     }
+    mlat_clear_dma::Disarm();  // The uDMA clear shares the bus; a clear in progress ends with BUSY high.
     // Always verify the chip is idle before asserting NSS.  Per §5.4.1.1 the
     // LR2021 will immediately raise BUSY once it sees the NSS falling edge, so
     // checking BUSY *after* asserting NSS would race with the hardware.

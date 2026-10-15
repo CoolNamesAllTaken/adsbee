@@ -113,6 +113,7 @@ bool CC1312::Init(bool spi_already_initialized) {
 
 bool CC1312::Update() {
     more_raw_packets_pending_ = false;
+    raw_packets_arriving_ = false;
     // Report a lost link once; reads fail fast and quietly while it stays down (see SPILinkGate).
     bool link_was_down = adsbee.subg_radio.IsLinkDown();
     // Query CC1312's device status.
@@ -137,6 +138,8 @@ bool CC1312::Update() {
             return false;
         }
         more_raw_packets_pending_ = CompositeArray::RawPackets::MorePending(device_status.pending_raw_packets_len_bytes);
+        raw_packets_arriving_ =
+            device_status.pending_raw_packets_len_bytes > sizeof(CompositeArray::RawPackets::Header);
         if (!CompositeArray::UnpackRawPacketsBufferToQueues(read_buf, sizeof(read_buf), nullptr,
                                                             &adsbee.raw_uat_adsb_packet_queue,
                                                             &adsbee.raw_uat_uplink_packet_queue)) {

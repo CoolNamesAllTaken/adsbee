@@ -278,6 +278,29 @@ class LR2021 {
     void FinishRxDrain();
     bool DrainIdle() const { return drain_state_ == DrainState::kIdle; }
 
+    // MLAT timestamps (mlat/mlat_pairing.hh)
+    //
+    // Routes SyncwordValid to DIO5 as a latched level and builds the ClearIrq frame the uDMA clear sends, or releases
+    // DIO5. Synchronous; call with the drain idle.
+    bool ConfigMlatSources(bool enabled);
+    // ClearIrq(SyncwordValid), 6 bytes, for mlat_clear_dma. Valid after ConfigMlatSources(true).
+    const uint8_t* mlat_clear_frame() const { return mlat_clear_tx_buf_; }
+    // While enabled, a loop drain sweep waits for its short frames in place (kMlatSweepWaitMaxUs each at most) and
+    // posts the FIFO read in the pass it started in: pairing needs the level read close to the packets. Before each
+    // command frame it lets a pending uDMA clear run (mlat_clear_dma::ClearPending), and after its FIFO read it arms
+    // the uDMA clear from the BUSY-fall interrupt. Enable only with the MLAT capture timer and mlat_clear_dma running.
+    void SetMlatSweepEnabled(bool enabled) { mlat_sweep_enabled_ = enabled; }
+    // The bus is free for the uDMA clear: no drain or chain, no kept read, and BUSY low within max_wait_us (the
+    // BUSY pulse of the sweep's last frame).
+    bool MlatClearMayArm(uint32_t max_wait_us);
+    // Capture timer values of the sweep that just returned kDataReady or kNoData.
+    struct MlatSweep {
+        uint32_t level_request_counter = 0;  // Just before the NSS falling edge of the GetRxFifoLevel request.
+        uint32_t level_answer_counter = 0;   // After the LR2021 sampled the level.
+        bool clear_tail_ran = false;         // LR_IRQ was high: the FIFO held 9 packets or more at some point.
+    };
+    const MlatSweep& mlat_sweep() const { return mlat_sweep_; }
+
     // IRQ-paced RX drain chain (lr2021_irq_drain.cpp)
     //
     // The LR2021 raises its DIO6 IRQ line (-> CC1314 LR_IRQ pin, rising edge) when the RX FIFO crosses
@@ -296,7 +319,9 @@ class LR2021 {
     // A healthy chain finishes in ~300 us; a chain stuck longer than this is cancelled by
     // ServiceRxDrain() at thread level.
     static constexpr uint32_t kIrqChainTimeoutMs = 10;
-    static constexpr uint8_t kNumIrqDrainSlots = 2;
+    // Staging slots the chain fills until the main loop parses them, 9 packets each. With the FIFO's own 18 packets,
+    // 6 slots ride out a main loop pass of about 18 ms at 4000 frames/s before the FIFO overflows.
+    static constexpr uint8_t kNumIrqDrainSlots = 6;
 
     // Staging slot: filled by the chain (ISR/SWI context), parsed and released by the main loop.
     // timestamp_us is captured at the IRQ edge -- closer to reception than parse-time stamping.
@@ -1530,6 +1555,21 @@ class LR2021 {
     // async_rx_buf_, so its frames must not touch the async buffers (would clobber the unparsed
     // payload / break the async_tx_buf_ "[2..] zeros" invariant).
     uint8_t tail_tx_buf_[4] = {};
+    // ClearIrq(SyncwordValid), built by ConfigMlatSources() and sent by the uDMA clear.
+    uint8_t mlat_clear_tx_buf_[6] = {};
+    volatile bool mlat_sweep_enabled_ = false;
+    // Set when the sweep's FIFO read ends: the BUSY-fall interrupt arms the uDMA clear.
+    volatile bool mlat_arm_on_busy_fall_ = false;
+    MlatSweep mlat_sweep_;
+    static constexpr uint32_t kMlatSweepWaitMaxUs = 200;
+    // MLAT sweep, frames ahead of the FIFO read: waits for the frame in flight (wait_done) or for BUSY low.
+    // False: not an MLAT sweep, or still waiting after kMlatSweepWaitMaxUs.
+    bool MlatSweepWait(DrainState s, bool wait_done);
+    uint32_t mlat_nss_counter_ = 0;  // Capture timer just before the NSS falling edge of the last posted frame.
+    // Longest wait for BUSY low after a uDMA clear: the LR2021 runs ClearIrq after NSS rises.
+    static constexpr uint32_t kMlatClearBusyWaitUs = 50;
+    // Busy-waits for BUSY low. False: still high after max_us.
+    bool WaitNotBusyUs(uint32_t max_us);
     uint8_t tail_rx_buf_[8] = {};
     volatile bool async_ok_ = false;         // Transfer status; written by SPICallback before async_done_.
     volatile bool async_done_ = false;       // Set last by SPICallback; cleared when posting a frame.

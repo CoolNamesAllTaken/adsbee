@@ -47,7 +47,8 @@ receiving stations across multiple packets, and then use the differences between
 station receive timing to calculate signal source position.
 
 FlightAware's dump1090 fork sends `0x00 0x00 0x00 0x00 0x00 0x00` when it has
-no MLAT data.
+no MLAT data. ADSBee does the same for a packet without an MLAT timestamp
+(`RawModeSPacket::no_mlat_timestamp`, set by the ADSBee m1421).
 
 
 ## RSSI

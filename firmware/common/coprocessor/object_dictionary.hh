@@ -48,8 +48,9 @@ class ObjectDictionary {
     static constexpr uint16_t kNetworkConsoleMutexTimeoutMs = 5;  // Max wait for network_console_rx_queue_mutex in SPI task context.
 #endif
     // CC1312 queues of decoded packets waiting for the RP2040. A UAT frame carries up to 32 ground uplinks within
-    // 176 ms, less than two RP2040 polls apart, so the uplink queue holds all of them.
-    static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;
+    // 176 ms, less than two RP2040 polls apart, so the uplink queue holds all of them. The ADS-B queue holds two
+    // composite array reads, so a burst survives until the RP2040's next poll.
+    static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 64;
     static constexpr uint16_t kDecodedUATUplinkPacketQueueDepth = 32;
 
     enum Address : uint8_t {
@@ -182,6 +183,7 @@ class ObjectDictionary {
         uint8_t hardware_capabilities = 0;
         uint16_t psram_total_kb = 0;  // PSRAM heap size (0 if no PSRAM).
         uint16_t psram_free_kb = 0;   // Free PSRAM heap (0 if no PSRAM).
+        uint8_t num_network_console_clients = 0;  // Connected /console WebSocket clients.
     };
 
     enum ESP32HardwareCapability : uint8_t {
