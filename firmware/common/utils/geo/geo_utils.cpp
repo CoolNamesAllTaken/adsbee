@@ -34,13 +34,12 @@ constexpr int32_t kCos0 = 1073741824, kCos2 = -536870908, kCos4 = 44739189, kCos
 constexpr int32_t kHalfPiQ30 = 1686629713;
 
 // atan(2^-i) in AWB, for CORDIC (coordinate rotation digital computer) vectoring.
-constexpr uint32_t kCordicAtanAWB[] = {536870912, 316933406, 167458907, 85004756, 42667331, 21354465, 10679838,
-                                       5340245,   2670163,   1335087,   667544,   333772,   166886,   83443,
-                                       41722,     20861,     10430,     5215,     2608,     1304,     652,
-                                       326,       163,       81,        41,       20,       10,       5};
+constexpr int kCordicIterations = 15;
+constexpr uint32_t kCordicAtanAWB[kCordicIterations] = {536870912, 316933406, 167458907, 85004756, 42667331,
+                                                        21354465,  10679838,  5340245,   2670163,  1335087,
+                                                        667544,    333772,    166886,    83443,    41722};
 // CORDIC magnitudes come out this much larger than the input (1.6467602581), Q30.
 constexpr int32_t kCordicGainQ30 = 1768195004;
-constexpr int kCordicIterations = 15;
 constexpr int32_t kAWBPerRadianQ28Q14 = 41722;  // AWB per 2^-28 rad, Q14: 2^32 / (2 pi) / 2^28 * 2^14.
 
 /**
@@ -154,11 +153,14 @@ void CalculateDistanceAndBearing(const GeoReference &ref, uint32_t lat_awb, uint
     int32_t sin_dlat = 2 * MulQ30(sin_half_dlat, cos_half_dlat);
     int32_t cos_dlat = kQ30One - 2 * MulQ30(sin_half_dlat, sin_half_dlat);
     int32_t cos_lat_b = MulQ30(ref.cos_lat_q30, cos_dlat) - MulQ30(ref.sin_lat_q30, sin_dlat);
-    // 2 cos(lat_b) sin^2(dlon / 2): what cos(dlon) takes away from the same-meridian terms.
-    int32_t t = 2 * MulQ30(cos_lat_b, MulQ30(sin_half_dlon, sin_half_dlon));
+    // cos(lat_b) sin^2(dlon / 2): half of what cos(dlon) takes away from the same-meridian terms. Doubling it can reach
+    // 2.0 (2^31), so the doubled terms are added in wrapping unsigned arithmetic; north and up themselves fit.
+    int32_t half_t = MulQ30(cos_lat_b, MulQ30(sin_half_dlon, sin_half_dlon));
     int32_t east = 2 * MulQ30(cos_lat_b, MulQ30(sin_half_dlon, cos_half_dlon));
-    int32_t north = sin_dlat + MulQ30(ref.sin_lat_q30, t);
-    int32_t up = cos_dlat - MulQ30(ref.cos_lat_q30, t);
+    int32_t north = static_cast<int32_t>(static_cast<uint32_t>(sin_dlat) +
+                                         2u * static_cast<uint32_t>(MulQ30(ref.sin_lat_q30, half_t)));
+    int32_t up = static_cast<int32_t>(static_cast<uint32_t>(cos_dlat) -
+                                      2u * static_cast<uint32_t>(MulQ30(ref.cos_lat_q30, half_t)));
 
     if (east == 0 && north == 0) {
         distance_m = up > 0 ? 0 : kHalfMeridianMeters;  // Same point or antipode.
