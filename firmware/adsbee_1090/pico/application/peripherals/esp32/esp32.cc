@@ -61,6 +61,9 @@ bool ESP32::Update() {
         hardware_capabilities = device_status.hardware_capabilities;
         psram_total_kb = device_status.psram_total_kb;
         psram_free_kb = device_status.psram_free_kb;
+        network_utc_time_valid = device_status.network_utc_time_valid;
+        network_utc_ms_of_day = device_status.network_utc_ms_of_day;
+        network_utc_timestamp_ms = get_time_since_boot_ms();
     } else {
         if (!esp32.IsLinkDown()) {  // Don't repeat this every pass while the link is down.
             CONSOLE_ERROR("ESP32::Update", "Unable to read ESP32 status.");

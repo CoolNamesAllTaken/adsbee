@@ -1234,6 +1234,31 @@ CPP_AT_CALLBACK(CommsManager::ATASTERIXSACSICCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATNTPServerCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s", settings_manager.settings.ntp_server);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            if (!CPP_AT_HAS_ARG(0) || args[0].size() > SettingsManager::Settings::kNTPServerMaxLen) {
+                CPP_AT_ERROR("Requires a host name or IP address of up to %u characters. AT+NTP_SERVER=<host>",
+                             SettingsManager::Settings::kNTPServerMaxLen);
+            }
+            for (char c : args[0]) {
+                if (!(isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == ':')) {
+                    CPP_AT_ERROR("Invalid character '%c' in NTP server.", c);
+                }
+            }
+            memset(settings_manager.settings.ntp_server, '\0', sizeof(settings_manager.settings.ntp_server));
+            memcpy(settings_manager.settings.ntp_server, args[0].data(), args[0].size());
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     switch (op) {
         case '?':
@@ -1634,6 +1659,7 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"LED_ENABLE\":[%d],", s.led_enabled);
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
     CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
+    CPP_AT_PRINTF("\"NTP_SERVER\":[\"%s\"],", s.ntp_server);
     CPP_AT_PRINTF("\"PROTOCOL_OUT\":[\"%s\",\"%s\"],",
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kConsole]],
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kCommsUART]]);
@@ -2167,6 +2193,13 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
                     "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
+    {.command = "NTP_SERVER",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "AT+NTP_SERVER=<host>\r\n\tSet the Network Time Protocol server the ESP32 takes UTC from while an "
+                    "output uses ASTERIX and GNSS has no time (default pool.ntp.org).\r\n\tAT+NTP_SERVER?\r\n\tQuery "
+                    "it.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATNTPServerCallback, comms_manager)},
     {.command = "NETWORK_INFO",
      .min_args = 0,
      .max_args = 0,

@@ -38,6 +38,22 @@ static bool SanitizeString(char* str, size_t size, const char* name, int index =
     return true;
 }
 
+bool SettingsManager::ProtocolInUse(const Settings& settings, ReportingProtocol protocol) {
+    if (settings.reporting_protocols[SerialInterface::kConsole] == protocol ||
+        settings.reporting_protocols[SerialInterface::kCommsUART] == protocol) {
+        return true;
+    }
+    if (!settings.feeds_enabled) {
+        return false;
+    }
+    for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
+        if (settings.feed_is_active[i] && settings.feed_protocols[i] == protocol) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool SettingsManager::Sanitize() {
     bool changed = false;
 
@@ -84,6 +100,7 @@ bool SettingsManager::Sanitize() {
         changed |= SanitizeString(net.ssid, sizeof(net.ssid), "wifi_sta_extra_networks.ssid", i);
         changed |= SanitizeString(net.password, sizeof(net.password), "wifi_sta_extra_networks.password", i);
     }
+    changed |= SanitizeString(settings.ntp_server, sizeof(settings.ntp_server), "ntp_server");
 
     // Baud rate 0 is invalid on hardware UARTs (but normal for the USB console).
     if (settings.baud_rates[SerialInterface::kCommsUART] == 0) {
@@ -389,4 +406,7 @@ void SettingsManager::PrintAT() {
 
     // AT+ASTERIX_SAC_SIC
     CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
+
+    // AT+NTP_SERVER
+    CONSOLE_PRINTF("AT+NTP_SERVER=%s\r\n", settings.ntp_server);
 }

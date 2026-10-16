@@ -55,7 +55,7 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(SettingsManager::Settings), 1344u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1408u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -503,7 +503,7 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
 }
 
-TEST(SettingsMigration, V18ToV19KeepsEverythingAndDefaultsASTERIXIDs) {
+TEST(SettingsMigration, V18ToV19KeepsEverythingAndDefaultsASTERIXAndNTP) {
     settings_v15::Settings v15;
     PopulateV15(v15);
     // 0xFF past the v18 struct, as Load() reads erased EEPROM there.
@@ -521,10 +521,12 @@ TEST(SettingsMigration, V18ToV19KeepsEverythingAndDefaultsASTERIXIDs) {
     SettingsManager::Settings out;
     out.asterix_sac = 0x55;
     out.asterix_sic = 0x66;
+    strcpy(out.ntp_server, "stale.example.com");
     ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_EQ(out.asterix_sac, 0);
     EXPECT_EQ(out.asterix_sic, 0);
+    EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
     EXPECT_TRUE(out.auto_update_enabled);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
@@ -557,7 +559,10 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t asterix = dump.find("AT+ASTERIX_SAC_SIC=0,0");
     ASSERT_NE(asterix, std::string::npos);
     EXPECT_LT(auto_update, asterix);
-    EXPECT_EQ(dump.find("AT+", asterix + 1), std::string::npos);
+    size_t ntp = dump.find("AT+NTP_SERVER=pool.ntp.org");
+    ASSERT_NE(ntp, std::string::npos);
+    EXPECT_LT(asterix, ntp);
+    EXPECT_EQ(dump.find("AT+", ntp + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);
@@ -1088,4 +1093,30 @@ TEST(SettingsManager, SanitizeDisablesGNSSWithoutReceiverType) {
     s.gnss_receiver_type = SettingsManager::kGNSSReceiverUBXMIA;
     EXPECT_FALSE(settings_manager.Sanitize());
     EXPECT_TRUE(s.gnss_enabled);
+}
+
+TEST(Settings, ProtocolInUseCountsSerialOutputsAndActiveFeeds) {
+    SettingsManager::Settings s;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+
+    s.reporting_protocols[SettingsManager::kCommsUART] = SettingsManager::kASTERIX;
+    EXPECT_TRUE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.reporting_protocols[SettingsManager::kCommsUART] = SettingsManager::kNoReports;
+
+    s.feed_protocols[2] = SettingsManager::kASTERIX;
+    s.feed_is_active[2] = false;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.feed_is_active[2] = true;
+    s.feeds_enabled = true;
+    EXPECT_TRUE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.feeds_enabled = false;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+}
+
+TEST(Settings, NTPServerDefaultsToPoolAndIsSanitized) {
+    SettingsManager manager;
+    EXPECT_STREQ(manager.settings.ntp_server, "pool.ntp.org");
+    memset(manager.settings.ntp_server, 'a', sizeof(manager.settings.ntp_server));
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(strlen(manager.settings.ntp_server), SettingsManager::Settings::kNTPServerMaxLen);
 }

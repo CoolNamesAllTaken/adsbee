@@ -13,7 +13,9 @@ navigation service providers:
 - Network feed (ADSBee 1090): `AT+FEED=<index>,<uri>,<port>,1,ASTERIX`, or pick ASTERIX in the web UI feed editor.
 - Data source: `AT+ASTERIX_SAC_SIC=<sac>,<sic>` sets the System Area Code and System Identification Code (0-255
   each, default 0,0) carried by every record. Use the codes your ASTERIX consumer assigned to this receiver; SACs
-  are allocated per country by EUROCONTROL. Save with `AT+SETTINGS=SAVE`.
+  are allocated per country by EUROCONTROL. Each ADSBee feeding the same consumer needs its own SAC/SIC pair. Save
+  with `AT+SETTINGS=SAVE`.
+- Time server (ADSBee 1090): `AT+NTP_SERVER=<host>` (default `pool.ntp.org`), see [Time](#time).
 
 ## What is sent
 
@@ -60,14 +62,24 @@ first ground station status report after boot sets RN (track numbering restarted
 
 ## Time
 
-ASTERIX times are seconds since midnight UTC. ADSBee takes UTC from a GNSS receiver (`AT+GNSS`), with the
-accuracy of its NMEA time messages. Without GNSS time:
+ASTERIX times are seconds since midnight UTC. ADSBee takes UTC from, in order:
+
+1. A GNSS receiver with a valid time (`AT+GNSS`), with the accuracy of its NMEA time messages.
+2. On the ADSBee 1090, SNTP (Simple Network Time Protocol) on the ESP32, polled once an hour from the
+   `AT+NTP_SERVER` host. It runs only while the console, the comms UART or an active feed uses ASTERIX, and needs
+   a WiFi station or Ethernet connection. The time counts for 3 h after the last answer from the server.
+   `"sntp"` in the device status of the metrics stream (`/metrics`) shows whether it is synced.
+
+Both count as a valid time source, so CAT023 clears TSV and NOGO. CAT021 and CAT023 have no item that tells
+GNSS time from network time.
+
+Without either:
 
 - Times count from boot, modulo 24 h.
 - CAT023 reports TSV (time source invalid) and NOGO (data must not be used operationally).
 - Every CAT021 record sets the I021/040 NOGO bit.
 
-The ADSBee 1421 has no GNSS input, so its output always carries NOGO.
+The ADSBee 1421 has no GNSS input or network, so its output always carries NOGO.
 
 ## Decoding
 

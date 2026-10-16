@@ -176,6 +176,10 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     uint8_t hardware_capabilities = 0;
     uint16_t psram_total_kb = 0;
     uint16_t psram_free_kb = 0;
+    // ESP32 only: UTC from SNTP (network_utc_ms_of_day) held at network_utc_timestamp_ms, local milliseconds since boot.
+    bool network_utc_time_valid = false;
+    uint32_t network_utc_ms_of_day = 0;
+    uint32_t network_utc_timestamp_ms = 0;
 
    protected:
     // Use this flag to indicate whether we are expecting the handshake line to go high. If it is high during a

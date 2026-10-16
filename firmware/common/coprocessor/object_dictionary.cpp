@@ -8,6 +8,7 @@
 #include "esp32_firmware_check.hh"
 #include "esp_app_desc.h"
 #include "esp_system.h"
+#include "network_time.hh"
 #include "pico.hh"               // pico_ll.ForceBlinkNetworkLED() for kAddrLEDBlink.
 #include "remote_id_manager.hh"  // remote_id_manager.GetOutQueue() for the ESP32 -> RP2040 Remote ID pull.
 #include "task_utils.hh"
@@ -26,7 +27,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 8;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 9;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -618,6 +619,12 @@ void ObjectDictionary::UpdateDeviceStatus() {
     // CC1312's pending_raw_packets_len_bytes pull mechanism (see the ON_TI branch below).
     device_status.pending_raw_packets_len_bytes = CompositeArray::CalculateRawPacketsBufferLength(
         nullptr, nullptr, nullptr, remote_id_manager.GetOutQueue());
+    static constexpr uint32_t kMsPerDay = 86400000;
+    uint32_t utc_ms_of_day, utc_local_ms;
+    device_status.network_utc_time_valid = network_time.GetUTC(utc_ms_of_day, utc_local_ms);
+    // Bring UTC back to timestamp_ms.
+    device_status.network_utc_ms_of_day =
+        (utc_ms_of_day + kMsPerDay - (utc_local_ms - device_status.timestamp_ms)) % kMsPerDay;
 #elif defined(ON_TI)
     device_status = {
         .timestamp_ms = get_time_since_boot_ms(),

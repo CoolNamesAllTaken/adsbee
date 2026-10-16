@@ -160,6 +160,7 @@ class SettingsManager {
         static constexpr uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
+        static constexpr uint16_t kNTPServerMaxLen = 63;
 
         /**
          * Core Network Settings struct is used for storing network settings that should remain unchanged through most
@@ -320,6 +321,9 @@ class SettingsManager {
         uint8_t asterix_sac = 0;
         uint8_t asterix_sic = 0;
 
+        // Network Time Protocol server the ESP32 sets its clock from while an output uses ASTERIX.
+        char ntp_server[kNTPServerMaxLen + 1];
+
         /**
          * Default constructor.
          */
@@ -330,6 +334,8 @@ class SettingsManager {
             memset(remote_id_tx_uas_id, '\0', sizeof(remote_id_tx_uas_id));
             memset(remote_id_tx_operator_id, '\0', sizeof(remote_id_tx_operator_id));
             memset(wifi_sta_extra_networks, '\0', sizeof(wifi_sta_extra_networks));
+            memset(ntp_server, '\0', sizeof(ntp_server));
+            strncpy(ntp_server, "pool.ntp.org", kNTPServerMaxLen);
 
 #ifdef ON_PICO
             DeviceInfo device_info;
@@ -663,6 +669,11 @@ class SettingsManager {
     void PrintAT();
 
     /**
+     * @retval True if the console, the comms UART or an active network feed reports the protocol.
+     */
+    static bool ProtocolInUse(const Settings& settings, ReportingProtocol protocol);
+
+    /**
      * Takes a password as a string and fills a buffer with the corresponding number of asterix.
      * @param[in] password_buf Buffer to read the password from. Must be at least password_len+1 chars.
      * @param[out] redacted_password_buf Buffer to write the asterix to. Must be at least password_len+1 chars.
@@ -738,7 +749,7 @@ extern SettingsManager settings_manager;
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
 static_assert(kSettingsVersion == 19,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 1344,
+static_assert(sizeof(SettingsManager::Settings) == 1408,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -762,5 +773,6 @@ static_assert(offsetof(SettingsManager::Settings, wifi_sta_extra_networks) == 11
 static_assert(offsetof(SettingsManager::Settings, auto_update_enabled) == 1338, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, asterix_sac) == 1339, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, asterix_sic) == 1340, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, ntp_server) == 1341, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

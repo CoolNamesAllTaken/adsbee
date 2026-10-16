@@ -8220,6 +8220,11 @@ const SETTINGS_SCHEMA_1090 = [
     },
     makeMavlinkIdEntry(),
     makeAsterixSacSicEntry(),
+    {
+        cmd: 'NTP_SERVER', label: 'NTP Server', group: 'Reporting',
+        help: 'Time server for ASTERIX output when GNSS has no time. Used only while an output uses ASTERIX.',
+        fields: [{ id: 'host', label: 'Host', type: 'string', maxLen: 63 }],
+    },
     // ── Position ──
     makeRxPositionEntry(),
     {
