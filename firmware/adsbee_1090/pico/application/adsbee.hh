@@ -277,8 +277,9 @@ class ADSBee {
     /**
      * Demodulates the queued captures and hands the messages to the decoder. Call from the loop that runs the
      * decoder, and from that loop only.
+     * @retval True if there was at least one capture to demodulate.
      */
-    void DemodulateCaptures();
+    bool DemodulateCaptures();
 
     /**
      * ISR for the timer alarm that ends the capture of a 56 bit message early, so its preamble matcher and sampler
