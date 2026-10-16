@@ -145,7 +145,8 @@ class ADSBee {
     SettingsManager::RxPosition rx_position;
     bool rx_position_available = false;
 
-    // MLAT feed clock epoch: random, set once per boot from the LR2021's random number generator.
+    // MLAT feed clock epoch: random at boot from the LR2021's random number generator, and new whenever the MLAT time
+    // base restarts.
     uint32_t mlat_epoch = 0;
 
    private:

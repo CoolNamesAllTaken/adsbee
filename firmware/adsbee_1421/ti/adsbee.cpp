@@ -159,6 +159,9 @@ void ADSBee::RestartMlatTimebase() {
     const uint64_t ticks = system_ticks > mlat_timebase_.ticks() ? system_ticks : mlat_timebase_.ticks() + 1;
     mlat_timebase_.Start(mlat_capture::Counter(), static_cast<uint32_t>(now_us), ticks);
     mlat_pairer_.Break(ticks);
+    if (mlat_epoch != 0) {
+        mlat_epoch = NextMlatEpoch(mlat_epoch, now_us);  // Tells the MLAT server to drop the old clock fit.
+    }
     mlat_clock_was_crystal_ = false;
 }
 

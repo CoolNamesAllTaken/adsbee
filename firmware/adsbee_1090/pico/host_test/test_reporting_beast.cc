@@ -248,6 +248,15 @@ TEST(BeastUtils, BuildModeSBeastFrameWith48MHzTimestamp) {
     EXPECT_EQ(memcmp(frame_48mhz + len_48mhz - 16, frame_12mhz + len_12mhz - 16, 16), 0);  // Same RSSI and data.
 }
 
+TEST(BeastUtils, PacketWithoutMLATTimestampHasZeroTimestamps) {
+    // An m1421 packet the receiver could not time carries only a coarse receive time.
+    RawModeSPacket packet((const char*)"8d495066587f469bb826d21ad767", 0, -80, 50, 0x00ABFF1AFFFFFF1AULL);
+    EXPECT_EQ(packet.GetMLAT48MHzCounter(), 0xFF1AFFFFFF1AULL);
+    packet.no_mlat_timestamp = true;
+    EXPECT_EQ(packet.GetMLAT48MHzCounter(), 0u);
+    EXPECT_EQ(packet.GetMLAT12MHzCounter(), 0u);
+}
+
 TEST(BeastUtils, BuildReceiverInfoFrame) {
     BeastReporter::ReceiverInfo info;
     strcpy(info.id, "0bee00038172d18c");

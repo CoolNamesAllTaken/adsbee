@@ -64,6 +64,19 @@ class MlatTimebase {
     uint64_t gap_ticks_ = 0;
 };
 
+// MLAT feed clock epoch after the time base restarts: timestamps before and after the restart don't line up, so the
+// epoch changes. Never 0 (no epoch yet) and never the previous epoch.
+inline uint32_t NextMlatEpoch(uint32_t epoch, uint64_t now_us) {
+    uint32_t next = (epoch * 1664525u + 1013904223u) ^ static_cast<uint32_t>(now_us);
+    if (next == epoch) {
+        next++;
+    }
+    if (next == 0) {
+        next = epoch == 1 ? 2 : 1;
+    }
+    return next;
+}
+
 class MlatPairer {
    public:
     static constexpr uint32_t kTicksPerUs = MlatTimebase::kTicksPerUs;
