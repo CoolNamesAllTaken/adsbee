@@ -41,6 +41,12 @@ static_assert(RemoteIDGuard::kTransportsBLE ==
               (SettingsManager::kRemoteIDTransportBLE4 | SettingsManager::kRemoteIDTransportBLE5Long));
 static_assert(RemoteIDGuard::kTransportWiFiBeacon == SettingsManager::kRemoteIDTransportWiFiBeacon);
 
+// Free heap needed to bring the Bluetooth stack up for receive or transmit.
+static uint32_t BLEStartFreeBytes(uint32_t with_psram_bytes) {
+    return HardwareCapabilities::HasPSRAM() ? with_psram_bytes
+                                            : RemoteIDGuard::kReserveFreeBytes + RemoteIDManager::kBLEHeapCostBytes;
+}
+
 uint8_t RemoteIDManager::AllowedTransports() {
     return RemoteIDGuard::AllowedTransports(HardwareCapabilities::HasPSRAM(), comms_manager.wifi_ap_enabled,
                                             comms_manager.wifi_sta_enabled, comms_manager.ethernet_enabled);
@@ -161,7 +167,8 @@ void RemoteIDManager::Reconcile() {
         if (!BluetoothIsSupported()) {
             // Bluetooth isn't compiled into this firmware at all: the user needs a different image.
             status_ |= kStatusNotInBuild;
-        } else if (ble_running_ || HardwareCapabilities::GetInternalFreeBytes() >= kMinHeapFreeBytesForBLE) {
+        } else if (BLEStackUp() ||
+                   HardwareCapabilities::GetInternalFreeBytes() >= BLEStartFreeBytes(kMinHeapFreeBytesForBLE)) {
             if (BLEStart(want_coded)) {
                 status_ |= kStatusBLEActive;
                 if (ble_coded_running_) status_ |= kStatusBLECodedPHYActive;
@@ -223,8 +230,8 @@ void RemoteIDManager::ReconcileTx() {
     if (want_ble_legacy || want_ble_coded) {
         if (!BluetoothIsSupported()) {
             status_ |= kStatusNotInBuild | kStatusTxBlocked;
-        } else if (ble_tx_legacy_running_ || ble_tx_coded_running_ ||
-                   HardwareCapabilities::GetInternalFreeBytes() >= kMinHeapFreeBytesForTx) {
+        } else if (BLEStackUp() ||
+                   HardwareCapabilities::GetInternalFreeBytes() >= BLEStartFreeBytes(kMinHeapFreeBytesForTx)) {
             if (BLETxStart(want_ble_legacy, want_ble_coded)) {
                 if (ble_tx_legacy_running_) status_ |= kStatusTxBLELegacyActive;
                 if (ble_tx_coded_running_) status_ |= kStatusTxBLECodedActive;
