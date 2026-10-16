@@ -1261,7 +1261,7 @@ class AircraftDictionary {
     bool IsPreferredReportForAddress(uint32_t uid, uint32_t timestamp_ms) const;
 
     /**
-     * Resolves the aircraft report filters for a reporting round. kAltitudeFilterNearReceiver uses the receiver
+     * Resolves the aircraft report filters for a reporting round. kAltitudeFilterNearRx uses the receiver
      * altitude from SetReferenceAltitudeFt(); without one it filters nothing.
      * @param[in] max_distance_m Settings::FilterDistanceMeters(): largest distance to report, 0 for no filter.
      * @param[in] altitude_mode AltitudeFilterMode (Settings::filter_altitude_mode).

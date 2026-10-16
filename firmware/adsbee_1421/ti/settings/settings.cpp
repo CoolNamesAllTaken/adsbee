@@ -289,7 +289,7 @@ void SettingsManager::PrintAT() {
                    (unsigned long)(settings.filter_distance_deci_nm % 10));
 
     // AT+FILTER_ALTITUDE_FT
-    CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%u,%ld,%ld\r\n", settings.filter_altitude_mode,
+    CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%s,%ld,%ld\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
                    (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
     // AT+LOG_LEVEL

@@ -77,7 +77,7 @@ TEST(Settings, Version5BlobMigratesWithReportFiltersOff) {
     SM::Settings out;
     out.filter_distance_enabled = true;
     out.filter_distance_deci_nm = 777;
-    out.filter_altitude_mode = kAltitudeFilterNearReceiver;
+    out.filter_altitude_mode = kAltitudeFilterNearRx;
     out.filter_altitude_a_ft = 300;
     out.filter_altitude_b_ft = 400;
     ASSERT_TRUE(SM::MigrateFromVersion5(blob, out));
@@ -101,4 +101,16 @@ TEST(Settings, Version5BlobMigratesWithReportFiltersOff) {
     version = 4;
     memcpy(blob + offsetof(SM::Settings, settings_version), &version, sizeof(version));
     EXPECT_FALSE(SM::MigrateFromVersion5(blob, untouched));
+}
+
+TEST(Settings, AltitudeFilterModeStrings) {
+    uint8_t mode = kAltitudeFilterOff;
+    EXPECT_TRUE(ParseAltitudeFilterMode("near_rx", 7, mode));
+    EXPECT_EQ(mode, kAltitudeFilterNearRx);
+    EXPECT_STREQ(AltitudeFilterModeStr(mode), "NEAR_RX");
+    EXPECT_TRUE(ParseAltitudeFilterMode("Between", 7, mode));
+    EXPECT_EQ(mode, kAltitudeFilterBetween);
+    EXPECT_FALSE(ParseAltitudeFilterMode("3", 1, mode));
+    EXPECT_FALSE(ParseAltitudeFilterMode("RANGE", 5, mode));
+    EXPECT_EQ(mode, kAltitudeFilterBetween);
 }

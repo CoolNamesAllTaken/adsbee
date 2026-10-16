@@ -517,7 +517,7 @@ TEST(SettingsMigration, V18ToV19KeepsAutoUpdateAndLeavesReportFiltersOff) {
     SettingsManager::Settings out;
     out.filter_distance_enabled = true;
     out.filter_distance_deci_nm = 12345;
-    out.filter_altitude_mode = kAltitudeFilterRange;
+    out.filter_altitude_mode = kAltitudeFilterBetween;
     out.filter_altitude_a_ft = 500;
     out.filter_altitude_b_ft = 600;
     ASSERT_TRUE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18), 18, out));
@@ -570,13 +570,13 @@ TEST(Settings, AltitudeFilterDefaultsOffAndRoundTrips) {
     EXPECT_EQ(manager.settings.filter_altitude_mode, kAltitudeFilterOff);
     EXPECT_EQ(manager.settings.filter_altitude_a_ft, 0);
     EXPECT_EQ(manager.settings.filter_altitude_b_ft, 10000);
-    manager.settings.filter_altitude_mode = kAltitudeFilterRange;
+    manager.settings.filter_altitude_mode = kAltitudeFilterBetween;
     manager.settings.filter_altitude_a_ft = -1500;
     manager.settings.filter_altitude_b_ft = 18000;
     testing::internal::CaptureStdout();
     manager.PrintAT();
     std::string dump = testing::internal::GetCapturedStdout();
-    EXPECT_NE(dump.find("AT+FILTER_ALTITUDE_FT=3,-1500,18000\r\n"), std::string::npos);
+    EXPECT_NE(dump.find("AT+FILTER_ALTITUDE_FT=BETWEEN,-1500,18000\r\n"), std::string::npos);
     EXPECT_FALSE(manager.Sanitize());
 
     // Invalid combinations from flash turn the filter off.
@@ -584,9 +584,9 @@ TEST(Settings, AltitudeFilterDefaultsOffAndRoundTrips) {
         uint8_t mode;
         int32_t a_ft, b_ft;
     } invalid[] = {{5, 0, 10000},           {255, 0, 10000},     {kAltitudeFilterAbove, -2001, 0},
-                   {kAltitudeFilterBelow, 100001, 0}, {kAltitudeFilterRange, 6000, 5000},
-                   {kAltitudeFilterRange, 0, 100001}, {kAltitudeFilterNearReceiver, 0, 0},
-                   {kAltitudeFilterNearReceiver, -100, 0}, {kAltitudeFilterOff, 0, INT32_MIN}};
+                   {kAltitudeFilterBelow, 100001, 0}, {kAltitudeFilterBetween, 6000, 5000},
+                   {kAltitudeFilterBetween, 0, 100001}, {kAltitudeFilterNearRx, 0, 0},
+                   {kAltitudeFilterNearRx, -100, 0}, {kAltitudeFilterOff, 0, INT32_MIN}};
     for (const auto& c : invalid) {
         manager.settings.filter_altitude_mode = c.mode;
         manager.settings.filter_altitude_a_ft = c.a_ft;

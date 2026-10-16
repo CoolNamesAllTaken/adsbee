@@ -1973,24 +1973,49 @@ static ModeSAircraft* InsertAircraftAtAltitude(AircraftDictionary& dictionary, u
     return a;
 }
 
+TEST(AltitudeFilter, ModeStrings) {
+    struct {
+        const char* str;
+        uint8_t mode;
+    } good[] = {{"OFF", kAltitudeFilterOff},          {"above", kAltitudeFilterAbove}, {"Below", kAltitudeFilterBelow},
+                {"BETWEEN", kAltitudeFilterBetween}, {"near_rx", kAltitudeFilterNearRx}, {"Near_Rx", kAltitudeFilterNearRx}};
+    for (const auto& g : good) {
+        uint8_t mode = 0xFF;
+        EXPECT_TRUE(ParseAltitudeFilterMode(g.str, strlen(g.str), mode)) << g.str;
+        EXPECT_EQ(mode, g.mode) << g.str;
+        EXPECT_STREQ(AltitudeFilterModeStr(mode), kAltitudeFilterModeStrs[g.mode]);
+    }
+    // Numbers, unknown words, prefixes and longer words are rejected and leave mode alone.
+    for (const char* bad : {"0", "1", "3", "4", "", "RANGE", "NEAR", "NEAR RX", "ABOVEX", "ABOV", "OFF ", "\x7f"}) {
+        uint8_t mode = kAltitudeFilterAbove;
+        EXPECT_FALSE(ParseAltitudeFilterMode(bad, strlen(bad), mode)) << bad;
+        EXPECT_EQ(mode, kAltitudeFilterAbove);
+    }
+    // Only the given length counts (AT arguments are string views, not terminated).
+    uint8_t mode = 0;
+    EXPECT_TRUE(ParseAltitudeFilterMode("BELOW,5000", 5, mode));
+    EXPECT_EQ(mode, kAltitudeFilterBelow);
+    EXPECT_STREQ(AltitudeFilterModeStr(kNumAltitudeFilterModes), "INVALID");
+}
+
 TEST(AltitudeFilter, Validation) {
     EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterOff, 0, 10000));
     EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterAbove, -2000, 100000));
     EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterBelow, 100000, -2000));  // b is unused.
-    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterRange, 5000, 5000));
-    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterNearReceiver, 1, 0));
+    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterBetween, 5000, 5000));
+    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterNearRx, 1, 0));
     EXPECT_FALSE(AltitudeFilterIsValid(kNumAltitudeFilterModes, 0, 0));
     EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterAbove, -2001, 0));
     EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterAbove, 100001, 0));
     EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterOff, 0, -2001));
-    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterRange, 5001, 5000));
-    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterNearReceiver, 0, 0));
-    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterNearReceiver, -500, 0));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterBetween, 5001, 5000));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterNearRx, 0, 0));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterNearRx, -500, 0));
 
     // Invalid settings resolve to no filter.
-    EXPECT_FALSE(AltitudeFilterBounds::Of(kAltitudeFilterRange, 6000, 5000, false, 0).enabled);
+    EXPECT_FALSE(AltitudeFilterBounds::Of(kAltitudeFilterBetween, 6000, 5000, false, 0).enabled);
     EXPECT_FALSE(AltitudeFilterBounds::Of(kAltitudeFilterOff, 0, 0, true, 0).enabled);
-    AltitudeFilterBounds near = AltitudeFilterBounds::Of(kAltitudeFilterNearReceiver, 100000, 0, true, 100000);
+    AltitudeFilterBounds near = AltitudeFilterBounds::Of(kAltitudeFilterNearRx, 100000, 0, true, 100000);
     EXPECT_EQ(near.min_ft, 0);
     EXPECT_EQ(near.max_ft, 200000);
 }
@@ -2017,29 +2042,29 @@ TEST(AircraftDictionary, AltitudeFilterModes) {
               (V{0xBEE001, 0xBEE002, 0xBEE005, 0xBEE006, 0xBEE007}));
     EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBelow, 0, 0)),
               (V{0xBEE006, 0xBEE007}));
-    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterRange, 1000, 5000)),
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBetween, 1000, 5000)),
               (V{0xBEE001, 0xBEE002, 0xBEE005, 0xBEE006}));
-    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterRange, 20000, 20000)),
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBetween, 20000, 20000)),
               (V{0xBEE004, 0xBEE006}));
 
     // Near receiver filters nothing until the receiver has a position and an altitude.
-    const AircraftReportFilter near_filter = dictionary.GetReportFilter(0, kAltitudeFilterNearReceiver, 2000, 0);
+    const AircraftReportFilter near_filter = dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0);
     EXPECT_FALSE(near_filter.altitude.enabled);
     EXPECT_EQ(ReportedICAOs(dictionary, near_filter), all);
     dictionary.SetReferenceAltitudeFt(4000);
-    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearReceiver, 2000, 0)), all);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0)), all);
     dictionary.SetReferencePosition(48.0f, 18.0f);
-    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearReceiver, 2000, 0)),
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0)),
               (V{0xBEE002, 0xBEE005, 0xBEE006}));  // 2000 to 6000 ft.
     dictionary.SetReferenceAltitudeFt(0);
-    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearReceiver, 1500, 0)),
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 1500, 0)),
               (V{0xBEE001, 0xBEE006, 0xBEE007}));  // -1500 to 1500 ft.
     dictionary.ClearReferenceAltitude();
-    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearReceiver, 2000, 0)), all);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0)), all);
     dictionary.SetReferenceAltitudeFt(4000);
     dictionary.ClearReferencePosition();  // Clears the receiver altitude too.
     dictionary.SetReferencePosition(48.0f, 18.0f);
-    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearReceiver, 2000, 0)), all);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0)), all);
 }
 
 // UAT aircraft use the same barometric-then-GNSS rule; Remote ID aircraft only carry a GNSS altitude.
@@ -2058,7 +2083,7 @@ TEST(AircraftDictionary, AltitudeFilterOtherAircraftTypes) {
     drone_no_alt->baro_altitude_ft = 50000;  // Not a Remote ID altitude: ignored.
 
     using V = std::vector<uint32_t>;
-    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterRange, 1000, 10000)),
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBetween, 1000, 10000)),
               (V{0xBEE011, 0xBEE012, 0xBEE014}));
     EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBelow, 1000, 0)),
               (V{0xBEE013, 0xBEE014}));

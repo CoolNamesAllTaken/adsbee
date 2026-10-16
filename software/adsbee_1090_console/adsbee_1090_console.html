@@ -5479,20 +5479,20 @@ function makeFilterAltitudeEntry() {
     return {
         cmd: 'FILTER_ALTITUDE_FT', label: 'Altitude Filter', group: 'Reporting',
         help: 'Leave aircraft outside an altitude band out of aircraft reports: the aircraft list and map, aircraft JSON, GDL90, MAVLink and CSBee. Raw, Beast and MLAT output and feeds of them always carry every packet.',
-        tip: 'Aircraft altitude is barometric, else GNSS. Aircraft without a known altitude are always reported. Near receiver needs a receiver altitude (Position settings).',
+        tip: 'Aircraft altitude is barometric, else GNSS. Aircraft without a known altitude are always reported. Within A of the receiver needs a receiver position (Position settings).',
         fields: [
             {
                 id: 'mode', label: 'Mode', type: 'enum',
                 options: [
-                    { value: '0', label: 'Off' },
-                    { value: '1', label: 'At or above A' },
-                    { value: '2', label: 'At or below A' },
-                    { value: '3', label: 'From A to B' },
-                    { value: '4', label: 'Within A above or below the receiver' },
+                    { value: 'OFF', label: 'Off' },
+                    { value: 'ABOVE', label: 'At or above A' },
+                    { value: 'BELOW', label: 'At or below A' },
+                    { value: 'BETWEEN', label: 'Between A and B' },
+                    { value: 'NEAR_RX', label: 'Within A above or below the receiver' },
                 ],
             },
-            { id: 'a', label: 'A (ft)', type: 'int', min: -2000, max: 100000, visibleIf: v => v.mode !== '0' },
-            { id: 'b', label: 'B (ft)', type: 'int', min: -2000, max: 100000, visibleIf: v => v.mode === '3' },
+            { id: 'a', label: 'A (ft)', type: 'int', min: -2000, max: 100000, visibleIf: v => v.mode !== 'OFF' },
+            { id: 'b', label: 'B (ft)', type: 'int', min: -2000, max: 100000, visibleIf: v => v.mode === 'BETWEEN' },
         ],
     };
 }
