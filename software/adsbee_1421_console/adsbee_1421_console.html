@@ -1997,6 +1997,8 @@
                             <th data-sort-key="track">Hdg</th>
                             <th data-sort-key="lat">Lat</th>
                             <th data-sort-key="lon">Lon</th>
+                            <th data-sort-key="r_dst" title="Distance from the receiver">Dist&nbsp;(nm)</th>
+                            <th data-sort-key="r_dir" title="Bearing from the receiver">Brg</th>
                             <th data-sort-key="rssi">RSSI</th>
                         </tr>
                     </thead>
@@ -3456,7 +3458,9 @@
         '.fisb-tip i:first-child{margin-left:0}.fisb-pirep{font:15px/14px sans-serif;text-align:center;text-shadow:0 0 2px #000,0 0 1px #000}' +
         '.fisb-urgent{font-size:21px}' +
         '.fisb-text{font:11px/1.35 monospace;white-space:pre-wrap;margin:0 0 6px;width:max-content;max-width:480px}.fisb-text b{font-family:sans-serif}' +
-        '.fisb-gs{color:#222;font:14px/14px sans-serif;text-shadow:0 0 2px #fff,0 0 2px #fff}';
+        '.fisb-gs{color:#222;font:14px/14px sans-serif;text-shadow:0 0 2px #fff,0 0 2px #fff}' +
+        // × only on a pinned window; a hovered one closes when the pointer leaves.
+        '.fisb-info:not(.fisb-pinned) .leaflet-popup-close-button{display:none}';
 
     const POPUP = { minWidth: 260, maxWidth: 500, maxHeight: 320 };
 
@@ -3605,7 +3609,7 @@
         for (const name in SYMBOLS) parts[name] = GRIDS[name] ? gridLayer(L, decoder, GRIDS[name], state) : L.layerGroup();
         const drawn = { airports: new Map(), pireps: new Map(), areas: new Map(), stations: new Map() };
         const buttons = {}, tips = {};
-        let timer = null, unsubscribe = null, stationsRequested = false, altitude = null;
+        let timer = null, unsubscribe = null, stationsRequested = false, altitude = null, map = null;
 
         const el = (tag, className, text) => {
             const e = doc.createElement(tag);
@@ -3619,6 +3623,62 @@
             pre.appendChild(doc.createTextNode(text));
             return pre;
         };
+
+        // One details window for stations, reports and areas: hover shows it while the pointer is over the feature or the
+        // window, a click pins it until ×, a click on the map, Escape, or a click on the pinned feature.
+        const info = { popup: null, key: null, object: null, pinned: false, timer: null };
+        const binds = new Map();
+        const keepInfo = () => { clearTimeout(info.timer); info.timer = null; };
+        const closeInfo = () => {
+            keepInfo();
+            const popup = info.popup;
+            Object.assign(info, { popup: null, key: null, object: null, pinned: false });
+            if (popup) popup.remove();
+        };
+        const leaveInfo = () => { if (!info.pinned && !info.timer) info.timer = setTimeout(closeInfo, 300); };
+        const openInfo = (key, latlng) => {
+            const bound = binds.get(key);
+            if (!map || !bound) return;
+            keepInfo();
+            if (info.key === key) return;
+            closeInfo();
+            const popup = L.popup(Object.assign({ autoPan: false, closeOnClick: false, className: 'fisb-info' }, POPUP));
+            Object.assign(info, { popup, key, object: bound.object });
+            popup.setLatLng(latlng).setContent(bound.content()).openOn(map);
+            popup.on('remove', () => { if (info.popup === popup) closeInfo(); });
+            const box = popup.getElement();
+            if (!box) return;
+            box.addEventListener('mouseenter', keepInfo);
+            box.addEventListener('mouseleave', leaveInfo);
+            box.addEventListener('click', () => pinInfo());
+        };
+        const pinInfo = () => {
+            if (info.pinned || !info.popup) return;
+            info.pinned = true;
+            keepInfo();
+            info.popup.getElement().classList.add('fisb-pinned');
+            // Moves a pinned window into view.
+            info.popup.options.autoPan = true;
+            info.popup.update();
+        };
+        // Hover and click handling for one feature; content() builds the window's elements.
+        const bindInfo = (object, key, content, anchor) => {
+            binds.set(key, { object, content });
+            const at = (e) => anchor || (e && e.latlng);
+            return object.on({
+                mouseover: (e) => { if (!info.pinned) openInfo(key, at(e)); else if (info.key === key) keepInfo(); },
+                mouseout: () => { if (info.key === key) leaveInfo(); },
+                click: (e) => {
+                    // Stays off the map's own click, which closes the window.
+                    if (e && e.originalEvent) L.DomEvent.stopPropagation(e);
+                    if (info.key === key && info.pinned) return closeInfo();
+                    openInfo(key, at(e));
+                    pinInfo();
+                },
+            });
+        };
+        const onMapClick = () => closeInfo();
+        const onKey = (e) => { if (e.key === 'Escape' && info.popup) closeInfo(); };
 
         // Adds, replaces and removes Leaflet objects so that the group matches items [{key, signature, make}].
         const sync = (name, items) => {
@@ -3636,6 +3696,18 @@
             }
             for (const [key, old] of cache) {
                 if (!keep.has(key)) { parts[name].removeLayer(old.object); cache.delete(key); }
+            }
+            // A window follows its feature's new data, and goes with it.
+            for (const key of binds.keys()) {
+                if (key.startsWith(name + ':') && !keep.has(key.slice(name.length + 1))) binds.delete(key);
+            }
+            if (info.key && info.key.startsWith(name + ':')) {
+                const bound = binds.get(info.key);
+                if (!bound) closeInfo();
+                else if (bound.object !== info.object) {
+                    info.object = bound.object;
+                    info.popup.setContent(bound.content());
+                }
             }
         };
 
@@ -3677,16 +3749,15 @@
                             radius: a.metar ? 5 : 3, color: '#222', weight: 1, fillColor: color, fillOpacity: a.metar ? 0.95 : 0.6,
                         });
                         const metar = a.metar && a.metar.text.replace(/\s+/g, ' ');
-                        marker.bindTooltip(() => textBlock(metar ? '' : a.id, metar || (a.taf ? a.taf.text : a.notams.length + ' NOTAM')));
-                        marker.bindPopup(() => {
+                        return bindInfo(marker, 'airports:' + a.id, () => {
                             const box = el('div');
+                            if (!metar) box.appendChild(el('b', '', a.id));
                             if (metar) box.appendChild(textBlock('', metar));
                             if (a.taf) box.appendChild(textBlock('', a.taf.text));
                             for (const w of a.winds.sort((x, y) => x.timeMs - y.timeMs)) box.appendChild(textBlock('', windsTable(w.text)));
                             for (const n of a.notams) box.appendChild(textBlock('', n.text));
                             return box;
-                        }, POPUP);
-                        return marker;
+                        }, position);
                     },
                 });
             }
@@ -3708,8 +3779,7 @@
                             html: '<span style="color:' + PIREP_COLORS[p.severity] + '">&#9670;</span>',
                         });
                         const marker = L.marker(position, { icon, keyboard: false });
-                        marker.bindTooltip(() => textBlock('', t.text.replace(/^PIREP \S+ \S+ /, '')));
-                        marker.bindPopup(() => {
+                        return bindInfo(marker, 'pireps:' + t.key, () => {
                             const lines = [];
                             for (const code in PIREP_LABELS) {
                                 let value = p.fields[code];
@@ -3723,8 +3793,7 @@
                             box.appendChild(textBlock((p.urgent ? 'Urgent pilot report' : 'Pilot report') + ' · ' + p.station, lines.join('\n')));
                             box.appendChild(textBlock('', t.text));
                             return box;
-                        }, POPUP);
-                        return marker;
+                        }, position);
                     },
                 });
             }
@@ -3764,14 +3833,13 @@
                                 closed ? L.polygon(outline.points, style) : L.polyline(outline.points, Object.assign({ fill: false }, style));
                             const edge = outline.shape === 'circle' ? circle(wide) :
                                 L.polyline(closed ? outline.points.concat([outline.points[0]]) : outline.points, wide);
-                            // An element keeps received text from being parsed as HTML.
-                            edge.bindTooltip(() => el('span', '', title), { sticky: true });
-                            edge.bindPopup(() => {
+                            // Elements keep received text from being parsed as HTML. The window opens where the pointer meets the outline.
+                            bindInfo(edge, 'areas:' + r.key + '#' + index, () => {
                                 const box = el('div');
                                 box.appendChild(textBlock(title, times));
                                 if (r.text) box.appendChild(textBlock('', r.text));
                                 return box;
-                            }, POPUP);
+                            });
                             return L.featureGroup([seen, edge]);
                         },
                     });
@@ -3875,6 +3943,7 @@
         /** Shows or hides one part, by its name in SYMBOLS. */
         layer.setVisible = (name, visible) => {
             show[name] = visible;
+            if (!visible && info.key && info.key.startsWith(name + ':')) closeInfo();
             if (visible) layer.addLayer(parts[name]); else layer.removeLayer(parts[name]);
             if (visible && name === 'areas') parts.areas.eachLayer((area) => area.bringToBack());
             if (buttons[name]) buttons[name].setAttribute('aria-pressed', visible);
@@ -3894,14 +3963,21 @@
         for (const name in parts) if (show[name]) layer.addLayer(parts[name]);
 
         const onAdd = layer.onAdd, onRemove = layer.onRemove;
-        layer.onAdd = function (map) {
-            onAdd.call(this, map);
+        layer.onAdd = function (m) {
+            onAdd.call(this, m);
+            map = m;
             control.addTo(map);
+            map.on('click', onMapClick);
+            if (doc) doc.addEventListener('keydown', onKey);
             unsubscribe = decoder.on(schedule);
             refresh();
         };
-        layer.onRemove = function (map) {
-            onRemove.call(this, map);
+        layer.onRemove = function (m) {
+            closeInfo();
+            map.off('click', onMapClick);
+            if (doc) doc.removeEventListener('keydown', onKey);
+            map = null;
+            onRemove.call(this, m);
             control.remove();
             if (unsubscribe) unsubscribe();
             clearTimeout(timer);
@@ -4761,7 +4837,7 @@ class SettingsEngine {
                 input.type = 'number';
                 if (field.min !== undefined) input.min = field.min;
                 if (field.max !== undefined) input.max = field.max;
-                input.step = field.type === 'float' ? 'any' : '1';
+                input.step = field.step !== undefined ? field.step : (field.type === 'float' ? 'any' : '1');
                 break;
             case 'enum': {
                 input = document.createElement('select');
@@ -5335,6 +5411,19 @@ function makeMavlinkIdEntry() {
             return values.sys === undefined ? null : values;
         },
         build(v) { return [`AT+MAVLINK_ID=${v.sys},${v.comp}`]; },
+    };
+}
+
+// FILTER_DISTANCE_NM is identical on both products.
+function makeFilterDistanceEntry() {
+    return {
+        cmd: 'FILTER_DISTANCE_NM', label: 'Distance Filter', group: 'Reporting',
+        help: 'Leave aircraft farther than this from the receiver out of aircraft reports: the aircraft list and map, aircraft JSON, GDL90, MAVLink and CSBee. Raw, Beast and MLAT output and feeds of them always carry every packet.',
+        tip: 'Needs a receiver position (Position settings). Aircraft without a known position are always reported.',
+        fields: [
+            { id: 'en', label: 'Enabled', type: 'bool' },
+            { id: 'nm', label: 'Distance (nm)', type: 'float', min: 0.1, max: 10000, step: 0.1 },
+        ],
     };
 }
 
@@ -5915,7 +6004,7 @@ function makeRxEnableEntry() {
 
         // ─── AircraftTable ───────────────────────────────────────────────────────
 
-        const kNumericSortKeys = new Set(['alt_baro', 'gs', 'track', 'lat', 'lon', 'rssi']);
+        const kNumericSortKeys = new Set(['alt_baro', 'gs', 'track', 'lat', 'lon', 'r_dst', 'r_dir', 'rssi']);
 
         class AircraftTable {
             constructor(tbodyId, store, onSelect) {
@@ -5990,6 +6079,8 @@ function makeRxEnableEntry() {
                     const hdg = dir != null ? Math.round(dir) + '°' : '';
                     const lat = ac.lat != null ? ac.lat.toFixed(4) : '';
                     const lon = ac.lon != null ? ac.lon.toFixed(4) : '';
+                    const rdst = ac.r_dst != null ? ac.r_dst.toFixed(1) : '';
+                    const rdir = ac.r_dir != null ? Math.round(ac.r_dir) % 360 + '°' : '';
                     const rssi = ac.rssi != null ? ac.rssi.toFixed(1) : '';
                     // Ground aircraft show gray regardless of their (latched) altitude.
                     const color = ac.on_ground ? '#888888' : acAltColor(ac.alt_baro);
@@ -6002,14 +6093,15 @@ function makeRxEnableEntry() {
                         c[3].textContent = sqwk; c[4].textContent = alt;
                         c[5].textContent = gs; c[6].textContent = hdg;
                         c[7].textContent = lat; c[8].textContent = lon;
-                        c[9].textContent = rssi;
+                        c[9].textContent = rdst; c[10].textContent = rdir;
+                        c[11].textContent = rssi;
                         r.classList.toggle('trail-active', this.selectedHex === ac.hex);
                     } else {
                         const r = document.createElement('tr');
                         r.dataset.hex = ac.hex;
                         r.innerHTML = `<td style="color:${color};font-family:monospace">${ac.hex}</td>` +
                             `<td>${cs}</td><td>${type}</td><td>${sqwk}</td><td>${alt}</td><td>${gs}</td>` +
-                            `<td>${hdg}</td><td>${lat}</td><td>${lon}</td><td>${rssi}</td>`;
+                            `<td>${hdg}</td><td>${lat}</td><td>${lon}</td><td>${rdst}</td><td>${rdir}</td><td>${rssi}</td>`;
                         r.addEventListener('click', () => {
                             if (this.onSelect) this.onSelect(ac.hex);
                         });
@@ -6444,6 +6536,7 @@ function makeRxEnableEntry() {
                 build(v) { return [`AT+PROTOCOL_OUT=CONSOLE,${v.CONSOLE}`]; },
             },
             makeMavlinkIdEntry(),
+            makeFilterDistanceEntry(),
             makeAsterixSacSicEntry(),
             // ── Position ──
             makeRxPositionEntry(),

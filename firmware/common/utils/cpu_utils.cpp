@@ -1,5 +1,12 @@
 #include "cpu_utils.hh"
 
+#ifdef ON_PICO
+#include "hardware/structs/nvic.h"
+#include "hardware/structs/scb.h"
+#include "hardware/structs/systick.h"
+#include "hardware/sync.h"
+#endif
+
 #ifdef ON_ESP32
 temperature_sensor_handle_t CPUMonitor::temp_sensor_handle_ = nullptr;
 bool CPUMonitor::temp_sensor_initialized_ = false;
@@ -75,7 +82,7 @@ void CPUMonitor::ReadCPUUsage(uint8_t& core_0_usage_percent, uint8_t& core_1_usa
     vPortFree(pxTaskStatusArray);
 }
 #else
-void CPUMonitor::Update() {
+bool CPUMonitor::Update() {
     uint32_t current_timestamp_ms = get_time_since_boot_ms();
 
     // Use local copies of last_update_timestamp_ms_ and ticks_since_last_update_ to avoid issues if
@@ -84,7 +91,18 @@ void CPUMonitor::Update() {
     uint32_t ticks_since_last_update = ticks_since_last_update_;
 
     if (delta_time_ms < config_.update_interval_ms) {
-        return;  // Not enough time has passed since the last update.
+        return false;  // Not enough time has passed since the last update.
+    }
+
+    if (config_.use_busy_time) {
+        uint32_t work_us = work_us_;
+        uint32_t isr_us = isr_us_;
+        cpu_usage_percent_ =
+            UsagePercentFromBusyDelta((work_us - last_work_us_) + (isr_us - last_isr_us_), delta_time_ms * kUsPerMs);
+        last_work_us_ = work_us;
+        last_isr_us_ = isr_us;
+        last_update_timestamp_ms_ = current_timestamp_ms;
+        return true;
     }
 
     // Number of ticks that would correspond to 100% CPU usage.
@@ -103,6 +121,59 @@ void CPUMonitor::Update() {
     // Reset the counters.
     ticks_since_last_update_ = 0;
     last_update_timestamp_ms_ = current_timestamp_ms;
+    return true;
+}
+#endif
+
+#ifdef ON_PICO
+namespace {
+constexpr uint16_t kNumTimedExceptions = VTABLE_FIRST_IRQ + NUM_IRQS;
+constexpr uint16_t kSysTickException = 15;
+
+CPUMonitor* timed_monitors[NUM_CORES] = {nullptr};
+irq_handler_t timed_handlers[kNumTimedExceptions] = {nullptr};  // Original handler of each wrapped vector.
+
+void __time_critical_func(timed_exception_handler)() {
+    CPUMonitor* monitor = timed_monitors[get_core_num()];
+    if (monitor == nullptr) {  // Wrapped by the other core but enabled on this one.
+        timed_handlers[__get_current_exception()]();
+        return;
+    }
+    monitor->OnISREnter();
+    timed_handlers[__get_current_exception()]();
+    monitor->OnISRExit();
+}
+}  // namespace
+
+CPUMonitor* CPUMonitor::ThisCore() { return timed_monitors[get_core_num()]; }
+
+void CPUMonitor::TimeInterrupts() {
+    isr_depth_ = 0;  // No interrupt runs on this core in thread mode; one may have been cut off by a core reset.
+    timed_monitors[get_core_num()] = this;
+    irq_handler_t* vtable = reinterpret_cast<irq_handler_t*>(scb_hw->vtor);
+    uint64_t enabled = static_cast<uint64_t>(nvic_hw->iser) << VTABLE_FIRST_IRQ;  // This core's NVIC.
+    if (systick_hw->csr & M0PLUS_SYST_CSR_TICKINT_BITS) {
+        enabled |= 1ull << kSysTickException;
+    }
+    for (uint16_t exception = kSysTickException; exception < kNumTimedExceptions; exception++) {
+        if (!(enabled & (1ull << exception)) || vtable[exception] == timed_exception_handler) {
+            continue;
+        }
+        timed_handlers[exception] = vtable[exception];
+        __dmb();  // The original handler must be in place before the wrapper can run.
+        vtable[exception] = timed_exception_handler;
+        timed_exceptions_ |= 1ull << exception;
+    }
+}
+
+void CPUMonitor::StopTimingInterrupts() {
+    irq_handler_t* vtable = reinterpret_cast<irq_handler_t*>(scb_hw->vtor);
+    for (uint16_t exception = kSysTickException; exception < kNumTimedExceptions; exception++) {
+        if ((timed_exceptions_ & (1ull << exception)) && vtable[exception] == timed_exception_handler) {
+            vtable[exception] = timed_handlers[exception];
+        }
+    }
+    timed_exceptions_ = 0;
 }
 #endif
 

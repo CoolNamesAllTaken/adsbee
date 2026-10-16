@@ -51,6 +51,23 @@ static inline const char* ModeSAddressTypeToStr(ModeSAircraft::AddressType type)
 }
 
 /**
+ * Appends readsb's "r_dst" (distance from the receiver, nautical miles) and "r_dir" (bearing from the receiver,
+ * degrees) when the aircraft's distance is known.
+ * @retval New length of buf, clamped to max.
+ */
+inline int16_t AppendAircraftJSONDistanceAndBearing(char buf[], int16_t n, int16_t max, const Aircraft& aircraft) {
+    if (aircraft.distance_m == Aircraft::kDistanceUnknown) {
+        return n;
+    }
+    uint32_t distance_milli_nm = static_cast<uint32_t>((static_cast<uint64_t>(aircraft.distance_m) * 1000 + 926) / 1852);
+    uint32_t bearing_decideg = ((static_cast<uint32_t>(aircraft.bearing_bam16) * 3600 + 32768) >> 16) % 3600;
+    n += snprintf(buf + n, max - n, ",\"r_dst\":%lu.%03lu,\"r_dir\":%lu.%lu", (unsigned long)(distance_milli_nm / 1000),
+                  (unsigned long)(distance_milli_nm % 1000), (unsigned long)(bearing_decideg / 10),
+                  (unsigned long)(bearing_decideg % 10));
+    return n < max ? n : max;
+}
+
+/**
  * Serializes a ModeSAircraft to a single-line readsb-compatible JSON object.
  * @param[out] buf Character array of at least kAircraftJSONMessageStrMaxLen bytes.
  * @param[in] aircraft Aircraft to serialize.
@@ -104,6 +121,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                       aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_baro
     if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid)) {
@@ -307,6 +325,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                       aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_baro
     if (aircraft.HasBitFlag(UATAircraft::kBitFlagBaroAltitudeValid)) {
@@ -472,6 +491,7 @@ inline int16_t WriteAircraftJSONRemoteIDAircraftStr(char buf[], const RemoteIDAi
         n += snprintf(buf + n, max - n, ",\"lat\":%.5f,\"lon\":%.5f", aircraft.latitude_deg, aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_geom (geometric / WGS84 altitude)
     if (aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagGNSSAltitudeValid)) {
@@ -540,29 +560,60 @@ inline int16_t WriteAircraftJSONRemoteIDAircraftStr(char buf[], const RemoteIDAi
 }
 
 /**
- * Serializes aircraft for the Live Map websocket as JSON arrays of whole objects, passing each array to
- * emit(const char* buf, uint16_t len). Only the preferred entry per ICAO address is sent (one target per aircraft).
- * @param[in] dictionary Aircraft dictionary to serialize.
- * @param[in] timestamp_ms Current local time (get_time_since_boot_ms()), for preference and "seen_pos".
- * @param[in] buf Scratch buffer for one array; each emitted array fits in buf_len bytes.
- * @param[in] buf_len Length of buf. Must hold at least one aircraft object plus the brackets.
- * @param[in] emit Called once per array.
+ * Lists the aircraft the Live Map websocket reports: the preferred entry per ICAO address (one target per aircraft),
+ * minus those the distance filter (AT+FILTER_DISTANCE_NM) leaves out. Aircraft at an unknown distance are kept.
+ * @param[in] dictionary Aircraft dictionary to list.
+ * @param[in] timestamp_ms Current local time (get_time_since_boot_ms()), for preference.
+ * @param[out] uids UIDs of the aircraft to report.
+ * @param[in] max_uids Length of uids.
+ * @param[in] filter_distance_m Settings::FilterDistanceMeters(): largest distance to report, 0 for no filter.
+ * @retval Number of UIDs written.
  */
-template <typename EmitFn>
-inline void WriteAircraftJSONLiveMapArrays(const AircraftDictionary& dictionary, uint32_t timestamp_ms, char buf[],
-                                           uint16_t buf_len, EmitFn emit) {
+inline uint16_t ListAircraftJSONLiveMapUIDs(const AircraftDictionary& dictionary, uint32_t timestamp_ms,
+                                            uint32_t uids[], uint16_t max_uids, uint32_t filter_distance_m = 0) {
+    uint16_t num_uids = 0;
+    for (const auto& itr : dictionary.dict) {
+        if (num_uids >= max_uids) {
+            break;
+        }
+        if (dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms) &&
+            !std::visit([filter_distance_m](const Aircraft& a) { return a.IsBeyondDistance(filter_distance_m); },
+                        itr.second)) {
+            uids[num_uids++] = itr.first;
+        }
+    }
+    return num_uids;
+}
+
+/**
+ * Serializes the next Live Map JSON array: whole aircraft objects from uids[next] on, until buf is full. UIDs no
+ * longer in the dictionary are skipped, so the list can be written out over several calls while the dictionary
+ * changes.
+ * @param[in] dictionary Aircraft dictionary to serialize from.
+ * @param[in] timestamp_ms Current local time (get_time_since_boot_ms()), for "seen_pos".
+ * @param[in] uids UIDs from ListAircraftJSONLiveMapUIDs().
+ * @param[in] num_uids Number of UIDs in uids.
+ * @param[in,out] next Index of the next UID to write; advanced past the UIDs written or skipped.
+ * @param[out] buf Buffer for the array.
+ * @param[in] buf_len Length of buf. Must hold at least one aircraft object plus the brackets.
+ * @retval Length of the array in buf, or 0 once no aircraft remain.
+ */
+inline uint16_t WriteAircraftJSONLiveMapArray(const AircraftDictionary& dictionary, uint32_t timestamp_ms,
+                                              const uint32_t uids[], uint16_t num_uids, uint16_t& next, char buf[],
+                                              uint16_t buf_len) {
     char json_buf[kAircraftJSONMessageStrMaxLen];
     uint16_t len_used = 0;
-    for (const auto& itr : dictionary.dict) {
-        if (!dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
-            continue;  // Another entry is reported for this ICAO address.
+    for (; next < num_uids; next++) {
+        auto itr = dictionary.dict.find(uids[next]);
+        if (itr == dictionary.dict.end()) {
+            continue;  // Removed since the list was made.
         }
         int16_t len = -1;
-        if (const ModeSAircraft* ac = std::get_if<ModeSAircraft>(&itr.second); ac) {
+        if (const ModeSAircraft* ac = std::get_if<ModeSAircraft>(&itr->second); ac) {
             len = WriteAircraftJSONModeSAircraftStr(json_buf, *ac, timestamp_ms);
-        } else if (const UATAircraft* ac = std::get_if<UATAircraft>(&itr.second); ac) {
+        } else if (const UATAircraft* ac = std::get_if<UATAircraft>(&itr->second); ac) {
             len = WriteAircraftJSONUATAircraftStr(json_buf, *ac, timestamp_ms);
-        } else if (const RemoteIDAircraft* ac = std::get_if<RemoteIDAircraft>(&itr.second); ac) {
+        } else if (const RemoteIDAircraft* ac = std::get_if<RemoteIDAircraft>(&itr->second); ac) {
             len = WriteAircraftJSONRemoteIDAircraftStr(json_buf, *ac);
         }
         if (len <= 0 || len + 2 > buf_len) {
@@ -570,9 +621,7 @@ inline void WriteAircraftJSONLiveMapArrays(const AircraftDictionary& dictionary,
         }
         // "[" or "," before the object, "]" after the array.
         if (len_used > 0 && len_used + 1 + len + 1 > buf_len) {
-            buf[len_used++] = ']';
-            emit(buf, len_used);
-            len_used = 0;
+            break;  // Starts the next array.
         }
         char separator = len_used == 0 ? '[' : ',';
         buf[len_used++] = separator;
@@ -581,6 +630,6 @@ inline void WriteAircraftJSONLiveMapArrays(const AircraftDictionary& dictionary,
     }
     if (len_used > 0) {
         buf[len_used++] = ']';
-        emit(buf, len_used);
     }
+    return len_used;
 }

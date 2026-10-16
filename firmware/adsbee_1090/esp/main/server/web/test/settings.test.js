@@ -42,9 +42,9 @@ global.document = new FakeDocument();
 global.confirm = () => true;
 const { SettingsEngine, SETTINGS_SCHEMA_1090 } = require('../settings.js');
 
-// The AT+SETTINGS?JSON line from an ADSBee 1090 running 0.9.1-rc8.
+// The AT+SETTINGS?JSON line from an ADSBee 1090 running 0.9.1-rc9.
 const DUMP = 'SETTINGS={"ASTERIX_SAC_SIC":[0,0],"AUTO_UPDATE":[0],"BAUD_RATE":[115207,9600],"BIAS_TEE_ENABLE":[0,0],"ETHERNET":[1],"ESP32_ENABLE":[1],' +
-    '"FEED_ENABLE":[1],"GNSS":[0,"NONE",0],"HOSTNAME":["test-bee"],"IP_MODE":["DUAL"],"LED_ENABLE":[1],"LOG_LEVEL":["WARNINGS"],' +
+    '"FEED_ENABLE":[1],"FILTER_DISTANCE_NM":[0,100.0],"GNSS":[0,"NONE",0],"HOSTNAME":["test-bee"],"IP_MODE":["DUAL"],"LED_ENABLE":[1],"LOG_LEVEL":["WARNINGS"],' +
     '"MAVLINK_ID":[1,156],"NTP_SERVER":["pool.ntp.org"],"PROTOCOL_OUT":["NONE","NONE"],"REMOTE_ID":[0,7,"0x00"],' +
     '"REMOTE_ID_TX":[0,7,"",1,2,"","0x0000"],"RX_ENABLE":[1,1],' +
     '"RX_POSITION":["LOWEST","OK",37.000000,-122.000000,-50,125,317.7,74,"000000"],"SUBG_ENABLE":["1"],' +
@@ -189,6 +189,28 @@ test('a save writes the changed setting, persists, and re-reads through the dump
     assert.deepStrictEqual(t.sent, ['AT+SETTINGS?JSON', 'AT+HOSTNAME=new-bee', 'AT+SETTINGS=SAVE', 'AT+SETTINGS?JSON']);
     assert.strictEqual(engine.deviceValues.HOSTNAME.hostname, 'new-bee');
     assert.strictEqual(engine.dirtyEntries().length, 0);
+});
+
+test('the distance filter loads from the dump and saves enable and distance in nm', async () => {
+    const t = makeTransport((cmd) => {
+        if (cmd === 'AT+SETTINGS?JSON') return [DUMP];
+        if (cmd === 'AT+FILTER_DISTANCE_NM=1,35.5' || cmd === 'AT+SETTINGS=SAVE') return [];
+        throw new Error(`unexpected ${cmd}`);
+    });
+    const engine = makeEngine(t);
+    await engine.refresh();
+    assert.strictEqual(input('FILTER_DISTANCE_NM', 'en').checked, false);
+    assert.strictEqual(input('FILTER_DISTANCE_NM', 'nm').value, '100');
+    assert.strictEqual(input('FILTER_DISTANCE_NM', 'nm').step, 0.1);
+
+    input('FILTER_DISTANCE_NM', 'nm').value = '0';  // Below 0.1 nm: caught before anything is written.
+    input('FILTER_DISTANCE_NM', 'en').checked = true;
+    await engine.save();
+    assert.deepStrictEqual(t.sent, ['AT+SETTINGS?JSON']);
+
+    input('FILTER_DISTANCE_NM', 'nm').value = '35.5';
+    await engine.save();
+    assert.deepStrictEqual(t.sent.slice(1, 3), ['AT+FILTER_DISTANCE_NM=1,35.5', 'AT+SETTINGS=SAVE']);
 });
 
 test('a save whose re-read fails still reports the save', async () => {

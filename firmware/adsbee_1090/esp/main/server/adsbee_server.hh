@@ -41,6 +41,8 @@ class ADSBeeServer {
     static const uint32_t kRawPacketProcessingIntervalMs = 200;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
     static const uint32_t kAircraftJSONReportingIntervalMs = 1000;
+    // Update() pass time spent on /aircraft frames, so a large report doesn't hold off draining the packet in-queues.
+    static const uint32_t kAircraftJSONPassBudgetUs = 20000;
     // RP2040 metrics older than this are stale and are dropped from the metrics message.
     static const uint32_t kRP2040MetricsStaleTimeoutMs = 3000;
 
@@ -175,7 +177,8 @@ class ADSBeeServer {
     void SendNetworkMetricsMessage();
 
     /**
-     * Broadcasts one JSON object per tracked aircraft to all connected /aircraft websocket clients.
+     * Broadcasts the next frames of the aircraft JSON report to all connected /aircraft websocket clients, until the
+     * report is done or the pass budget is used up.
      */
     void SendAircraftJSONMessages();
 
@@ -215,6 +218,10 @@ class ADSBeeServer {
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
     uint32_t last_aircraft_json_report_timestamp_ms_ = 0;
+    // Aircraft JSON report in progress: the aircraft to send and the next one.
+    uint32_t aircraft_json_uids_[kAircraftDictionaryMaxNumAircraft];
+    uint16_t aircraft_json_num_uids_ = 0;
+    uint16_t aircraft_json_next_uid_ = 0;
     uint32_t last_rp2040_metrics_timestamp_ms_ = 0;
     uint32_t last_http_session_sweep_timestamp_ms_ = 0;
 };

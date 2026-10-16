@@ -12,6 +12,7 @@
 #endif
 
 #ifdef ON_PICO
+#include "cpu_utils.hh"
 #include "hal.hh"
 #elif defined(ON_coprocessor)
 #include "adsbee_server.hh"
@@ -378,6 +379,9 @@ bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t* objec
     }
     const bool quiet = link_gate_.IsDown();
     spi_write_in_progress = true;
+#ifdef ON_PICO
+    CPUMonitor::WorkScope work;  // Counts the whole exchange as core load, including waits for the slave.
+#endif
 
     write_packet.cmd = require_ack ? ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck
                                    : ObjectDictionary::SCCommand::kCmdWriteToSlave;
@@ -438,6 +442,9 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object
     }
     const bool quiet = link_gate_.IsDown();
     spi_read_in_progress = true;
+#ifdef ON_PICO
+    CPUMonitor::WorkScope work;  // Counts the whole exchange as core load, including waits for the slave.
+#endif
 
     read_request_packet.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;
 

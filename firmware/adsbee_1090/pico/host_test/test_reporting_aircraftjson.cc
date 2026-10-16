@@ -582,6 +582,19 @@ TEST(AircraftJSON, LinkAndSeenPos) {
     EXPECT_EQ(GetJSONValue(std::string_view(buf), "seen_pos"), "");
 }
 
+// Writes a whole Live Map report the way the ESP32 does, one array per call.
+static std::vector<std::string> WriteLiveMapReport(const AircraftDictionary& dictionary, uint32_t timestamp_ms,
+                                                   char buf[], uint16_t buf_len) {
+    uint32_t uids[kAircraftDictionaryMaxNumAircraft];
+    uint16_t num_uids = ListAircraftJSONLiveMapUIDs(dictionary, timestamp_ms, uids, kAircraftDictionaryMaxNumAircraft);
+    std::vector<std::string> arrays;
+    uint16_t next = 0;
+    while (uint16_t len = WriteAircraftJSONLiveMapArray(dictionary, timestamp_ms, uids, num_uids, next, buf, buf_len)) {
+        arrays.emplace_back(buf, len);
+    }
+    return arrays;
+}
+
 // The Live Map (/aircraft) gets one record per ICAO address, the preferred source, in whole-object JSON arrays.
 TEST_F(PreferredReportForAddress, LiveMapArraysHaveOneRecordPerAddress) {
     AddModeS(true, 1000);                                              // a41090 direct 1090ES: preferred.
@@ -591,10 +604,8 @@ TEST_F(PreferredReportForAddress, LiveMapArraysHaveOneRecordPerAddress) {
     other->WriteBitFlag(UATAircraft::BitFlag::kBitFlagPositionValid, true);  // TIS-B only: reported as TIS-B.
     other->last_position_update_ms = kNowMs - 20000;
 
-    std::vector<std::string> arrays;
-    char buf[4000];  // WebSocketServer::kWebSocketMessageMaxLen on the ESP32.
-    WriteAircraftJSONLiveMapArrays(dictionary, kNowMs, buf, sizeof(buf),
-                                   [&](const char* b, uint16_t len) { arrays.emplace_back(b, len); });
+    char buf[4000];
+    std::vector<std::string> arrays = WriteLiveMapReport(dictionary, kNowMs, buf, sizeof(buf));
     ASSERT_EQ(arrays.size(), 1u);
     const std::string& a = arrays[0];
     EXPECT_EQ(a.front(), '[');
@@ -618,10 +629,8 @@ TEST_F(PreferredReportForAddress, LiveMapArraysSplitAtObjectBoundaries) {
         ac->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
         ac->last_position_update_ms = kNowMs;
     }
-    std::vector<std::string> arrays;
     char buf[1000];
-    WriteAircraftJSONLiveMapArrays(dictionary, kNowMs, buf, sizeof(buf),
-                                   [&](const char* b, uint16_t len) { arrays.emplace_back(b, len); });
+    std::vector<std::string> arrays = WriteLiveMapReport(dictionary, kNowMs, buf, sizeof(buf));
     EXPECT_GT(arrays.size(), 1u);
     size_t records = 0;
     for (const std::string& a : arrays) {
@@ -631,4 +640,94 @@ TEST_F(PreferredReportForAddress, LiveMapArraysSplitAtObjectBoundaries) {
         for (size_t pos = a.find("\"hex\""); pos != std::string::npos; pos = a.find("\"hex\"", pos + 1)) records++;
     }
     EXPECT_EQ(records, 40u);
+}
+
+TEST(AircraftJSON, DistanceAndBearingFromReceiver) {
+    char buf[kAircraftJSONMessageStrMaxLen];
+    ModeSAircraft mode_s(0xA41090);
+    mode_s.WriteBitFlag(ModeSAircraft::kBitFlagPositionValid, true);
+    ASSERT_GT(WriteAircraftJSONModeSAircraftStr(buf, mode_s), 0);
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dst"), "");  // Unknown distance: left out.
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dir"), "");
+
+    mode_s.distance_m = 84585;      // 45.672 nm.
+    mode_s.bearing_bam16 = 0xFFFF;  // 359.995 deg rounds to 0.0.
+    ASSERT_GT(WriteAircraftJSONModeSAircraftStr(buf, mode_s), 0);
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dst"), "45.672");
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dir"), "0.0");
+
+    UATAircraft uat(0xA41090);
+    uat.WriteBitFlag(UATAircraft::kBitFlagPositionValid, true);
+    uat.distance_m = 926;           // 0.5 nm.
+    uat.bearing_bam16 = 0x4000;     // 90 deg.
+    ASSERT_GT(WriteAircraftJSONUATAircraftStr(buf, uat), 0);
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dst"), "0.500");
+    EXPECT_EQ(GetJSONValue(std::string_view(buf), "r_dir"), "90.0");
+}
+
+// The Live Map list leaves out aircraft beyond the distance filter and keeps those at an unknown distance.
+TEST_F(PreferredReportForAddress, LiveMapListAppliesDistanceFilter) {
+    ModeSAircraft* near = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00001));
+    near->distance_m = 10000;
+    ModeSAircraft* far = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00002));
+    far->distance_m = 90000;
+    dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00003));  // Unknown distance.
+
+    for (uint32_t filter_distance_m : {0u, 50000u}) {
+        uint32_t uids[kAircraftDictionaryMaxNumAircraft];
+        uint16_t num_uids =
+            ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, kAircraftDictionaryMaxNumAircraft, filter_distance_m);
+        std::string all;
+        char buf[4000];
+        uint16_t next = 0, len;
+        while ((len = WriteAircraftJSONLiveMapArray(dictionary, kNowMs, uids, num_uids, next, buf, sizeof(buf))) > 0) {
+            all.append(buf, len);
+        }
+        EXPECT_NE(all.find("\"hex\":\"b00001\""), std::string::npos);
+        EXPECT_EQ(all.find("\"hex\":\"b00002\"") != std::string::npos, filter_distance_m == 0);
+        EXPECT_NE(all.find("\"hex\":\"b00003\""), std::string::npos);
+    }
+}
+
+// A report written over several calls skips aircraft removed since it started and sends the rest once each.
+TEST_F(PreferredReportForAddress, LiveMapReportSkipsRemovedAircraft) {
+    for (uint32_t i = 0; i < 40; i++) {
+        ModeSAircraft* ac = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00000 + i));
+        ac->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+        ac->last_position_update_ms = kNowMs;
+    }
+    uint32_t uids[kAircraftDictionaryMaxNumAircraft];
+    uint16_t num_uids = ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, kAircraftDictionaryMaxNumAircraft);
+    ASSERT_EQ(num_uids, 40u);
+    char buf[1000];
+    uint16_t next = 0;
+    std::string report;
+    uint16_t len = WriteAircraftJSONLiveMapArray(dictionary, kNowMs, uids, num_uids, next, buf, sizeof(buf));
+    ASSERT_GT(len, 0u);
+    report.append(buf, len);
+    ASSERT_LT(next, num_uids);
+    uint32_t removed_uid = uids[num_uids - 1];
+    ASSERT_TRUE(dictionary.RemoveAircraft(removed_uid));
+    while ((len = WriteAircraftJSONLiveMapArray(dictionary, kNowMs, uids, num_uids, next, buf, sizeof(buf))) > 0) {
+        EXPECT_LE(len, sizeof(buf));
+        report.append(buf, len);
+    }
+    EXPECT_EQ(next, num_uids);
+    size_t records = 0;
+    for (size_t pos = report.find("\"hex\""); pos != std::string::npos; pos = report.find("\"hex\"", pos + 1)) {
+        records++;
+    }
+    EXPECT_EQ(records, 39u);
+    char removed_hex[16];
+    snprintf(removed_hex, sizeof(removed_hex), "\"%06x\"", Aircraft::UIDToICAOAddress(removed_uid));
+    EXPECT_EQ(report.find(removed_hex), std::string::npos);
+}
+
+// The list stops at its capacity.
+TEST_F(PreferredReportForAddress, LiveMapUIDListCapped) {
+    for (uint32_t i = 0; i < 10; i++) {
+        dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00000 + i));
+    }
+    uint32_t uids[4];
+    EXPECT_EQ(ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, 4), 4u);
 }
