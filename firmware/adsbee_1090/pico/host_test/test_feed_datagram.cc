@@ -36,6 +36,8 @@ TEST(FeedDatagram, BeastSplitsBeforeFrameStartsOnly) {
     EXPECT_EQ(datagrams[0].size(), 16u);  // f1 + f2
     EXPECT_EQ(datagrams[1], f3);
 
+    EXPECT_EQ(Split(SettingsManager::kMLAT, buf, 17), datagrams);
+
     datagrams = Split(SettingsManager::kBeastNoUAT, buf, 8);
     ASSERT_EQ(datagrams.size(), 3u);
     EXPECT_EQ(datagrams[1], f2);

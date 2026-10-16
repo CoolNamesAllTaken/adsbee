@@ -118,6 +118,9 @@ void CommsManager::FeedMQTTEventHandler(uint16_t feed_index, int32_t event_id, e
             char status_topic[kMQTTTopicMaxLen + 1];
             FeedMQTTTopic(feed_index, "status", status_topic, sizeof(status_topic));
             esp_mqtt_client_enqueue(event->client, status_topic, "online", 0, 1, 1, true);
+            if (settings_manager.settings.feed_protocols[feed_index] == SettingsManager::kMLAT) {
+                RestartMLATReceiverInfo(feed_index);  // The next report starts with a receiver info frame.
+            }
             feed_sock_is_connecting_[feed_index] = false;
             feed_sock_is_connected_[feed_index] = true;
             CONSOLE_INFO("CommsManager::FeedMQTTEventHandler", "Feed %d connected to MQTT broker %s.", feed_index,

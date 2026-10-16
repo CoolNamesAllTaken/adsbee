@@ -550,6 +550,9 @@ bool CommsManager::ConnectFeedUDP(uint16_t feed_index) {
     }
     feed_sock_[feed_index] = sock;
     feed_sock_is_connected_[feed_index] = true;
+    if (settings_manager.settings.feed_protocols[feed_index] == SettingsManager::kMLAT) {
+        RestartMLATReceiverInfo(feed_index);  // The next report starts with a receiver info frame.
+    }
     CONSOLE_INFO("CommsManager::IPWANTask", "Feed %d sends UDP datagrams to %s:%d.", feed_index, uri, port);
     return true;
 }
