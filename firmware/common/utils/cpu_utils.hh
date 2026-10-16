@@ -38,7 +38,7 @@ class CPUMonitor {
         uint32_t full_usage_update_frequency_hz =
             100;                             // If the loop slows down to this frequency or lower, CPU usage is 100%.
         uint32_t update_interval_ms = 1000;  // Interval at which to update CPU usage percentage.
-        bool use_busy_time = false;          // Usage from BeginPass()/EndPass() and the ISR hooks instead of Tick().
+        bool use_busy_time = false;          // Usage from work regions and interrupt time instead of Tick().
 #endif
     };
 
@@ -90,28 +90,43 @@ class CPUMonitor {
      */
     inline void Tick() { ticks_since_last_update_++; }
 
-    // Busy time mode: usage is (loop passes that did work + interrupt handlers) / elapsed time. Call these only on the
-    // monitored core; Update() may run on the other core.
+    // Busy time mode: usage is (work regions + interrupt handlers) / elapsed time. Call these only on the monitored
+    // core; Update() may run on the other core.
 
-    /** Starts timing a loop pass. */
-    inline void BeginPass() {
-        pass_start_us_ = NowUs();
-        pass_start_isr_us_ = isr_us_;
-        pass_did_work_ = false;
+    /** Starts a work region. Nested regions count once. */
+    inline void BeginWork() {
+        if (work_depth_++ == 0) {
+            work_start_us_ = NowUs();
+            work_start_isr_us_ = isr_us_;
+        }
     }
 
-    /** Marks the current loop pass as useful work. */
-    inline void MarkWork() { pass_did_work_ = true; }
-
-    /** Ends a loop pass: adds its time, minus interrupts already counted, if it did work. */
-    inline void EndPass() {
-        if (!pass_did_work_) {
+    /** Ends a work region: adds its time, minus interrupts already counted, unless discarded. */
+    inline void EndWork(bool counted = true) {
+        if (--work_depth_ != 0 || !counted) {
             return;
         }
-        uint32_t isr_us = isr_us_ - pass_start_isr_us_;
-        uint32_t pass_us = NowUs() - pass_start_us_;
-        work_us_ += pass_us > isr_us ? pass_us - isr_us : 0;
+        uint32_t isr_us = isr_us_ - work_start_isr_us_;
+        uint32_t region_us = NowUs() - work_start_us_;
+        work_us_ += region_us > isr_us ? region_us - isr_us : 0;
     }
+
+    /** Times its own scope as a work region. Without a monitor, uses the calling core's (see TimeInterrupts()). */
+    class WorkScope {
+       public:
+        explicit WorkScope(CPUMonitor& monitor) : monitor_(&monitor) { monitor_->BeginWork(); }
+#ifdef ON_PICO
+        WorkScope() : monitor_(ThisCore()) {
+            if (monitor_) monitor_->BeginWork();
+        }
+#endif
+        ~WorkScope() {
+            if (monitor_) monitor_->EndWork();
+        }
+
+       private:
+        CPUMonitor* monitor_;
+    };
 
     /** Interrupt entry and exit hooks. Only the outermost of nested interrupts is timed. */
     CPU_MONITOR_INLINE void OnISREnter() {
@@ -129,9 +144,13 @@ class CPUMonitor {
 #ifdef ON_PICO
     /**
      * Times the interrupts enabled on the calling core (and its SysTick) through OnISREnter() / OnISRExit(), by
-     * pointing their vector table entries at a timing wrapper. Repeat calls pick up newly enabled interrupts.
+     * pointing their vector table entries at a timing wrapper, and makes this the calling core's monitor. Repeat calls
+     * pick up newly enabled interrupts.
      */
     void TimeInterrupts();
+
+    /** The calling core's monitor, nullptr before its TimeInterrupts(). */
+    static CPUMonitor* ThisCore();
 
     /** Restores the vector table entries wrapped by TimeInterrupts(), so their handlers can be set again. */
     void StopTimingInterrupts();
@@ -146,7 +165,7 @@ class CPUMonitor {
 
     /**
      * Returns the CPU usage as a percentage (0-100%) over the last interval. In busy time mode, the share of time spent
-     * in loop passes that did work and in interrupts. Otherwise estimated from the loop tick rate: the configured idle
+     * in work regions and in interrupts. Otherwise estimated from the loop tick rate: the configured idle
      * tick count is 0%, the full usage loop frequency is 100%.
      * @retval CPU usage percentage (0-100%).
      */
@@ -183,9 +202,9 @@ class CPUMonitor {
     uint32_t last_work_us_ = 0;
     uint32_t last_isr_us_ = 0;
 
-    uint32_t pass_start_us_ = 0;
-    uint32_t pass_start_isr_us_ = 0;
-    bool pass_did_work_ = false;
+    uint32_t work_depth_ = 0;
+    uint32_t work_start_us_ = 0;
+    uint32_t work_start_isr_us_ = 0;
     uint32_t isr_depth_ = 0;
     uint32_t isr_start_us_ = 0;
 

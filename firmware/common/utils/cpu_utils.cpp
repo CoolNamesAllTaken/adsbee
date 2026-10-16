@@ -145,6 +145,8 @@ void __time_critical_func(timed_exception_handler)() {
 }
 }  // namespace
 
+CPUMonitor* CPUMonitor::ThisCore() { return timed_monitors[get_core_num()]; }
+
 void CPUMonitor::TimeInterrupts() {
     isr_depth_ = 0;  // No interrupt runs on this core in thread mode; one may have been cut off by a core reset.
     timed_monitors[get_core_num()] = this;

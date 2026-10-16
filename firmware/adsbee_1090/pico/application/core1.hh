@@ -21,7 +21,7 @@ inline void main_core1() {
     core_1_monitor.TimeInterrupts();
 
     while (true) {
-        core_1_monitor.BeginPass();
+        core_1_monitor.BeginWork();  // Counted only if the pass demodulated or decoded something.
 #ifdef ISRS_ON_CORE1
         // Core 0 may try to toggle the 1090 receiver on and off. Keep an eye on it and turn it on and off here, since
         // it can't be toggle from core 0 without accidentally duplicating all the ISR stuff on that core.
@@ -32,11 +32,9 @@ inline void main_core1() {
 #ifdef HARDWARE_UNIT_TESTS
         RunPendingTestFunctionOnCore1();  // Lets hardware unit tests read core 1 state, e.g. its SysTick.
 #endif
-        if (adsbee.DemodulateCaptures() || decoder.raw_mode_s_packet_in_queue.Length() > 0) {
-            core_1_monitor.MarkWork();
-        }
+        bool did_work = adsbee.DemodulateCaptures() || decoder.raw_mode_s_packet_in_queue.Length() > 0;
         decoder.UpdateDecoderLoop();
-        core_1_monitor.EndPass();
+        core_1_monitor.EndWork(did_work);
     }
 }
 

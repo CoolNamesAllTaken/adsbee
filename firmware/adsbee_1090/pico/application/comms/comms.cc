@@ -8,8 +8,6 @@
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 
-extern CPUMonitor core_0_monitor;
-
 static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kConsole,
                                                            SettingsManager::SerialInterface::kCommsUART};
 static const uint16_t kNumReportingSinks = sizeof(kReportingSinks) / sizeof(CommsManager::ReportSink);
@@ -44,7 +42,7 @@ bool CommsManager::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - last_raw_report_check_timestamp_ms_ > kRawReportingCheckIntervalMs) {
         last_raw_report_check_timestamp_ms_ = timestamp_ms;  // Proceed with update and record timestamp.
-        core_0_monitor.MarkWork();
+        CPUMonitor::WorkScope work;
 
         // Calculate how much buffer space the current packets would need.
         uint16_t required_buffer_len = CompositeArray::CalculateRawPacketsBufferLength(
@@ -162,7 +160,7 @@ int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const cha
 int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const char* format, va_list args) {
     char buf[kPrintfBufferMaxSize];
 
-    core_0_monitor.MarkWork();
+    CPUMonitor::WorkScope work;
     // Formatted print to buffer.
     int res = vsnprintf(buf, kPrintfBufferMaxSize, format, args);
     if (res <= 0) {

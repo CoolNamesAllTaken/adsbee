@@ -6,8 +6,6 @@
 #include "cpu_utils.hh"
 #include "hal.hh"               // For get_time_since_boot_ms().
 
-extern CPUMonitor core_0_monitor;
-
 void GNSSReceiver::ClaimUart() {
     // Bring the GNSS UART up to a known state. uart0 is shared with the ESP32 flasher (GPIO 16/17),
     // which calls uart_deinit(uart0) when it finishes; claim the GNSS pins (GPIO 0/1) and
@@ -171,7 +169,7 @@ bool GNSSReceiver::Update() {
     // Drain all currently available bytes from the GNSS UART.
     char c;
     while (ReadBufferedByte(c)) {
-        core_0_monitor.MarkWork();
+        CPUMonitor::WorkScope work;
         NMEAParser::SentenceType result = parser_.IngestByte(c);
         // TEMPORARY: also feed the byte to the receiver-specific binary sniffer (UBX for ublox).
         DebugIngestByte(c);

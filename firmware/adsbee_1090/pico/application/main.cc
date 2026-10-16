@@ -38,7 +38,7 @@ EEPROM eeprom = EEPROM({});
 // out which board configuration we should load (settings in flash, or settings in EEPROM).
 BSP bsp = BSP(eeprom.Init());
 
-// Core load is the time of loop passes that did work plus interrupt time.
+// Core load is the time of work regions plus interrupt time.
 CPUMonitor core_0_monitor =
     CPUMonitor({.update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs, .use_busy_time = true});
 CPUMonitor core_1_monitor =
@@ -225,7 +225,6 @@ int main() {
     core_0_monitor.TimeInterrupts();
     while (true) {
         // Loop forever.
-        core_0_monitor.BeginPass();
         if (core_0_monitor.Update()) {
             core_0_monitor.TimeInterrupts();  // Picks up interrupts enabled since, e.g. the GNSS UART.
         }
@@ -264,6 +263,5 @@ int main() {
             adsbee.PokeWatchdog();
         }
 #endif
-        core_0_monitor.EndPass();
     }
 }

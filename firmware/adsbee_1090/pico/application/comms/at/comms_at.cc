@@ -32,8 +32,6 @@
 // #include "printf.h" // for using custom printf defined in printf.h
 #include <cstdio>  // for using regular printf
 
-extern CPUMonitor core_0_monitor;
-
 // This is intended to stop people from accidentally modifying serial number information on their device.
 const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;
 // Polling interval during OTA update. Faster than the normal ESP32 heartbeat for better transfer bandwidth.
@@ -2296,7 +2294,7 @@ bool CommsManager::UpdateAT() {
     // Check for new AT commands from STDIO.
     int ci = getchar_timeout_us(0);
     while (ci != PICO_ERROR_TIMEOUT) {
-        core_0_monitor.MarkWork();
+        CPUMonitor::WorkScope work;
         switch (stdio_at_line_.Push(static_cast<char>(ci), get_time_since_boot_ms())) {
             case ATLineAssembler<kATCommandBufMaxLen>::kLine:
                 at_parser_.ParseMessage(stdio_at_line_.line());
@@ -2320,7 +2318,7 @@ bool CommsManager::UpdateAT() {
         // Receive incoming network console characters.
         char c;
         while (!at_console_guard_.PayloadInProgress() && esp32_console_rx_queue.Dequeue(c)) {
-            core_0_monitor.MarkWork();
+            CPUMonitor::WorkScope work;
             switch (network_at_line_.Push(c, get_time_since_boot_ms())) {
                 case ATLineAssembler<kATCommandBufMaxLen>::kLine:
                     CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %.*s\r\n",

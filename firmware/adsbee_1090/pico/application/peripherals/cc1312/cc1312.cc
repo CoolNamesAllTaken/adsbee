@@ -7,8 +7,6 @@
 #include "crc.hh"  // For IEEE 802.3 CRC32 calculation.
 #include "hal.hh"
 
-extern CPUMonitor core_0_monitor;
-
 const CC1312::SPIPeripheralConfig kDefaultSPIPeripheralConfig;  // use defaults
 const CC1312::SPIPeripheralConfig kBootloaderSPIPeripheralConfig = {
     .bits_per_transfer = 8,
@@ -713,7 +711,7 @@ void CC1312::SPIEndTransaction() {
 int CC1312::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes, bool end_transaction) {
     int bytes_written = 0;
 
-    core_0_monitor.MarkWork();
+    CPUMonitor::WorkScope work;
     SPIBeginTransaction();
 
     if (tx_buf == nullptr) {

@@ -63,9 +63,9 @@ class CPUMonitorBusyTime : public ::testing::Test {
         monitor.Update();  // Starts the first interval.
     }
 
-    // One loop pass of pass_us, with an interrupt of isr_us in the middle.
+    // One loop pass of pass_us timed as a work region, with an interrupt of isr_us in the middle.
     void Pass(uint32_t pass_us, bool did_work, uint32_t isr_us = 0) {
-        monitor.BeginPass();
+        monitor.BeginWork();
         inc_time_since_boot_us((pass_us - isr_us) / 2);
         if (isr_us > 0) {
             monitor.OnISREnter();
@@ -73,10 +73,7 @@ class CPUMonitorBusyTime : public ::testing::Test {
             monitor.OnISRExit();
         }
         inc_time_since_boot_us(pass_us - isr_us - (pass_us - isr_us) / 2);
-        if (did_work) {
-            monitor.MarkWork();
-        }
-        monitor.EndPass();
+        monitor.EndWork(did_work);
     }
 
     // Runs idle passes to the end of a 1 s interval that began at interval_start_us and returns the usage.
@@ -113,8 +110,24 @@ TEST_F(CPUMonitorBusyTime, InterruptInIdlePassCounted) {
     EXPECT_EQ(FinishInterval(0), 3);
 }
 
+TEST_F(CPUMonitorBusyTime, NestedWorkScopesCountedOnce) {
+    {
+        CPUMonitor::WorkScope outer(monitor);
+        inc_time_since_boot_us(100000);
+        {
+            CPUMonitor::WorkScope inner(monitor);
+            inc_time_since_boot_us(100000);
+            monitor.OnISREnter();
+            inc_time_since_boot_us(50000);
+            monitor.OnISRExit();
+        }
+        inc_time_since_boot_us(100000);
+    }
+    inc_time_since_boot_us(200000);  // Outside any region: not counted.
+    EXPECT_EQ(FinishInterval(0), 35);
+}
+
 TEST_F(CPUMonitorBusyTime, NestedInterruptsCountedOnce) {
-    monitor.BeginPass();
     monitor.OnISREnter();
     inc_time_since_boot_us(100000);
     monitor.OnISREnter();
@@ -122,7 +135,6 @@ TEST_F(CPUMonitorBusyTime, NestedInterruptsCountedOnce) {
     monitor.OnISRExit();
     inc_time_since_boot_us(100000);
     monitor.OnISRExit();
-    monitor.EndPass();
     EXPECT_EQ(FinishInterval(0), 30);
 }
 
