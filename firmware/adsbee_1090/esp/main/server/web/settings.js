@@ -185,7 +185,7 @@ class SettingsEngine {
                 input.type = 'number';
                 if (field.min !== undefined) input.min = field.min;
                 if (field.max !== undefined) input.max = field.max;
-                input.step = field.type === 'float' ? 'any' : '1';
+                input.step = field.step !== undefined ? field.step : (field.type === 'float' ? 'any' : '1');
                 break;
             case 'enum': {
                 input = document.createElement('select');
@@ -762,6 +762,19 @@ function makeMavlinkIdEntry() {
     };
 }
 
+// FILTER_DISTANCE_NM is identical on both products.
+function makeFilterDistanceEntry() {
+    return {
+        cmd: 'FILTER_DISTANCE_NM', label: 'Distance Filter', group: 'Reporting',
+        help: 'Leave aircraft farther than this from the receiver out of aircraft reports: the aircraft list and map, aircraft JSON, GDL90, MAVLink and CSBee. Raw, Beast and MLAT output and feeds of them always carry every packet.',
+        tip: 'Needs a receiver position (Position settings). Aircraft without a known position are always reported.',
+        fields: [
+            { id: 'en', label: 'Enabled', type: 'bool' },
+            { id: 'nm', label: 'Distance (nm)', type: 'float', min: 0.1, max: 10000, step: 0.1 },
+        ],
+    };
+}
+
 // RX_ENABLE is identical on both products.
 function makeRxEnableEntry() {
     return {
@@ -922,6 +935,7 @@ const SETTINGS_SCHEMA_1090 = [
         build(v, dirty) { return [...dirty].map(iface => `AT+PROTOCOL_OUT=${iface},${v[iface]}`); },
     },
     makeMavlinkIdEntry(),
+    makeFilterDistanceEntry(),
     // ── Position ──
     makeRxPositionEntry(),
     {

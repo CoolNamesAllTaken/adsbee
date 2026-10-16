@@ -589,19 +589,124 @@ static_assert(offsetof(Settings, wifi_sta_extra_networks) == 1142, "v17 wifi_sta
 
 }  // namespace settings_v17
 
-/**
- * v18 layout: v17 plus `auto_update_enabled` in its tail padding.
- */
 namespace settings_v18 {
 
+static constexpr uint16_t kHostnameMaxLen = 32;
+static constexpr uint16_t kWiFiSSIDMaxLen = 31;
+static constexpr uint16_t kWiFiPasswordMaxLen = 63;
+static constexpr uint16_t kNumSerialInterfaces = 3;
 static constexpr uint16_t kMaxNumFeeds = 10;
+static constexpr uint16_t kFeedURIMaxNumChars = 63;
+static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
+static constexpr uint16_t kRemoteIDIDMaxLen = 20;
 static constexpr uint16_t kWiFiSTANumExtraNetworks = 2;
 
-using settings_v17::CoreNetworkSettings;
-using settings_v17::RxPosition;
-using settings_v17::WiFiNetwork;
+struct CoreNetworkSettings {
+    bool esp32_enabled;
+    char hostname[kHostnameMaxLen + 1];
+    bool wifi_ap_enabled;
+    uint8_t wifi_ap_channel;
+    char wifi_ap_ssid[kWiFiSSIDMaxLen + 2];
+    char wifi_ap_password[kWiFiPasswordMaxLen + 2];
+    bool wifi_sta_enabled;
+    char wifi_sta_ssid[kWiFiSSIDMaxLen + 2];
+    char wifi_sta_password[kWiFiPasswordMaxLen + 2];
+    bool ethernet_enabled;
+    uint32_t crc32;
+};
+
+struct WiFiNetwork {
+    char ssid[kWiFiSSIDMaxLen + 2];
+    char password[kWiFiPasswordMaxLen + 2];
+};
+
+struct __attribute__((packed)) RxPosition {
+    uint8_t source;
+    float latitude_deg;
+    float longitude_deg;
+    int32_t gnss_altitude_ft;
+    int32_t baro_altitude_ft;
+    float heading_deg;
+    int32_t speed_kts;
+    uint32_t icao_address;
+};
 
 // Byte-identical copy of the v18 Settings layout. Enum members are stored as their underlying integer types.
+struct alignas(4) Settings {
+    uint32_t settings_version;
+    CoreNetworkSettings core_network_settings;
+    bool r1090_rx_enabled;
+    int32_t tl_offset_mv;
+    bool r1090_bias_tee_enabled;
+    uint32_t watchdog_timeout_sec;
+    bool led_enabled;
+    bool feeds_enabled;  // Added in v15.
+    bool gnss_enabled;
+    uint8_t gnss_receiver_type;
+    bool gnss_notify;
+    uint16_t log_level;
+    uint16_t reporting_protocols[kNumSerialInterfaces];
+    uint32_t baud_rates[kNumSerialInterfaces];
+    int8_t subg_enabled;
+    bool subg_rx_enabled;
+    bool subg_bias_tee_enabled;
+    uint8_t subg_mode;
+    bool remote_id_rx_enabled;
+    uint8_t remote_id_transports;
+    bool remote_id_tx_enabled;
+    uint8_t remote_id_tx_transports;
+    uint8_t remote_id_tx_uas_id_type;
+    uint8_t remote_id_tx_ua_type;
+    char remote_id_tx_uas_id[kRemoteIDIDMaxLen + 1];
+    char remote_id_tx_operator_id[kRemoteIDIDMaxLen + 1];
+    char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
+    uint16_t feed_ports[kMaxNumFeeds];
+    bool feed_is_active[kMaxNumFeeds];
+    uint16_t feed_protocols[kMaxNumFeeds];
+    uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
+    uint8_t mavlink_system_id;
+    uint8_t mavlink_component_id;
+    RxPosition rx_position;
+    uint8_t ip_mode;
+    WiFiNetwork wifi_sta_extra_networks[kWiFiSTANumExtraNetworks];  // Added in v17.
+    bool auto_update_enabled;                                       // Added in v18 (tail padding of v17).
+};
+
+// Lock the v18 byte layout (the live layout lock in settings.hh at kSettingsVersion == 18).
+static_assert(sizeof(CoreNetworkSettings) == 240, "v18 CoreNetworkSettings must be 240 bytes.");
+static_assert(sizeof(RxPosition) == 29, "v18 RxPosition must be 29 bytes.");
+static_assert(sizeof(Settings) == 1340, "v18 Settings must be 1340 bytes.");
+static_assert(offsetof(Settings, core_network_settings) == 4, "v18 CoreNetworkSettings offset drift.");
+static_assert(offsetof(Settings, led_enabled) == 260, "v18 led_enabled offset drift.");
+static_assert(offsetof(Settings, feeds_enabled) == 261, "v18 feeds_enabled offset drift.");
+static_assert(offsetof(Settings, gnss_notify) == 264, "v18 gnss_notify offset drift.");
+static_assert(offsetof(Settings, log_level) == 266, "v18 log_level offset drift.");
+static_assert(offsetof(Settings, baud_rates) == 276, "v18 baud_rates offset drift.");
+static_assert(offsetof(Settings, subg_mode) == 291, "v18 subg_mode offset drift.");
+static_assert(offsetof(Settings, remote_id_tx_enabled) == 294, "v18 remote_id_tx_enabled offset drift.");
+static_assert(offsetof(Settings, feed_uris) == 340, "v18 feed_uris offset drift.");
+static_assert(offsetof(Settings, feed_protocols) == 1010, "v18 feed_protocols offset drift.");
+static_assert(offsetof(Settings, feed_receiver_ids) == 1030, "v18 feed_receiver_ids offset drift.");
+static_assert(offsetof(Settings, mavlink_system_id) == 1110, "v18 mavlink_system_id offset drift.");
+static_assert(offsetof(Settings, rx_position) == 1112, "v18 rx_position offset drift.");
+static_assert(offsetof(Settings, ip_mode) == 1141, "v18 ip_mode offset drift.");
+static_assert(offsetof(Settings, wifi_sta_extra_networks) == 1142, "v18 wifi_sta_extra_networks offset drift.");
+static_assert(offsetof(Settings, auto_update_enabled) == 1338, "v18 auto_update_enabled offset drift.");
+
+}  // namespace settings_v18
+
+/**
+ * v19 layout: v18 plus the distance filter, filter_distance_enabled in v18's tail padding.
+ */
+namespace settings_v19 {
+
+using settings_v18::CoreNetworkSettings;
+using settings_v18::kMaxNumFeeds;
+using settings_v18::kNumSerialInterfaces;
+using settings_v18::RxPosition;
+using settings_v18::WiFiNetwork;
+
+// Byte-identical copy of the v19 Settings layout. Enum members are stored as their underlying integer types.
 struct alignas(4) Settings {
     uint32_t settings_version;
     CoreNetworkSettings core_network_settings;
@@ -615,8 +720,8 @@ struct alignas(4) Settings {
     uint8_t gnss_receiver_type;
     bool gnss_notify;
     uint16_t log_level;
-    uint16_t reporting_protocols[settings_v17::kNumSerialInterfaces];
-    uint32_t baud_rates[settings_v17::kNumSerialInterfaces];
+    uint16_t reporting_protocols[kNumSerialInterfaces];
+    uint32_t baud_rates[kNumSerialInterfaces];
     int8_t subg_enabled;
     bool subg_rx_enabled;
     bool subg_bias_tee_enabled;
@@ -627,28 +732,29 @@ struct alignas(4) Settings {
     uint8_t remote_id_tx_transports;
     uint8_t remote_id_tx_uas_id_type;
     uint8_t remote_id_tx_ua_type;
-    char remote_id_tx_uas_id[settings_v17::kRemoteIDIDMaxLen + 1];
-    char remote_id_tx_operator_id[settings_v17::kRemoteIDIDMaxLen + 1];
-    char feed_uris[kMaxNumFeeds][settings_v17::kFeedURIMaxNumChars + 1];
+    char remote_id_tx_uas_id[settings_v18::kRemoteIDIDMaxLen + 1];
+    char remote_id_tx_operator_id[settings_v18::kRemoteIDIDMaxLen + 1];
+    char feed_uris[kMaxNumFeeds][settings_v18::kFeedURIMaxNumChars + 1];
     uint16_t feed_ports[kMaxNumFeeds];
     bool feed_is_active[kMaxNumFeeds];
     uint16_t feed_protocols[kMaxNumFeeds];
-    uint8_t feed_receiver_ids[kMaxNumFeeds][settings_v17::kFeedReceiverIDNumBytes];
+    uint8_t feed_receiver_ids[kMaxNumFeeds][settings_v18::kFeedReceiverIDNumBytes];
     uint8_t mavlink_system_id;
     uint8_t mavlink_component_id;
     RxPosition rx_position;
     uint8_t ip_mode;
-    WiFiNetwork wifi_sta_extra_networks[kWiFiSTANumExtraNetworks];
-    bool auto_update_enabled;  // Added in v18.
+    WiFiNetwork wifi_sta_extra_networks[settings_v18::kWiFiSTANumExtraNetworks];
+    bool auto_update_enabled;
+    bool filter_distance_enabled;  // Added in v19.
+    uint32_t filter_distance_deci_nm;
 };
 
-// Lock the v18 byte layout (the live layout lock in settings.hh at kSettingsVersion == 18).
-static_assert(sizeof(Settings) == 1340, "v18 Settings must be 1340 bytes.");
-static_assert(offsetof(Settings, feed_uris) == 340, "v18 feed_uris offset drift.");
-static_assert(offsetof(Settings, feed_protocols) == 1010, "v18 feed_protocols offset drift.");
-static_assert(offsetof(Settings, rx_position) == 1112, "v18 rx_position offset drift.");
-static_assert(offsetof(Settings, ip_mode) == 1141, "v18 ip_mode offset drift.");
-static_assert(offsetof(Settings, wifi_sta_extra_networks) == 1142, "v18 wifi_sta_extra_networks offset drift.");
-static_assert(offsetof(Settings, auto_update_enabled) == 1338, "v18 auto_update_enabled offset drift.");
+// Lock the v19 byte layout (the live layout lock in settings.hh at kSettingsVersion == 19).
+static_assert(sizeof(Settings) == 1344, "v19 Settings must be 1344 bytes.");
+static_assert(offsetof(Settings, feed_uris) == 340, "v19 feed_uris offset drift.");
+static_assert(offsetof(Settings, rx_position) == 1112, "v19 rx_position offset drift.");
+static_assert(offsetof(Settings, auto_update_enabled) == 1338, "v19 auto_update_enabled offset drift.");
+static_assert(offsetof(Settings, filter_distance_enabled) == 1339, "v19 filter_distance_enabled offset drift.");
+static_assert(offsetof(Settings, filter_distance_deci_nm) == 1340, "v19 filter_distance_deci_nm offset drift.");
 
-}  // namespace settings_v18
+}  // namespace settings_v19

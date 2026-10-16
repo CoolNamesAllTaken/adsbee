@@ -18,8 +18,10 @@ inline void main_core1() {
     irq_set_enabled(IO_IRQ_BANK0, false);  // Disable GPIO IRQs (OnDemodBegin) on this core.
     irq_set_enabled(PIO0_IRQ_0, false);    // Disable PIO0 IRQ0 (OnDemodComplete) on this core.
 #endif  // ISRS_ON_CORE1
+    core_1_monitor.TimeInterrupts();
 
     while (true) {
+        core_1_monitor.BeginWork();  // Counted only if the pass demodulated or decoded something.
 #ifdef ISRS_ON_CORE1
         // Core 0 may try to toggle the 1090 receiver on and off. Keep an eye on it and turn it on and off here, since
         // it can't be toggle from core 0 without accidentally duplicating all the ISR stuff on that core.
@@ -30,9 +32,9 @@ inline void main_core1() {
 #ifdef HARDWARE_UNIT_TESTS
         RunPendingTestFunctionOnCore1();  // Lets hardware unit tests read core 1 state, e.g. its SysTick.
 #endif
-        core_1_monitor.Tick();
-        adsbee.DemodulateCaptures();
+        bool did_work = adsbee.DemodulateCaptures() || decoder.raw_mode_s_packet_in_queue.Length() > 0;
         decoder.UpdateDecoderLoop();
+        core_1_monitor.EndWork(did_work);
     }
 }
 
@@ -51,6 +53,7 @@ inline void StopCore1() {
         return;
     }
     adsbee.DeInitISRs();  // Clean up DMA channels and other ISR resources before stopping core
+    core_1_monitor.StopTimingInterrupts();  // InitISRs() sets the handlers again on restart.
     multicore_reset_core1();
 }
 
