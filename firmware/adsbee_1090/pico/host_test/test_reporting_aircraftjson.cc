@@ -645,8 +645,9 @@ TEST_F(PreferredReportForAddress, LiveMapListAppliesDistanceFilter) {
 
     for (uint32_t filter_distance_m : {0u, 50000u}) {
         uint32_t uids[kAircraftDictionaryMaxNumAircraft];
-        uint16_t num_uids =
-            ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, kAircraftDictionaryMaxNumAircraft, filter_distance_m);
+        AircraftReportFilter filter;
+        filter.max_distance_m = filter_distance_m;
+        uint16_t num_uids = ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, kAircraftDictionaryMaxNumAircraft, filter);
         std::string all;
         char buf[4000];
         uint16_t next = 0, len;
@@ -655,6 +656,32 @@ TEST_F(PreferredReportForAddress, LiveMapListAppliesDistanceFilter) {
         }
         EXPECT_NE(all.find("\"hex\":\"b00001\""), std::string::npos);
         EXPECT_EQ(all.find("\"hex\":\"b00002\"") != std::string::npos, filter_distance_m == 0);
+        EXPECT_NE(all.find("\"hex\":\"b00003\""), std::string::npos);
+    }
+}
+
+// The Live Map list applies the altitude filter too and keeps aircraft with no altitude.
+TEST_F(PreferredReportForAddress, LiveMapListAppliesAltitudeFilter) {
+    ModeSAircraft* low = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00001));
+    low->baro_altitude_ft = 2000;
+    low->WriteBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid, true);
+    ModeSAircraft* high = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00002));
+    high->gnss_altitude_ft = 35000;
+    high->WriteBitFlag(ModeSAircraft::kBitFlagGNSSAltitudeValid, true);
+    dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00003));  // Unknown altitude.
+
+    for (uint8_t mode : {kAltitudeFilterOff, kAltitudeFilterBelow}) {
+        uint32_t uids[kAircraftDictionaryMaxNumAircraft];
+        uint16_t num_uids = ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, kAircraftDictionaryMaxNumAircraft,
+                                                        dictionary.GetReportFilter(0, mode, 10000, 0));
+        std::string all;
+        char buf[4000];
+        uint16_t next = 0, len;
+        while ((len = WriteAircraftJSONLiveMapArray(dictionary, kNowMs, uids, num_uids, next, buf, sizeof(buf))) > 0) {
+            all.append(buf, len);
+        }
+        EXPECT_NE(all.find("\"hex\":\"b00001\""), std::string::npos);
+        EXPECT_EQ(all.find("\"hex\":\"b00002\"") != std::string::npos, mode == kAltitudeFilterOff);
         EXPECT_NE(all.find("\"hex\":\"b00003\""), std::string::npos);
     }
 }

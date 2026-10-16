@@ -301,7 +301,7 @@ void SettingsMigrator::MigrateV17ToV18(const settings_v17::Settings& in, setting
 }
 
 void SettingsMigrator::MigrateV18ToV19(const settings_v18::Settings& in, SettingsManager::Settings& out) {
-    // Start from a fresh, fully-defaulted current struct: the distance filter (new in v19) stays off.
+    // Start from a fresh, fully-defaulted current struct: the distance and altitude filters (new in v19) stay off.
     out = SettingsManager::Settings();
 
     out.settings_version = kSettingsVersion;

@@ -2298,6 +2298,7 @@ void AircraftDictionary::ClearReferencePosition() {
         BumpReferenceEpoch();
     }
     reference_position_valid_ = false;
+    reference_altitude_valid_ = false;
 }
 
 void AircraftDictionary::UpdateDistanceAndBearing(Aircraft &aircraft, bool position_valid) {

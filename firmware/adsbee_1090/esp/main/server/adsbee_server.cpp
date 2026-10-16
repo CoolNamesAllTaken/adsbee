@@ -257,6 +257,8 @@ bool ADSBeeServer::Update() {
             aircraft_dictionary.SetReferencePosition(
                 object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
                 object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
+            aircraft_dictionary.SetReferenceAltitudeFt(
+                object_dictionary.composite_device_status.rp2040.rx_position.FilterAltitudeFt());
         } else {
             aircraft_dictionary.ClearReferencePosition();
         }
@@ -406,7 +408,7 @@ bool ADSBeeServer::Update() {
             network_aircraft.GetNumClients() > 0
                 ? ListAircraftJSONLiveMapUIDs(aircraft_dictionary, timestamp_ms, aircraft_json_uids_,
                                               kAircraftDictionaryMaxNumAircraft,
-                                              settings_manager.settings.FilterDistanceMeters())
+                                              aircraft_dictionary.GetReportFilter(settings_manager.settings))
                 : 0;
         aircraft_json_next_uid_ = 0;
     }
@@ -487,15 +489,14 @@ bool ADSBeeServer::ReportGDL90() {
     uint8_t aircraft_msg_buf[CommsManager::NetworkMessage::kMaxLenBytes];
     uint16_t aircraft_msg_buf_len = 0;
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    uint32_t filter_distance_m = settings_manager.settings.FilterDistanceMeters();
+    AircraftReportFilter report_filter = aircraft_dictionary.GetReportFilter(settings_manager.settings);
     for (auto& itr : aircraft_dictionary.dict) {
         aircraft_index++;
         if (!aircraft_dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
             continue;  // Another entry (e.g. the aircraft's own ADS-B) is reported for this ICAO address.
         }
-        if (std::visit([filter_distance_m](const Aircraft& a) { return a.IsBeyondDistance(filter_distance_m); },
-                       itr.second)) {
-            continue;  // AT+FILTER_DISTANCE_NM.
+        if (std::visit([&report_filter](const auto& a) { return report_filter.Excludes(a); }, itr.second)) {
+            continue;  // AT+FILTER_DISTANCE_NM, AT+FILTER_ALTITUDE_FT.
         }
 
         if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {

@@ -44,7 +44,7 @@ const { SettingsEngine, SETTINGS_SCHEMA_1090 } = require('../settings.js');
 
 // The AT+SETTINGS?JSON line from an ADSBee 1090 running 0.9.1-rc9.
 const DUMP = 'SETTINGS={"AUTO_UPDATE":[0],"BAUD_RATE":[115207,9600],"BIAS_TEE_ENABLE":[0,0],"ETHERNET":[1],"ESP32_ENABLE":[1],' +
-    '"FEED_ENABLE":[1],"FILTER_DISTANCE_NM":[0,100.0],"GNSS":[0,"NONE",0],"HOSTNAME":["test-bee"],"IP_MODE":["DUAL"],"LED_ENABLE":[1],"LOG_LEVEL":["WARNINGS"],' +
+    '"FEED_ENABLE":[1],"FILTER_ALTITUDE_FT":[0,0,10000],"FILTER_DISTANCE_NM":[0,100.0],"GNSS":[0,"NONE",0],"HOSTNAME":["test-bee"],"IP_MODE":["DUAL"],"LED_ENABLE":[1],"LOG_LEVEL":["WARNINGS"],' +
     '"MAVLINK_ID":[1,156],"PROTOCOL_OUT":["NONE","NONE"],"REMOTE_ID":[0,7,"0x00"],' +
     '"REMOTE_ID_TX":[0,7,"",1,2,"","0x0000"],"RX_ENABLE":[1,1],' +
     '"RX_POSITION":["LOWEST","OK",37.000000,-122.000000,-50,125,317.7,74,"000000"],"SUBG_ENABLE":["1"],' +
@@ -211,6 +211,29 @@ test('the distance filter loads from the dump and saves enable and distance in n
     input('FILTER_DISTANCE_NM', 'nm').value = '35.5';
     await engine.save();
     assert.deepStrictEqual(t.sent.slice(1, 3), ['AT+FILTER_DISTANCE_NM=1,35.5', 'AT+SETTINGS=SAVE']);
+});
+
+test('the altitude filter loads from the dump and saves mode and altitudes in ft', async () => {
+    const t = makeTransport((cmd) => {
+        if (cmd === 'AT+SETTINGS?JSON') return [DUMP];
+        if (cmd === 'AT+FILTER_ALTITUDE_FT=3,1000,18000' || cmd === 'AT+SETTINGS=SAVE') return [];
+        throw new Error(`unexpected ${cmd}`);
+    });
+    const engine = makeEngine(t);
+    await engine.refresh();
+    assert.strictEqual(input('FILTER_ALTITUDE_FT', 'mode').value, '0');
+    assert.strictEqual(input('FILTER_ALTITUDE_FT', 'a').value, '0');
+    assert.strictEqual(input('FILTER_ALTITUDE_FT', 'b').value, '10000');
+
+    input('FILTER_ALTITUDE_FT', 'mode').value = '3';
+    input('FILTER_ALTITUDE_FT', 'b').value = '100001';  // Above 100000 ft: caught before anything is written.
+    await engine.save();
+    assert.deepStrictEqual(t.sent, ['AT+SETTINGS?JSON']);
+
+    input('FILTER_ALTITUDE_FT', 'a').value = '1000';
+    input('FILTER_ALTITUDE_FT', 'b').value = '18000';
+    await engine.save();
+    assert.deepStrictEqual(t.sent.slice(1, 3), ['AT+FILTER_ALTITUDE_FT=3,1000,18000', 'AT+SETTINGS=SAVE']);
 });
 
 test('a save whose re-read fails still reports the save', async () => {

@@ -1240,6 +1240,51 @@ CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATFilterAltitudeFtCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%u,%ld,%ld", settings_manager.settings.filter_altitude_mode,
+                              (long)settings_manager.settings.filter_altitude_a_ft,
+                              (long)settings_manager.settings.filter_altitude_b_ft);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            int32_t mode = settings_manager.settings.filter_altitude_mode;
+            int32_t a_ft = settings_manager.settings.filter_altitude_a_ft;
+            int32_t b_ft = settings_manager.settings.filter_altitude_b_ft;
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, mode);
+            }
+            if (CPP_AT_HAS_ARG(1)) {
+                CPP_AT_TRY_ARG2NUM(1, a_ft);
+            }
+            if (CPP_AT_HAS_ARG(2)) {
+                CPP_AT_TRY_ARG2NUM(2, b_ft);
+            }
+            if (mode < 0 || mode >= kNumAltitudeFilterModes) {
+                CPP_AT_ERROR("Mode must be 0 (off), 1 (above), 2 (below), 3 (range) or 4 (near receiver).");
+            }
+            if (a_ft < kAltitudeFilterMinFt || a_ft > kAltitudeFilterMaxFt || b_ft < kAltitudeFilterMinFt ||
+                b_ft > kAltitudeFilterMaxFt) {
+                CPP_AT_ERROR("Altitudes must be %ld to %ld ft.", (long)kAltitudeFilterMinFt, (long)kAltitudeFilterMaxFt);
+            }
+            if (mode == kAltitudeFilterRange && a_ft > b_ft) {
+                CPP_AT_ERROR("Range mode needs a <= b.");
+            }
+            if (mode == kAltitudeFilterNearReceiver && a_ft <= 0) {
+                CPP_AT_ERROR("Near receiver mode needs a > 0.");
+            }
+            settings_manager.settings.filter_altitude_mode = static_cast<uint8_t>(mode);
+            settings_manager.settings.filter_altitude_a_ft = a_ft;
+            settings_manager.settings.filter_altitude_b_ft = b_ft;
+            settings_manager.SyncToCoprocessors();  // The ESP32 filters its web UI, GDL90 and feeds too.
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATFilterDistanceNMCallback) {
     using Settings = SettingsManager::Settings;
     switch (op) {
@@ -1634,6 +1679,8 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"ETHERNET\":[%d],", cns.ethernet_enabled);
     CPP_AT_PRINTF("\"ESP32_ENABLE\":[%d],", esp32.IsEnabled());
     CPP_AT_PRINTF("\"FEED_ENABLE\":[%d],", s.feeds_enabled);
+    CPP_AT_PRINTF("\"FILTER_ALTITUDE_FT\":[%u,%ld,%ld],", s.filter_altitude_mode, (long)s.filter_altitude_a_ft,
+                  (long)s.filter_altitude_b_ft);
     CPP_AT_PRINTF("\"FILTER_DISTANCE_NM\":[%d,%lu.%lu],", s.filter_distance_enabled,
                   static_cast<unsigned long>(s.filter_distance_deci_nm / 10),
                   static_cast<unsigned long>(s.filter_distance_deci_nm % 10));
@@ -2113,6 +2160,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "all feeds, or 1 to allow feeds marked active. Does not change per-feed active flags set with "
                     "AT+FEED.\r\n\tAT+FEED_ENABLE?\r\n\tQuery whether outbound feeds are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedEnableCallback, comms_manager)},
+    {.command = "FILTER_ALTITUDE_FT",
+     .min_args = 0,
+     .max_args = 3,
+     .help_string = "AT+FILTER_ALTITUDE_FT=<mode [0 1 2 3 4]>,<a_ft>,<b_ft>\r\n\tLeave aircraft outside an altitude band out "
+                    "of aircraft reports (aircraft JSON, the web UI's list and map, GDL90, MAVLink, CSBee). Modes: 0 off, 1 at or above a, 2 at "
+                    "or below a, 3 from a to b, 4 within a ft above or below the receiver (AT+RX_POSITION; filters "
+                    "nothing without a receiver altitude). Altitudes are -2000 to 100000 ft; aircraft altitude is "
+                    "barometric, else GNSS. Aircraft with no known altitude are always kept. Raw packets (Raw, Beast, MLAT and every feed of them) are never "
+                    "filtered. Empty arguments keep their value. Default: 0,0,10000 (off).\r\n\t"
+                    "AT+FILTER_ALTITUDE_FT?\r\n\tQuery the mode and its altitudes.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterAltitudeFtCallback, comms_manager)},
     {.command = "FILTER_DISTANCE_NM",
      .min_args = 0,
      .max_args = 2,

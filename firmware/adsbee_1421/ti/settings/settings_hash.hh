@@ -13,7 +13,7 @@ enum Scope : uint8_t {
 
 // Left out of kScopeFleet: the receiver position values.
 inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) {
-    static_assert(kSettingsVersion == 6 && sizeof(SettingsManager::Settings) == 67,
+    static_assert(kSettingsVersion == 6 && sizeof(SettingsManager::Settings) == 76,
                   "Settings changed: add the new fields below, then update this check.");
     ConfigHasher hasher;
 
@@ -45,6 +45,9 @@ inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) 
 
     hasher.AddBool(settings.filter_distance_enabled);
     hasher.AddU32(settings.filter_distance_deci_nm);
+    hasher.AddU8(settings.filter_altitude_mode);
+    hasher.AddI32(settings.filter_altitude_a_ft);
+    hasher.AddI32(settings.filter_altitude_b_ft);
 
     return hasher.Value();
 }

@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "altitude_filter.hh"
 #include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
@@ -134,6 +135,18 @@ class SettingsManager {
         static bool MayBeTransmittedAsOwnPosition(PositionSource source) {
             return source == kPositionSourceFixed || source == kPositionSourceGNSS;
         }
+
+        /**
+         * Receiver altitude for AT+FILTER_ALTITUDE_FT's near-receiver mode: the GNSS altitude for a GNSS fix (it has no
+         * barometric altitude), otherwise the barometric altitude, falling back to the GNSS altitude when that is 0
+         * (not entered, or not known for the aircraft the position comes from).
+         */
+        int32_t FilterAltitudeFt() const {
+            if (source == kPositionSourceGNSS || baro_altitude_ft == 0) {
+                return gnss_altitude_ft;
+            }
+            return baro_altitude_ft;
+        }
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
@@ -145,6 +158,9 @@ class SettingsManager {
         static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
         static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
         static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
+        // AT+FILTER_ALTITUDE_FT defaults: off, with 0 to 10,000 ft ready for range mode.
+        static constexpr int32_t kDefaultFilterAltitudeAFt = 0;
+        static constexpr int32_t kDefaultFilterAltitudeBFt = 10000;
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
         // For settings struct backwards compatibility. ESP IDF can't handle the full length SSID and password, so length was reduced.
@@ -327,6 +343,13 @@ class SettingsManager {
         // auto_update_enabled's tail padding.
         bool filter_distance_enabled = false;
         uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
+
+        // Altitude filter (AT+FILTER_ALTITUDE_FT=<mode>,<a>,<b>), an AltitudeFilterMode with its arguments in feet.
+        // Leaves aircraft outside the selected altitudes out of the same aircraft reports as the distance filter.
+        // Aircraft with no known altitude are always kept.
+        uint8_t filter_altitude_mode = kAltitudeFilterOff;
+        int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
+        int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
 
         /**
          * The distance filter as Aircraft::IsBeyondDistance() takes it.
@@ -754,7 +777,7 @@ extern SettingsManager settings_manager;
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
 static_assert(kSettingsVersion == 19,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 1344,
+static_assert(sizeof(SettingsManager::Settings) == 1356,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -778,5 +801,8 @@ static_assert(offsetof(SettingsManager::Settings, wifi_sta_extra_networks) == 11
 static_assert(offsetof(SettingsManager::Settings, auto_update_enabled) == 1338, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_distance_enabled) == 1339, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_distance_deci_nm) == 1340, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_altitude_mode) == 1344, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_altitude_a_ft) == 1348, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_altitude_b_ft) == 1352, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */
