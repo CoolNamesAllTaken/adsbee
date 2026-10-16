@@ -1666,6 +1666,8 @@ class LiveMap {
             ['lat', 'Latitude', v => v.toFixed(5)],
             ['lon', 'Longitude', v => v.toFixed(5)],
             ['seen_pos', 'Position age', v => v.toFixed(1) + ' s'],
+            ['r_dst', 'Distance', v => v.toFixed(1) + ' nm'],
+            ['r_dir', 'Bearing', v => Math.round(v) % 360 + '°'],
             ['rssi', 'RSSI', v => v.toFixed(1) + ' dBm'],
             ['messages', 'Messages', v => v.toLocaleString()],
             ['nic', 'NIC', v => String(v)],
@@ -1712,7 +1714,7 @@ class LiveMap {
 }
 
 // ─── AircraftTable ────────────────────────────────────────────────────────────
-const kNumericSortKeys = new Set(['alt_baro', 'gs', 'track', 'lat', 'lon', 'rssi']);
+const kNumericSortKeys = new Set(['alt_baro', 'gs', 'track', 'lat', 'lon', 'r_dst', 'r_dir', 'rssi']);
 
 class AircraftTable {
     constructor(tbodyId, store, onSelect) {
@@ -1786,6 +1788,8 @@ class AircraftTable {
             const hdg = ac.track != null ? Math.round(ac.track) + '°' : '';
             const lat = ac.lat != null ? ac.lat.toFixed(4) : '';
             const lon = ac.lon != null ? ac.lon.toFixed(4) : '';
+            const dst = ac.r_dst != null ? ac.r_dst.toFixed(1) : '';
+            const dir = ac.r_dir != null ? Math.round(ac.r_dir) % 360 + '°' : '';
             const rssi = ac.rssi != null ? ac.rssi.toFixed(1) : '';
             const color = acAltColor(ac.alt_baro);
 
@@ -1797,14 +1801,15 @@ class AircraftTable {
                 c[3].textContent = sqwk; c[4].textContent = alt;
                 c[5].textContent = gs; c[6].textContent = hdg;
                 c[7].textContent = lat; c[8].textContent = lon;
-                c[9].textContent = rssi;
+                c[9].textContent = dst; c[10].textContent = dir;
+                c[11].textContent = rssi;
                 r.classList.toggle('trail-active', this.selectedHex === ac.key);
             } else {
                 const r = document.createElement('tr');
                 r.dataset.key = ac.key;
                 r.innerHTML = `<td style="color:${color};font-family:monospace">${ac.hex}</td>` +
                     `<td>${cs}</td><td>${source}</td><td>${sqwk}</td><td>${alt}</td><td>${gs}</td>` +
-                    `<td>${hdg}</td><td>${lat}</td><td>${lon}</td><td>${rssi}</td>`;
+                    `<td>${hdg}</td><td>${lat}</td><td>${lon}</td><td>${dst}</td><td>${dir}</td><td>${rssi}</td>`;
                 r.addEventListener('click', () => {
                     if (this.onSelect) this.onSelect(ac.key);
                 });

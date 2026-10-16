@@ -13,7 +13,7 @@ enum Scope : uint8_t {
 
 // Left out of kScopeFleet: the receiver and antenna position values and the ASTERIX SIC.
 inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) {
-    static_assert(kSettingsVersion == 7 && sizeof(SettingsManager::Settings) == 94,
+    static_assert(kSettingsVersion == 8 && sizeof(SettingsManager::Settings) == 99,
                   "Settings changed: add the new fields below, then update this check.");
     ConfigHasher hasher;
 
@@ -45,6 +45,8 @@ inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) 
     ReceiverPosition antenna_position = settings.antenna_position;
     hasher.AddReceiverPosition(antenna_position, scope == kScopeFull);
 
+    hasher.AddBool(settings.filter_distance_enabled);
+    hasher.AddU32(settings.filter_distance_deci_nm);
     hasher.AddU8(settings.asterix_sac);
     if (scope == kScopeFull) hasher.AddU8(settings.asterix_sic);
 

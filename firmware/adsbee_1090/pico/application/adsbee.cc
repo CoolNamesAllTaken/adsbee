@@ -25,6 +25,7 @@
 #include <string.h>  // for strcat
 
 #include "comms.hh"           // For debug prints.
+#include "cpu_utils.hh"
 #include "gnss_interface.hh"  // For the gnss receiver instance.
 
 // Uncomment to measure the demodulation time in DemodulateCaptures() and print avg/max once per second.
@@ -709,8 +710,10 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
     }
 }
 
-void __time_critical_func(ADSBee::DemodulateCaptures)() {
+bool __time_critical_func(ADSBee::DemodulateCaptures)() {
+    bool demodulated = false;
     while (const Capture* capture_slot = capture_queue_.Front()) {
+        demodulated = true;
         const Capture& capture = *capture_slot;
         uint16_t sm_index = capture.source;
         aircraft_dictionary.Record1090Demod(sm_index);
@@ -750,6 +753,7 @@ void __time_critical_func(ADSBee::DemodulateCaptures)() {
         }
         capture_queue_.Pop();
     }
+    return demodulated;
 }
 
 void __time_critical_func(ADSBee::OnSysTickWrap)() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
@@ -816,6 +820,11 @@ void ADSBee::IngestAndForwardPackets() {
     // Explicitly count the number of packets to process so that we don't get stuck in this loop if the decoder
     // keeps outputting packets.
     uint16_t num_decoded_mode_s_packets = decoder.decoded_mode_s_packet_out_queue.Length();
+    if (num_decoded_mode_s_packets == 0 && raw_uat_adsb_packet_queue.Length() == 0 &&
+        raw_uat_uplink_packet_queue.Length() == 0 && raw_remote_id_packet_queue.Length() == 0) {
+        return;
+    }
+    CPUMonitor::WorkScope work;
     for (uint16_t i = 0;
          i < num_decoded_mode_s_packets && decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet); i++) {
         // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\tdf=%d icao_address=0x%06x",
@@ -829,7 +838,8 @@ void ADSBee::IngestAndForwardPackets() {
             //              aircraft_dictionary.GetNumAircraft());
         }
         // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
-        // dictionary didn't know what to do with them.
+        // dictionary didn't know what to do with them. Raw packets are never distance filtered: Raw, Beast, MLAT and
+        // the ESP32's feeds carry every packet. AT+FILTER_DISTANCE_NM only gates aircraft reports.
         if (decoded_packet.is_valid) {
             if (comms_manager.mode_s_packet_reporting_queue.IsFull()) {
                 comms_manager.ForceFlushRawPackets();
@@ -1041,6 +1051,7 @@ void ADSBee::PruneAircraftDictionary() {
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
+        CPUMonitor::WorkScope work;
         aircraft_dictionary.Update(timestamp_ms);
         if (esp32.IsEnabled()) {
             // Send fresh aircraft dictionary stats to ESPS32.
@@ -1110,6 +1121,7 @@ void ADSBee::UpdateNoiseFloor() {
         return;
     }
 
+    CPUMonitor::WorkScope work;
     int32_t sample_mv = ReadSignalStrengthMilliVoltsBlocking();
 
     // Discard the sample if a demodulation began during the conversion: the RSSI line was rising and the ISR's
@@ -1151,6 +1163,7 @@ void ADSBee::UpdateTLLearning() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (tl_learning_temperature_mv_ > 0 &&
         timestamp_ms - tl_learning_cycle_start_timestamp_ms_ > kTLLearningIntervalMs) {
+        CPUMonitor::WorkScope work;
         // Trigger level learning is active and due for an update.
         // Is this neighbor (current value for tl_mv) worth traversing to?
         float valid_packet_ratio = (tl_learning_num_valid_packets_ - tl_learning_prev_num_valid_packets_) /

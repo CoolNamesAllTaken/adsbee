@@ -4,10 +4,11 @@
 #include <cstdio>   // Regular pico/stdio.h doesn't support vprint functions.
 
 #include "adsbee.hh"  // For the receiver position and MLAT epoch.
+#include "cpu_utils.hh"
+#include "esp32.hh"
 #include "object_dictionary.hh"
 #include "pico/stdlib.h"
 #include "pico/unique_id.h"
-#include "esp32.hh"
 #include "spi_coprocessor.hh"
 
 static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kConsole,
@@ -44,6 +45,7 @@ bool CommsManager::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - last_raw_report_check_timestamp_ms_ > kRawReportingCheckIntervalMs) {
         last_raw_report_check_timestamp_ms_ = timestamp_ms;  // Proceed with update and record timestamp.
+        CPUMonitor::WorkScope work;
 
         // Calculate how much buffer space the current packets would need.
         uint16_t required_buffer_len = CompositeArray::CalculateRawPacketsBufferLength(
@@ -161,6 +163,7 @@ int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const cha
 int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const char* format, va_list args) {
     char buf[kPrintfBufferMaxSize];
 
+    CPUMonitor::WorkScope work;
     // Formatted print to buffer.
     int res = vsnprintf(buf, kPrintfBufferMaxSize, format, args);
     if (res <= 0) {

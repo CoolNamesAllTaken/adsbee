@@ -191,6 +191,7 @@ bool ESP32::SPIGetHandshakePinLevel() { return gpio_get(config_.spi_handshake_pi
 int ESP32::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes, bool end_transaction) {
     int bytes_written = 0;
 #ifdef ON_PICO
+    CPUMonitor::WorkScope work;
     SPIBeginTransaction();  // Begin SPI transaction, which sets the CS pin low.
     // Blocking check of handshake line. If we're expecting a handshake, it's OK for the line to be high. Otherwise, we
     // need to bail out to not stomp on the ESP32's incoming message.

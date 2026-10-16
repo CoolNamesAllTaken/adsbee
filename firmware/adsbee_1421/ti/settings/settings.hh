@@ -8,6 +8,7 @@
 #include "crc.hh"
 #include "macros.hh"
 #include "receiver_position.hh"
+#include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
 #include "string.h"  // for memset
@@ -16,7 +17,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 7;
+static constexpr uint32_t kSettingsVersion = 8;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -123,6 +124,10 @@ class SettingsManager {
     // in-RAM instance is aligned separately (see the `settings` member below).
     struct __attribute__((packed)) Settings {
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
+        // AT+FILTER_DISTANCE_NM, in tenths of a nautical mile.
+        static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
+        static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
+        static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
         // NOTE: Lengths do not include null terminator.
         // Single source of truth for the console boot baud rate: CommsManagerConfig defaults to this,
         // and Apply() falls back to it if the stored rate isn't whitelisted.
@@ -174,11 +179,20 @@ class SettingsManager {
         // Receiver position settings
         RxPosition rx_position;
 
-        // ASTERIX data source identifier (I021/010, I023/010): System Area Code and System Identification Code.
+        // Distance filter (AT+FILTER_DISTANCE_NM), added in version 6. When enabled, aircraft known to be farther than
+        // filter_distance_deci_nm tenths of a nautical mile from the receiver are left out of aircraft reports
+        // (aircraft JSON, GDL90, MAVLink, CSBee). Raw packets (Raw, Beast, MLAT) are never filtered. Aircraft at an
+        // unknown distance are always kept.
+        bool filter_distance_enabled = false;
+        uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
+
+        // ASTERIX data source identifier (I021/010, I023/010), added in version 7: System Area Code and System
+        // Identification Code.
         uint8_t asterix_sac = 0;
         uint8_t asterix_sic = 0;
 
-        // Antenna position entered by the operator for MLAT (source kSourceFixed, or kSourceNone if not set).
+        // Antenna position entered by the operator for MLAT (source kSourceFixed, or kSourceNone if not set), added in
+        // version 8.
         ReceiverPosition antenna_position;
 
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
@@ -188,6 +202,14 @@ class SettingsManager {
          * Default constructor.
          */
         Settings() {}
+
+        /**
+         * The distance filter as Aircraft::IsBeyondDistance() takes it.
+         * @retval Filter distance in meters, or 0 when the filter is off.
+         */
+        inline uint32_t FilterDistanceMeters() const {
+            return filter_distance_enabled ? DeciNmToMeters(filter_distance_deci_nm) : 0;
+        }
 
         /**
          * CRC32 over the struct from `magic` up to (not including) `crc`.
@@ -222,6 +244,44 @@ class SettingsManager {
     // trailing padding. Trips if the packed attribute is ever dropped or a member is added after `crc`.
     static_assert(offsetof(Settings, crc) == sizeof(Settings) - sizeof(uint32_t),
                   "Settings::crc must be the last member, with no trailing padding.");
+
+    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled and
+    // filter_distance_deci_nm, version 7 asterix_sac and asterix_sic, version 8 antenna_position.
+    static constexpr uint16_t kVersion5SettingsSize = 62;
+    static constexpr uint16_t kVersion6SettingsSize = 67;
+    static constexpr uint16_t kVersion7SettingsSize = 69;
+    static_assert(kSettingsVersion == 8 &&
+                      offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
+                      offsetof(Settings, asterix_sac) == kVersion6SettingsSize - sizeof(uint32_t) &&
+                      offsetof(Settings, antenna_position) == kVersion7SettingsSize - sizeof(uint32_t) &&
+                      sizeof(Settings) == kVersion7SettingsSize + sizeof(ReceiverPosition),
+                  "Settings changed: update MigrateFromOlderVersion or add a migration from version 8.");
+
+    /**
+     * Converts a version 5, 6 or 7 settings blob, so a firmware update keeps the user's settings. Fields added after
+     * the blob's version take their defaults.
+     * @param[in] blob Stored bytes, at least kVersion7SettingsSize long.
+     * @param[out] out Migrated and stamped settings. Untouched unless the blob is an intact version 5, 6 or 7 blob.
+     * @retval True if the blob was an intact version 5, 6 or 7 blob.
+     */
+    static bool MigrateFromOlderVersion(const uint8_t *blob, Settings &out) {
+        uint32_t magic, version, crc;
+        memcpy(&magic, blob, sizeof(magic));
+        memcpy(&version, blob + sizeof(magic), sizeof(version));
+        if (magic != kSettingsMagic || version < 5 || version > 7) {
+            return false;
+        }
+        const uint16_t sizes[] = {kVersion5SettingsSize, kVersion6SettingsSize, kVersion7SettingsSize};
+        const uint16_t field_bytes = sizes[version - 5] - sizeof(uint32_t);  // Everything before the CRC.
+        memcpy(&crc, blob + field_bytes, sizeof(crc));
+        if (crc != crc32_ieee_802_3(blob, field_bytes)) {
+            return false;
+        }
+        out = Settings();
+        memcpy(static_cast<void *>(&out), blob, field_bytes);
+        out.Stamp();
+        return true;
+    }
 
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {
