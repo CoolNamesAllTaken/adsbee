@@ -127,10 +127,9 @@ bool SettingsManager::Load() {
     // was interrupted after the leading words leaves a blob that passes a version-only check on every
     // boot forever, and whose remaining fields are erased flash (0xFF).
     if (!settings.IsValid()) {
-        uint32_t stored_version = settings.settings_version;
-        if (MigrateFromOlderVersion((const uint8_t*)kFlashSettingsStartAddr, settings)) {
-            CONSOLE_INFO("SettingsManager::Load", "Migrated settings from version %lu to %lu.",
-                         (unsigned long)stored_version, (unsigned long)kSettingsVersion);
+        if (MigrateFromVersion5((const uint8_t*)kFlashSettingsStartAddr, settings)) {
+            CONSOLE_INFO("SettingsManager::Load", "Migrated settings from version 5 to %lu.",
+                         (unsigned long)kSettingsVersion);
             return WriteSettingsToFlash(settings);
         }
         CONSOLE_ERROR("SettingsManager::Load",

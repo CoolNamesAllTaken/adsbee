@@ -16,7 +16,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 7;
+static constexpr uint32_t kSettingsVersion = 6;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -184,7 +184,7 @@ class SettingsManager {
         bool filter_distance_enabled = false;
         uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
 
-        // ASTERIX data source identifier (I021/010, I023/010), added in version 7: System Area Code and System
+        // ASTERIX data source identifier (I021/010, I023/010), added in version 6: System Area Code and System
         // Identification Code.
         uint8_t asterix_sac = 0;
         uint8_t asterix_sic = 0;
@@ -239,38 +239,31 @@ class SettingsManager {
     static_assert(offsetof(Settings, crc) == sizeof(Settings) - sizeof(uint32_t),
                   "Settings::crc must be the last member, with no trailing padding.");
 
-    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled and
-    // filter_distance_deci_nm, version 7 asterix_sac and asterix_sic.
+    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled,
+    // filter_distance_deci_nm, asterix_sac and asterix_sic.
     static constexpr uint16_t kVersion5SettingsSize = 62;
-    static constexpr uint16_t kVersion6SettingsSize = 67;
-    static_assert(kSettingsVersion == 7 &&
+    static_assert(kSettingsVersion == 6 &&
                       offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
-                      offsetof(Settings, asterix_sac) == kVersion6SettingsSize - sizeof(uint32_t) &&
-                      sizeof(Settings) == kVersion6SettingsSize + 2,
-                  "Settings changed: update MigrateFromOlderVersion or add a migration from version 7.");
+                      sizeof(Settings) == kVersion5SettingsSize + 7,
+                  "Settings changed: update MigrateFromVersion5 or add a migration from version 6.");
 
     /**
-     * Converts a version 5 or 6 settings blob, so a firmware update keeps the user's settings. Fields added after the
-     * blob's version take their defaults.
-     * @param[in] blob Stored bytes, at least kVersion6SettingsSize long.
-     * @param[out] out Migrated and stamped settings. Untouched unless the blob is an intact version 5 or 6 blob.
-     * @retval True if the blob was an intact version 5 or 6 blob.
+     * Converts a version 5 settings blob, so a firmware update keeps the user's settings.
+     * @param[in] blob Stored bytes, at least kVersion5SettingsSize long.
+     * @param[out] out Migrated and stamped settings. Untouched unless the blob is an intact version 5 blob.
+     * @retval True if the blob was an intact version 5 blob.
      */
-    static bool MigrateFromOlderVersion(const uint8_t *blob, Settings &out) {
+    static bool MigrateFromVersion5(const uint8_t *blob, Settings &out) {
+        constexpr uint16_t kFieldBytes = kVersion5SettingsSize - sizeof(uint32_t);  // Everything before the CRC.
         uint32_t magic, version, crc;
         memcpy(&magic, blob, sizeof(magic));
         memcpy(&version, blob + sizeof(magic), sizeof(version));
-        if (magic != kSettingsMagic || (version != 5 && version != 6)) {
+        memcpy(&crc, blob + kFieldBytes, sizeof(crc));
+        if (magic != kSettingsMagic || version != 5 || crc != crc32_ieee_802_3(blob, kFieldBytes)) {
             return false;
         }
-        // Everything before the CRC.
-        const uint16_t field_bytes = (version == 5 ? kVersion5SettingsSize : kVersion6SettingsSize) - sizeof(uint32_t);
-        memcpy(&crc, blob + field_bytes, sizeof(crc));
-        if (crc != crc32_ieee_802_3(blob, field_bytes)) {
-            return false;
-        }
-        out = Settings();
-        memcpy(static_cast<void *>(&out), blob, field_bytes);
+        out = Settings();  // The fields added in version 6 take their defaults.
+        memcpy(static_cast<void *>(&out), blob, kFieldBytes);
         out.Stamp();
         return true;
     }

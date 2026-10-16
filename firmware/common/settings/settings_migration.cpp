@@ -2,14 +2,13 @@
 
 #include <cstring>  // memcpy
 
-// The migration chain must end at the live version. When kSettingsVersion is bumped, freeze v21 and extend the chain
+// The migration chain must end at the live version. When kSettingsVersion is bumped, freeze v19 and extend the chain
 // (see settings_migration.hh).
-static_assert(kSettingsVersion == 21, "kSettingsVersion changed: freeze the previous layout and add a migration step.");
+static_assert(kSettingsVersion == 19, "kSettingsVersion changed: freeze the previous layout and add a migration step.");
 static_assert(sizeof(settings_v12::Settings) == 1088 && sizeof(settings_v13::Settings) == 1088 &&
                   sizeof(settings_v14::Settings) == 1140 && sizeof(settings_v15::Settings) == 1144 &&
                   sizeof(settings_v16::Settings) == 1144 && sizeof(settings_v17::Settings) == 1340 &&
-                  sizeof(settings_v18::Settings) == 1340 &&
-                  sizeof(settings_v19::Settings) == 1344 && sizeof(settings_v20::Settings) == 2656,
+                  sizeof(settings_v18::Settings) == 1340,
               "A frozen settings snapshot changed size. Frozen snapshots must never be edited.");
 
 // The frozen nested layouts must stay byte-identical to the live ones for the raw copies below to be valid. If a future
@@ -301,25 +300,9 @@ void SettingsMigrator::MigrateV17ToV18(const settings_v17::Settings& in, setting
     out.auto_update_enabled = false;
 }
 
-void SettingsMigrator::MigrateV18ToV19(const settings_v18::Settings& in, settings_v19::Settings& out) {
-    // v19 adds the distance filter after v18's fields, off at 100.0 nm.
-    memset(&out, 0, sizeof(out));
-    memcpy(&out, &in, sizeof(in));
-    out.settings_version = 19;
-    out.filter_distance_enabled = false;
-    out.filter_distance_deci_nm = SettingsManager::Settings::kDefaultFilterDistanceDeciNm;
-}
-
-void SettingsMigrator::MigrateV19ToV20(const settings_v19::Settings& in, settings_v20::Settings& out) {
-    // v20 appends feed transports and MQTT options after v19's fields: every feed keeps the TCP transport (0).
-    memset(&out, 0, sizeof(out));
-    memcpy(&out, &in, sizeof(in));
-    out.settings_version = 20;
-}
-
-void SettingsMigrator::MigrateV20ToV21(const settings_v20::Settings& in, SettingsManager::Settings& out) {
-    // Start from a fresh, fully-defaulted current struct: the ASTERIX SAC/SIC and NTP server (new in v21) take their
-    // defaults.
+void SettingsMigrator::MigrateV18ToV19(const settings_v18::Settings& in, SettingsManager::Settings& out) {
+    // Start from a fresh, fully-defaulted current struct: the distance filter (new in v19) stays off,
+    // feeds keep the TCP transport, and the ASTERIX SAC/SIC (0, 0) and NTP server (pool.ntp.org) take their defaults.
     out = SettingsManager::Settings();
 
     out.settings_version = kSettingsVersion;
@@ -372,12 +355,6 @@ void SettingsMigrator::MigrateV20ToV21(const settings_v20::Settings& in, Setting
     out.ip_mode = static_cast<SettingsManager::IPMode>(in.ip_mode);
     memcpy(out.wifi_sta_extra_networks, in.wifi_sta_extra_networks, sizeof(in.wifi_sta_extra_networks));
     out.auto_update_enabled = in.auto_update_enabled;
-    out.filter_distance_enabled = in.filter_distance_enabled;
-    out.filter_distance_deci_nm = in.filter_distance_deci_nm;
-    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-        out.feed_transports[i] = static_cast<SettingsManager::FeedTransport>(in.feed_transports[i]);
-    }
-    memcpy(out.feed_mqtt, in.feed_mqtt, sizeof(in.feed_mqtt));
 }
 
 bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t from_version,
@@ -390,8 +367,6 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
     settings_v16::Settings v16;
     static settings_v17::Settings v17;  // Static: the snapshots above already fill the RP2040's 4 kB stack.
     static settings_v18::Settings v18;
-    static settings_v19::Settings v19;
-    static settings_v20::Settings v20;
 
     switch (from_version) {
         case 12: {
@@ -447,9 +422,7 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
             }
             memcpy(&v17, blob, sizeof(v17));
             MigrateV17ToV18(v17, v18);
-            MigrateV18ToV19(v18, v19);
-            MigrateV19ToV20(v19, v20);
-            MigrateV20ToV21(v20, out);
+            MigrateV18ToV19(v18, out);
             return true;
         }
         case 18: {
@@ -457,26 +430,7 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
                 return false;
             }
             memcpy(&v18, blob, sizeof(v18));
-            MigrateV18ToV19(v18, v19);
-            MigrateV19ToV20(v19, v20);
-            MigrateV20ToV21(v20, out);
-            return true;
-        }
-        case 19: {
-            if (blob_len < sizeof(settings_v19::Settings)) {
-                return false;
-            }
-            memcpy(&v19, blob, sizeof(v19));
-            MigrateV19ToV20(v19, v20);
-            MigrateV20ToV21(v20, out);
-            return true;
-        }
-        case 20: {
-            if (blob_len < sizeof(settings_v20::Settings)) {
-                return false;
-            }
-            memcpy(&v20, blob, sizeof(v20));
-            MigrateV20ToV21(v20, out);
+            MigrateV18ToV19(v18, out);
             return true;
         }
         default:
@@ -486,8 +440,6 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
 
     MigrateV16ToV17(v16, v17);
     MigrateV17ToV18(v17, v18);
-    MigrateV18ToV19(v18, v19);
-    MigrateV19ToV20(v19, v20);
-    MigrateV20ToV21(v20, out);  // Final step: v20 is the newest frozen version, so this lands on the live struct.
+    MigrateV18ToV19(v18, out);  // Final step: v18 is the newest frozen version, so this lands on the live struct.
     return true;
 }
