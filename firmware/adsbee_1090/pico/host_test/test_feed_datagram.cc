@@ -82,3 +82,23 @@ TEST(FeedDatagram, MAVLinkUsesTheLengthField) {
     EXPECT_EQ(datagrams[1], v2_signed);
     EXPECT_EQ(datagrams[2], v1);
 }
+
+TEST(FeedDatagram, ASTERIXSplitsBetweenDataBlocks) {
+    // Two CAT021 data blocks of 7 and 5 bytes and a CAT023 block of 4 bytes.
+    std::vector<uint8_t> b1 = {21, 0, 7, 1, 2, 3, 4};
+    std::vector<uint8_t> b2 = {21, 0, 5, 1, 2};
+    std::vector<uint8_t> b3 = {23, 0, 4, 1};
+    std::vector<uint8_t> buf;
+    for (auto* b : {&b1, &b2, &b3}) buf.insert(buf.end(), b->begin(), b->end());
+
+    auto datagrams = Split(SettingsManager::kASTERIX, buf, 13);
+    ASSERT_EQ(datagrams.size(), 2u);
+    EXPECT_EQ(datagrams[0].size(), 12u);  // b1 + b2
+    EXPECT_EQ(datagrams[1], b3);
+
+    // A length field that runs past the buffer or is too short to be a block keeps the rest in one datagram.
+    std::vector<uint8_t> bad = {21, 0x10, 0x00, 1, 2, 3, 4, 5, 6, 7};
+    EXPECT_EQ(Split(SettingsManager::kASTERIX, bad, 4).size(), 1u);
+    bad = {21, 0, 1, 1, 2, 3, 4, 5};
+    EXPECT_EQ(Split(SettingsManager::kASTERIX, bad, 4).size(), 1u);
+}

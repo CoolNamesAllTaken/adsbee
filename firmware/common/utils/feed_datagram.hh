@@ -44,6 +44,11 @@ inline uint16_t FrameLen(SettingsManager::ReportingProtocol protocol, const uint
             }
             return frame_len < len ? frame_len : len;
         }
+        case SettingsManager::kASTERIX: {
+            // Data blocks start with a category byte and a 2 byte big-endian length that includes those 3 bytes.
+            uint16_t block_len = len >= 3 ? (buf[1] << 8) | buf[2] : len;
+            return block_len >= 3 && block_len < len ? block_len : len;
+        }
         case SettingsManager::kRaw:
         case SettingsManager::kCSBee:
         case SettingsManager::kAircraftJSON:
