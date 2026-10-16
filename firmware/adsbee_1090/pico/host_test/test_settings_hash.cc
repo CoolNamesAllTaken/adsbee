@@ -69,8 +69,8 @@ TEST(SettingsHash, SameSettingsSameHashWhateverThePadding) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Host defaults (no device info, access point channel 1). Changes only with the Settings struct or its defaults.
     Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x89F48FEFu);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x63D80042u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x28CE7FBFu);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xD106EB3Bu);
 }
 
 TEST(SettingsHash, StoredCRCDoesNotCount) {
@@ -149,8 +149,7 @@ TEST(SettingsHash, EverySharedSettingChangesBothHashes) {
     EXPECT_CHANGES_BOTH(strcpy(s.wifi_sta_extra_networks[1].ssid, "net"));
     EXPECT_CHANGES_BOTH(strcpy(s.wifi_sta_extra_networks[1].password, "secret"));
     EXPECT_CHANGES_BOTH(s.auto_update_enabled = true);
-    EXPECT_CHANGES_BOTH(s.antenna_position.source = ReceiverPosition::kSourceFixed);
-    EXPECT_CHANGES_BOTH(s.antenna_position.moving = true);
+    EXPECT_CHANGES_BOTH(s.rx_position_details.moving = true);
     EXPECT_CHANGES_BOTH(s.feed_transports[0] = SettingsManager::kFeedTransportMQTT);
     EXPECT_CHANGES_BOTH(strcpy(s.feed_mqtt[0].topic_prefix, "home"));
     EXPECT_CHANGES_BOTH(strcpy(s.feed_mqtt[0].username, "bee"));
@@ -177,10 +176,13 @@ TEST(SettingsHash, PerUnitSettingsChangeOnlyTheFullHash) {
     EXPECT_CHANGES_FULL_ONLY(s.asterix_sic = 7);
 }
 
-TEST(SettingsHash, AntennaCoordinatesChangeOnlyTheFullHash) {
+TEST(SettingsHash, RxPositionDetailsCountOnlyInTheFullHashForAFixedPosition) {
     Settings a, b;
-    a.antenna_position.source = b.antenna_position.source = ReceiverPosition::kSourceFixed;
-    b.antenna_position.latitude_deg = 47.5;
+    b.rx_position_details.ellipsoid_height_set = true;
+    b.rx_position_details.ellipsoid_height_m = 31.5f;
+    b.rx_position_details.vertical_accuracy_m = 2.0f;
+    EXPECT_EQ(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
+    a.rx_position.source = b.rx_position.source = SettingsManager::RxPosition::kPositionSourceFixed;
     EXPECT_EQ(SettingsHash::Compute(a, kScopeFleet), SettingsHash::Compute(b, kScopeFleet));
     EXPECT_NE(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 }

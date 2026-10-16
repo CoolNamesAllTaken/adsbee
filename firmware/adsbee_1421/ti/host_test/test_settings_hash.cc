@@ -15,8 +15,8 @@ TEST(SettingsHash, SameSettingsSameHash) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Changes only with the Settings struct or its defaults.
     SM::Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x4D4E1663u);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x06F49179u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0xE881BF38u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xFAE8D6ACu);
 }
 
 TEST(SettingsHash, MagicAndStoredCRCDoNotCount) {
@@ -55,9 +55,8 @@ TEST(SettingsHash, EverySettingChangesBothHashes) {
     ExpectChangesBoth("mavlink_component_id", [](SM::Settings& s) { s.mavlink_component_id++; });
     ExpectChangesBoth("rx_position.source",
                       [](SM::Settings& s) { s.rx_position.source = SM::RxPosition::kPositionSourceGNSS; });
-    ExpectChangesBoth("antenna_position.source",
-                      [](SM::Settings& s) { s.antenna_position.source = ReceiverPosition::kSourceFixed; });
-    ExpectChangesBoth("antenna_position.moving", [](SM::Settings& s) { s.antenna_position.moving = true; });
+    ExpectChangesBoth("filter_distance_enabled", [](SM::Settings& s) { s.filter_distance_enabled = true; });
+    ExpectChangesBoth("rx_position_details.moving", [](SM::Settings& s) { s.rx_position_details.moving = true; });
     ExpectChangesBoth("asterix_sac", [](SM::Settings& s) { s.asterix_sac = 25; });
 }
 
@@ -68,10 +67,12 @@ TEST(SettingsHash, ASTERIXSICCountsOnlyInTheFullHash) {
     EXPECT_NE(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 }
 
-TEST(SettingsHash, AntennaCoordinatesChangeOnlyTheFullHash) {
+TEST(SettingsHash, RxPositionDetailsCountOnlyInTheFullHashForAFixedPosition) {
     SM::Settings a, b;
-    a.antenna_position.source = b.antenna_position.source = ReceiverPosition::kSourceFixed;
-    b.antenna_position.latitude_deg = 47.5;
+    b.rx_position_details.ellipsoid_height_set = true;
+    b.rx_position_details.ellipsoid_height_m = 31.5f;
+    EXPECT_EQ(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
+    a.rx_position.source = b.rx_position.source = SM::RxPosition::kPositionSourceFixed;
     EXPECT_EQ(SettingsHash::Compute(a, kScopeFleet), SettingsHash::Compute(b, kScopeFleet));
     EXPECT_NE(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 }

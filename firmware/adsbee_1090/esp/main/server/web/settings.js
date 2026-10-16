@@ -691,7 +691,7 @@ const SETTINGS_LOG_LEVELS = ['SILENT', 'ERRORS', 'WARNINGS', 'INFO'];
 function makeRxPositionEntry() {
     return {
         cmd: 'RX_POSITION', label: 'Receiver Position', group: 'Position',
-        help: 'Where the receiver is located, used for range calculations and position decoding.',
+        help: 'Where the receiver is located, used for range calculations and position decoding. MLAT feeds get the GNSS fix (GNSS) or the fixed position (FIXED), and no position for the other sources.',
         query: { expect: /^(Receiver Position:|Source:|Latitude:|Longitude:|GNSS Altitude:|Barometric Altitude:|Heading:|Speed:|ICAO:)/ },
         fields: [
             {
@@ -712,6 +712,11 @@ function makeRxPositionEntry() {
             { id: 'heading', label: 'Heading (deg)', type: 'float', min: 0, max: 359.9, visibleIf: v => v.source === 'FIXED' },
             { id: 'speed', label: 'Speed (kts)', type: 'int', min: 0, visibleIf: v => v.source === 'FIXED' },
             { id: 'icao', label: 'ICAO Address (hex)', type: 'hex', maxLen: 6, visibleIf: v => v.source === 'ICAO' },
+            { id: 'height', label: 'MLAT: Height above ellipsoid (m, - for GNSS altitude)', type: 'string', maxLen: 12, visibleIf: v => v.source === 'FIXED' },
+            { id: 'hacc', label: 'MLAT: Horizontal accuracy, 1 sigma (m, 0 if unknown)', type: 'float', min: 0, visibleIf: v => v.source === 'FIXED' },
+            { id: 'vacc', label: 'MLAT: Vertical accuracy, 1 sigma (m, 0 if unknown)', type: 'float', min: 0, visibleIf: v => v.source === 'FIXED' },
+            { id: 'moving', label: 'MLAT: Receiver may move (vehicle)', type: 'bool' },
+            { id: 'mlat', label: 'MLAT position in use', type: 'display' },
         ],
         parse(lines) {
             const values = {};
@@ -727,41 +732,25 @@ function makeRxPositionEntry() {
                 else if ((m = l.match(/^Heading:\s*(-?[\d.]+)/))) values.heading = parseFloat(m[1]);
                 else if ((m = l.match(/^Speed:\s*(-?\d+)/))) values.speed = parseInt(m[1], 10);
                 else if ((m = l.match(/^ICAO:\s*0x([0-9A-Fa-f]+)/))) values.icao = m[1].toUpperCase();
+                else if ((m = l.match(/^MLAT[^:]*:\s*([^,]+),(-?[\d.]+),(-?[\d.]+),([01])\s*\[([^\]]*)\]/))) {
+                    values.height = m[1];
+                    values.hacc = parseFloat(m[2]);
+                    values.vacc = parseFloat(m[3]);
+                    values.moving = m[4] === '1';
+                    values.mlat = m[5];
+                }
             }
             return values.source === undefined ? null : values;
         },
         build(v) {
+            // The MLAT arguments follow the 6 FIXED arguments, which are empty for the other sources.
+            const mlat = `${v.height === undefined || v.height === '' ? '-' : v.height},${v.hacc ?? 0},${v.vacc ?? 0},${v.moving ? 1 : 0}`;
             if (v.source === 'FIXED') {
-                return [`AT+RX_POSITION=FIXED,${v.lat},${v.lon},${v.gnss_alt},${v.baro_alt},${v.heading},${v.speed}`];
+                return [`AT+RX_POSITION=FIXED,${v.lat},${v.lon},${v.gnss_alt},${v.baro_alt},${v.heading},${v.speed},${mlat}`];
             }
-            if (v.source === 'ICAO') return [`AT+RX_POSITION=ICAO,${v.icao}`];
-            return [`AT+RX_POSITION=${v.source}`];
+            if (v.source === 'ICAO') return [`AT+RX_POSITION=ICAO,${v.icao},,,,,,${mlat}`];
+            return [`AT+RX_POSITION=${v.source},,,,,,,${mlat}`];
         },
-    };
-}
-
-// ANTENNA_POSITION is identical on both products.
-function makeAntennaPositionEntry() {
-    const fixed = v => v.source === 'FIXED';
-    return {
-        cmd: 'ANTENNA_POSITION', label: 'Antenna Position (MLAT)', group: 'Position',
-        help: 'Antenna position sent to MLAT servers (MLAT protocol) when there is no GNSS fix. Height is above the WGS84 ellipsoid (GNSS height), not above sea level.',
-        fields: [
-            {
-                id: 'source', label: 'Source', type: 'enum',
-                options: [
-                    { value: 'NONE', label: 'Not set' },
-                    { value: 'FIXED', label: 'Fixed (enter below)' },
-                ],
-            },
-            { id: 'lat', label: 'Latitude (deg)', type: 'float', min: -90, max: 90, visibleIf: fixed },
-            { id: 'lon', label: 'Longitude (deg)', type: 'float', min: -180, max: 180, visibleIf: fixed },
-            { id: 'height', label: 'Height above ellipsoid (m)', type: 'float', min: -1000, max: 100000, visibleIf: fixed },
-            { id: 'hacc', label: 'Horizontal accuracy, 1 sigma (m, 0 if unknown)', type: 'float', min: 0, visibleIf: fixed },
-            { id: 'vacc', label: 'Vertical accuracy, 1 sigma (m, 0 if unknown)', type: 'float', min: 0, visibleIf: fixed },
-            { id: 'moving', label: 'Receiver may move (vehicle)', type: 'bool' },
-            { id: 'in_use', label: 'Position in use', type: 'display' },
-        ],
     };
 }
 
@@ -983,7 +972,6 @@ const SETTINGS_SCHEMA_1090 = [
     },
     // ── Position ──
     makeRxPositionEntry(),
-    makeAntennaPositionEntry(),
     {
         cmd: 'GNSS', label: 'GNSS Receiver', group: 'Position',
         fields: [

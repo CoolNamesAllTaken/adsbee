@@ -131,7 +131,6 @@ class CommsManager {
 
     inline uint32_t GetBaudRate() const { return config_.uart_baud_rate; }
 
-    CPP_AT_CALLBACK(ATAntennaPositionCallback);
     CPP_AT_CALLBACK(ATBaudRateCallback);
     CPP_AT_CALLBACK(ATBootloaderPinCallback);
     CPP_AT_CALLBACK(ATConfigHashCallback);

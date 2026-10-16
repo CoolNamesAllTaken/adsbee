@@ -125,17 +125,17 @@ TEST(Settings, Version6BlobMigratesWithASTERIXDataSourceZero) {
     EXPECT_EQ(out.asterix_sac, 0);
     EXPECT_EQ(out.asterix_sic, 0);
 
-    EXPECT_EQ(out.antenna_position.source, ReceiverPosition::kSourceNone);
+    EXPECT_TRUE(out.rx_position_details == RxPositionDetails());
 }
 
-TEST(Settings, Version7BlobMigratesWithAntennaPositionUnset) {
+TEST(Settings, Version7BlobMigratesWithRxPositionDetailsEmpty) {
     // A version 7 blob is today's struct up to the ASTERIX SAC/SIC, then its CRC.
     SM::Settings current;
     current.filter_distance_enabled = true;
     current.asterix_sac = 25;
     current.asterix_sic = 7;
     uint8_t blob[sizeof(SM::Settings)];
-    memset(blob, 0xFF, sizeof(blob));  // Erased flash past the version 7 struct: it must not become a position.
+    memset(blob, 0xFF, sizeof(blob));  // Erased flash past the version 7 struct: it must not become RX_POSITION details.
     memcpy(blob, static_cast<const void*>(&current), SM::kVersion7SettingsSize - sizeof(uint32_t));
     uint32_t version = 7;
     memcpy(blob + offsetof(SM::Settings, settings_version), &version, sizeof(version));
@@ -143,15 +143,14 @@ TEST(Settings, Version7BlobMigratesWithAntennaPositionUnset) {
     memcpy(blob + SM::kVersion7SettingsSize - sizeof(uint32_t), &crc, sizeof(crc));
 
     SM::Settings out;
-    out.antenna_position.source = ReceiverPosition::kSourceFixed;
-    out.antenna_position.moving = true;
+    out.rx_position_details.ellipsoid_height_set = true;
+    out.rx_position_details.moving = true;
     ASSERT_TRUE(SM::MigrateFromOlderVersion(blob, out));
     EXPECT_TRUE(out.IsValid());
     EXPECT_TRUE(out.filter_distance_enabled);
     EXPECT_EQ(out.asterix_sac, 25);
     EXPECT_EQ(out.asterix_sic, 7);
-    EXPECT_EQ(out.antenna_position.source, ReceiverPosition::kSourceNone);
-    EXPECT_FALSE(out.antenna_position.moving);
+    EXPECT_TRUE(out.rx_position_details == RxPositionDetails());
 
     // A version 8 blob is not migrated.
     version = 8;
@@ -164,5 +163,5 @@ TEST(Settings, ASTERIXDataSourceDefaultsToZero) {
     SM::Settings settings;
     EXPECT_EQ(settings.asterix_sac, 0);
     EXPECT_EQ(settings.asterix_sic, 0);
-    EXPECT_EQ(sizeof(SM::Settings), 99u);
+    EXPECT_EQ(sizeof(SM::Settings), 83u);
 }

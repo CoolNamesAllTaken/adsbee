@@ -528,7 +528,9 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
 }
 
 bool GetReceiverPosition(ReceiverPosition& position) {
-    position = settings_manager.settings.antenna_position;  // No GNSS receiver: the fixed position or none.
+    // No GNSS receiver: the FIXED position, or none.
+    RxPositionDetails details = settings_manager.settings.rx_position_details;  // Copy: Settings is packed.
+    position = details.ForMLAT(adsbee.rx_position, nullptr);
     return position.IsValid();
 }
 

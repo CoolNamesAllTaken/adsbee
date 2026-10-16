@@ -72,9 +72,9 @@ bool SettingsManager::Apply() {
     if (settings.rx_position.source >= RxPosition::kNumPositionSources) {
         settings.rx_position.source = RxPosition::kPositionSourceLowestAircraft;
     }
-    ReceiverPosition antenna_position = settings.antenna_position;
-    if (ReceiverPosition::SanitizeStoredFixed(antenna_position)) {
-        settings.antenna_position = antenna_position;
+    RxPositionDetails rx_position_details = settings.rx_position_details;  // Copy: Settings is packed.
+    if (rx_position_details.Sanitize()) {
+        settings.rx_position_details = rx_position_details;
     }
 
     // All of these can fail if the radio fails to open/close or the RX command can't be restarted; fold that
@@ -262,9 +262,10 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
     CONSOLE_PRINTF("\tASTERIX SIC: %u\r\n", settings.asterix_sic);
 
-    char antenna_args[96];
-    ReceiverPosition::PrintATArgs(antenna_args, sizeof(antenna_args), settings.antenna_position);
-    CONSOLE_PRINTF("\tAntenna Position: %s\r\n", antenna_args);
+    RxPositionDetails rx_position_details = settings.rx_position_details;  // Copy: Settings is packed.
+    char details_args[64];
+    rx_position_details.PrintATArgs(details_args, sizeof(details_args));
+    CONSOLE_PRINTF("\tReceiver Position Details (ellipsoid height, accuracy, moving): %s\r\n", details_args);
 
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
@@ -351,8 +352,12 @@ void SettingsManager::PrintAT() {
     // AT+ASTERIX_SAC_SIC
     CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
 
-    // AT+ANTENNA_POSITION: last, since older firmware stops replaying at the first command it doesn't know.
-    char antenna_args[96];
-    ReceiverPosition::PrintATArgs(antenna_args, sizeof(antenna_args), settings.antenna_position);
-    CONSOLE_PRINTF("AT+ANTENNA_POSITION=%s\r\n", antenna_args);
+    // AT+RX_POSITION MLAT arguments, if set: last, since older firmware rejects the longer line. The empty source
+    // keeps the source and position above.
+    RxPositionDetails rx_position_details = settings.rx_position_details;  // Copy: Settings is packed.
+    if (rx_position_details != RxPositionDetails()) {
+        char details_args[64];
+        rx_position_details.PrintATArgs(details_args, sizeof(details_args));
+        CONSOLE_PRINTF("AT+RX_POSITION=,,,,,,,%s\r\n", details_args);
+    }
 }

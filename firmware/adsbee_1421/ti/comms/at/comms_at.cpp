@@ -53,28 +53,6 @@ int CppAT::cpp_at_printf(const char* format, ...) {
 
 /** AT Command Callback Functions **/
 
-CPP_AT_CALLBACK(CommsManager::ATAntennaPositionCallback) {
-    switch (op) {
-        case '?': {
-            char position_args[96];
-            ReceiverPosition::PrintATArgs(position_args, sizeof(position_args),
-                                          settings_manager.settings.antenna_position);
-            ReceiverPosition in_use;
-            GetReceiverPosition(in_use);
-            CPP_AT_CMD_PRINTF("=%s,%s", position_args, ReceiverPosition::SourceToStr(in_use.source));
-            CPP_AT_SILENT_SUCCESS();
-        }
-        case '=': {
-            const char* error = "";
-            if (!ReceiverPosition::ApplyATArgs(args, num_args, settings_manager.settings.antenna_position, error)) {
-                CPP_AT_ERROR("%s", error);
-            }
-            CPP_AT_SUCCESS();
-        }
-    }
-    CPP_AT_ERROR("Operator '%c' not supported.", op);
-}
-
 CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
     switch (op) {
         case '?':
@@ -800,12 +778,24 @@ void ATRxPositionHelpCallback() {
         "\tspeed_kts: Speed in kts."
         "AT+RX_POSITION=ICAO,<icao>\r\n"
         "\ticao: ICAO address in hex (e.g. 7ABCDEF) of aircraft to use for position bootstrap.\r\n"
+        "AT+RX_POSITION=<source>,<args>,<ellipsoid_height_m>,<hacc_m>,<vacc_m>,<moving>\r\n"
+        "\tOptional, for MLAT, after the 6 FIXED arguments (empty for other sources). An empty argument keeps its "
+        "value.\r\n"
+        "\tellipsoid_height_m: FIXED antenna height above the WGS84 ellipsoid, \"-\" to clear. Without it MLAT uses "
+        "gnss_alt_ft.\r\n"
+        "\thacc_m, vacc_m: FIXED one sigma accuracies, 0 if unknown.\r\n"
+        "\tmoving: 1 for a receiver in a vehicle, for any source.\r\n"
         "AT+RX_POSITION?\r\n\tQuery the receiver's position.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
     switch (op) {
         case '?': {
+            RxPositionDetails details = settings_manager.settings.rx_position_details;  // Copy: Settings is packed.
+            char details_args[64];
+            details.PrintATArgs(details_args, sizeof(details_args));
+            ReceiverPosition in_use;
+            GetReceiverPosition(in_use);
             CPP_AT_PRINTF(
                 "Receiver Position:\r\n"
                 "\tSource: %s [%s] \r\n"
@@ -815,7 +805,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 "\tBarometric Altitude: %d ft\r\n"
                 "\tHeading: %.1f deg\r\n"
                 "\tSpeed: %d kts\r\n"
-                "\tICAO: 0x%06X [%s]\r\n",
+                "\tICAO: 0x%06X [%s]\r\n"
+                "\tMLAT (ellipsoid height, accuracy, moving): %s [%s]\r\n",
                 SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                 adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
                 adsbee.rx_position.longitude_deg, adsbee.rx_position.gnss_altitude_ft,
@@ -824,7 +815,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 adsbee.rx_position.source ==
                         SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO
                     ? "IN USE"
-                    : "NOT IN USE");
+                    : "NOT IN USE",
+                details_args, ReceiverPosition::SourceToStr(in_use.source));
             // if (rx_position.source ==
             //     SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
             //     CPP_AT_PRINTF("\tICAO: 0x%06X\r\n", rx_position.icao_address);
@@ -833,6 +825,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
             break;
         }
         case '=': {
+            // Optional MLAT arguments, checked before anything changes.
+            RxPositionDetails details = settings_manager.settings.rx_position_details;  // Copy: Settings is packed.
+            const char* error = "";
+            if (!details.ApplyATArgs(args, num_args, error)) {
+                CPP_AT_ERROR("%s", error);
+            }
             if (CPP_AT_HAS_ARG(0)) {
                 // Set position source.
                 for (uint16_t i = 0; i <= SettingsManager::RxPosition::kNumPositionSources; i++) {
@@ -926,6 +924,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                     }
                 }
             }
+            settings_manager.settings.rx_position_details = details;
             CPP_AT_SUCCESS();
             break;
         }
@@ -955,17 +954,6 @@ static void PrintSettingsJSON() {
     }
 
     CPP_AT_PRINTF("SETTINGS={");
-    {
-        ReceiverPosition antenna = s.antenna_position;  // Copy: Settings is packed.
-        ReceiverPosition in_use;
-        GetReceiverPosition(in_use);
-        char position_args[96];
-        ReceiverPosition::PrintATArgs(position_args, sizeof(position_args), antenna);
-        // Same values as AT+ANTENNA_POSITION?, as a JSON array: the source string, then numbers.
-        char* numbers = strchr(position_args, ',');
-        CPP_AT_PRINTF("\"ANTENNA_POSITION\":[\"%.*s\"%s,\"%s\"],", static_cast<int>(numbers - position_args),
-                      position_args, numbers, ReceiverPosition::SourceToStr(in_use.source));
-    }
     CPP_AT_PRINTF("\"ASTERIX_SAC_SIC\":[%u,%u],", s.asterix_sac, s.asterix_sic);
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu],", (unsigned long)comms_manager.GetBaudRate());
     CPP_AT_PRINTF("\"BOOTLOADER_PIN\":[%d],", CcfgBootloader::BackdoorEnabled(CcfgBootloader::ReadBlConfig()));
@@ -982,12 +970,26 @@ static void PrintSettingsJSON() {
                   SettingsManager::kR1090PreambleModeStrs[adsbee.GetR1090PreambleMode()]);
     CPP_AT_PRINTF("\"R1090_RX_BOOST\":[%u],", adsbee.GetR1090RxBoost());
     CPP_AT_PRINTF("\"RX_ENABLE\":[%d,%d],", adsbee.Rx1090IsEnabled(), adsbee.RxSubGHzIsEnabled());
-    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\"],",
+    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\",",
                   SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                   adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
                   adsbee.rx_position.longitude_deg, (int)adsbee.rx_position.gnss_altitude_ft,
                   (int)adsbee.rx_position.baro_altitude_ft, adsbee.rx_position.heading_deg,
                   (int)adsbee.rx_position.speed_kts, (unsigned)adsbee.rx_position.icao_address);
+    {
+        // The optional MLAT arguments as AT+RX_POSITION? prints them, then the position source MLAT uses.
+        RxPositionDetails details = s.rx_position_details;  // Copy: Settings is packed.
+        ReceiverPosition in_use;
+        GetReceiverPosition(in_use);
+        if (details.ellipsoid_height_set) {
+            CPP_AT_PRINTF("\"%.2f\",", static_cast<double>(details.ellipsoid_height_m));
+        } else {
+            CPP_AT_PRINTF("\"-\",");
+        }
+        CPP_AT_PRINTF("%.2f,%.2f,%d,\"%s\"],", static_cast<double>(details.horizontal_accuracy_m),
+                      static_cast<double>(details.vertical_accuracy_m), details.moving,
+                      ReceiverPosition::SourceToStr(in_use.source));
+    }
     CPP_AT_PRINTF("\"SUBG_MODE\":[\"%s\"],", SettingsManager::kSubGHzModeStrs[subg_radio.GetMode()]);
     CPP_AT_PRINTF("\"WATCHDOG\":[%lu]", (unsigned long)adsbee.GetWatchdogTimeoutSec());
     CPP_AT_PRINTF("}\r\n");
@@ -1413,17 +1415,6 @@ CPP_AT_CALLBACK(CommsManager::ATRxCWCallback) {
 #endif
 
 const CppAT::ATCommandDef_t at_command_list[] = {
-    {.command = "ANTENNA_POSITION",
-     .min_args = 0,
-     .max_args = 7,
-     .help_string =
-         "AT+ANTENNA_POSITION=<NONE|FIXED>,<lat_deg>,<lon_deg>,<height_m>,<hacc_m>,<vacc_m>,<moving>\r\n\tAntenna "
-         "position sent in the MLAT protocol's receiver info frame. Height is above the WGS84 ellipsoid (GNSS "
-         "height, not height above sea level). hacc_m and vacc_m are one sigma accuracies (empty if unknown). moving "
-         "is 1 for a receiver in a vehicle (position sent every second). NONE clears the position; an empty argument "
-         "keeps moving as it is. AT+SETTINGS=SAVE stores it.\r\n\tAT+ANTENNA_POSITION?\r\n\tQuery the stored "
-         "position, followed by the source in use (none or fixed).",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATAntennaPositionCallback, comms_manager)},
     {.command = "ASTERIX_SAC_SIC",
      .min_args = 0,
      .max_args = 2,
@@ -1541,7 +1532,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     },
     {.command = "RX_POSITION",
      .min_args = 0,
-     .max_args = 8,
+     .max_args = 11,
      .help_callback = ATRxPositionHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxPositionCallback, comms_manager)},
     {.command = "RX_STATS",

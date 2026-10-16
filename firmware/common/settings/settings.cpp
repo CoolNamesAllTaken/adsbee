@@ -169,8 +169,8 @@ bool SettingsManager::Sanitize() {
         }
     }
 
-    if (ReceiverPosition::SanitizeStoredFixed(settings.antenna_position)) {
-        CONSOLE_ERROR("SettingsManager::Sanitize", "antenna_position is invalid, clearing it.");
+    if (settings.rx_position_details.Sanitize()) {
+        CONSOLE_ERROR("SettingsManager::Sanitize", "rx_position_details is invalid, clearing it.");
         changed = true;
     }
 
@@ -264,14 +264,9 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
                    static_cast<unsigned long>(settings.filter_distance_deci_nm / 10),
                    static_cast<unsigned long>(settings.filter_distance_deci_nm % 10));
-    const ReceiverPosition& antenna = settings.antenna_position;
-    if (antenna.source == ReceiverPosition::kSourceFixed) {
-        CONSOLE_PRINTF("\tAntenna Position: %.7f deg, %.7f deg, %.2f m (accuracy %.2f m, %.2f m)%s\r\n",
-                       antenna.latitude_deg, antenna.longitude_deg, antenna.height_m, antenna.horizontal_accuracy_m,
-                       antenna.vertical_accuracy_m, antenna.moving ? ", moving" : "");
-    } else {
-        CONSOLE_PRINTF("\tAntenna Position: NOT SET%s\r\n", antenna.moving ? ", moving" : "");
-    }
+    char details_args[64];
+    settings.rx_position_details.PrintATArgs(details_args, sizeof(details_args));
+    CONSOLE_PRINTF("\tReceiver Position Details (ellipsoid height, accuracy, moving): %s\r\n", details_args);
 
 #ifdef ON_PICO
     // Only print serial reporting protocols on master, where we aren't constrained by log message size.
@@ -474,8 +469,11 @@ void SettingsManager::PrintAT() {
     // AT+NTP_SERVER
     CONSOLE_PRINTF("AT+NTP_SERVER=%s\r\n", settings.ntp_server);
 
-    // AT+ANTENNA_POSITION
-    char antenna_args[96];
-    ReceiverPosition::PrintATArgs(antenna_args, sizeof(antenna_args), settings.antenna_position);
-    CONSOLE_PRINTF("AT+ANTENNA_POSITION=%s\r\n", antenna_args);
+    // AT+RX_POSITION MLAT arguments, if set: last, since older firmware rejects the longer line. The empty source
+    // keeps the receiver position as it is.
+    if (settings.rx_position_details != RxPositionDetails()) {
+        char details_args[64];
+        settings.rx_position_details.PrintATArgs(details_args, sizeof(details_args));
+        CONSOLE_PRINTF("AT+RX_POSITION=,,,,,,,%s\r\n", details_args);
+    }
 }

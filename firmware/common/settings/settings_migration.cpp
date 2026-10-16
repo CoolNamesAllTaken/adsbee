@@ -327,7 +327,7 @@ void SettingsMigrator::MigrateV20ToV21(const settings_v20::Settings& in, setting
 }
 
 void SettingsMigrator::MigrateV21ToV22(const settings_v21::Settings& in, SettingsManager::Settings& out) {
-    // Start from a fresh, fully-defaulted current struct: the fixed antenna position (new in v22) starts unset.
+    // Start from a fresh, fully-defaulted current struct: the AT+RX_POSITION details (new in v22) start empty.
     out = SettingsManager::Settings();
 
     out.settings_version = kSettingsVersion;

@@ -373,9 +373,9 @@ class SettingsManager {
         // Network Time Protocol server the ESP32 sets its clock from while an output uses ASTERIX.
         char ntp_server[kNTPServerMaxLen + 1];
 
-        // Antenna position entered by the operator (source kSourceFixed, or kSourceNone if not set). A valid GNSS fix
-        // takes precedence. `moving` applies to both.
-        ReceiverPosition antenna_position;
+        // Optional AT+RX_POSITION arguments for MLAT: ellipsoid height and accuracy of a FIXED position, and whether
+        // the receiver may move.
+        RxPositionDetails rx_position_details;
 
         /**
          * Default constructor.
@@ -818,7 +818,7 @@ extern SettingsManager settings_manager;
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
 static_assert(kSettingsVersion == 22,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 2752,
+static_assert(sizeof(SettingsManager::Settings) == 2736,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -848,6 +848,6 @@ static_assert(offsetof(SettingsManager::Settings, feed_mqtt) == 1354, "Settings 
 static_assert(offsetof(SettingsManager::Settings, asterix_sac) == 2654, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, asterix_sic) == 2655, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, ntp_server) == 2656, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, antenna_position) == 2720, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, rx_position_details) == 2720, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

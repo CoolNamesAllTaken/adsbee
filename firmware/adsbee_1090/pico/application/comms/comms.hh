@@ -93,7 +93,6 @@ class CommsManager {
 #endif
     CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
-    CPP_AT_CALLBACK(ATAntennaPositionCallback);
     CPP_AT_CALLBACK(ATAutoUpdateCallback);
     CPP_AT_CALLBACK(ATFeedEnableCallback);
     CPP_AT_CALLBACK(ATFeedMQTTCallback);

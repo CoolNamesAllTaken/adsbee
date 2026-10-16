@@ -191,9 +191,9 @@ class SettingsManager {
         uint8_t asterix_sac = 0;
         uint8_t asterix_sic = 0;
 
-        // Antenna position entered by the operator for MLAT (source kSourceFixed, or kSourceNone if not set), added in
-        // version 8.
-        ReceiverPosition antenna_position;
+        // Optional AT+RX_POSITION arguments for MLAT, added in version 8: ellipsoid height and accuracy of a FIXED
+        // position, and whether the receiver may move.
+        RxPositionDetails rx_position_details;
 
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
         uint32_t crc = 0;
@@ -246,15 +246,15 @@ class SettingsManager {
                   "Settings::crc must be the last member, with no trailing padding.");
 
     // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled and
-    // filter_distance_deci_nm, version 7 asterix_sac and asterix_sic, version 8 antenna_position.
+    // filter_distance_deci_nm, version 7 asterix_sac and asterix_sic, version 8 rx_position_details.
     static constexpr uint16_t kVersion5SettingsSize = 62;
     static constexpr uint16_t kVersion6SettingsSize = 67;
     static constexpr uint16_t kVersion7SettingsSize = 69;
     static_assert(kSettingsVersion == 8 &&
                       offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
                       offsetof(Settings, asterix_sac) == kVersion6SettingsSize - sizeof(uint32_t) &&
-                      offsetof(Settings, antenna_position) == kVersion7SettingsSize - sizeof(uint32_t) &&
-                      sizeof(Settings) == kVersion7SettingsSize + sizeof(ReceiverPosition),
+                      offsetof(Settings, rx_position_details) == kVersion7SettingsSize - sizeof(uint32_t) &&
+                      sizeof(Settings) == kVersion7SettingsSize + sizeof(RxPositionDetails),
                   "Settings changed: update MigrateFromOlderVersion or add a migration from version 8.");
 
     /**

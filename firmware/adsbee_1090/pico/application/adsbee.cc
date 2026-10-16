@@ -464,7 +464,7 @@ void ADSBee::UpdateReceiverPosition() {
     ReceiverPosition gnss_position;
     bool have_gnss = gnss != nullptr && gnss->GetReceiverPosition(gnss_position);
     receiver_position =
-        ReceiverPosition::Resolve(settings_manager.settings.antenna_position, have_gnss ? &gnss_position : nullptr);
+        settings_manager.settings.rx_position_details.ForMLAT(rx_position, have_gnss ? &gnss_position : nullptr);
 
     // Read the latest PPS edge; retry if the interrupt updated it in between.
     uint32_t edge_count, edge_timestamp_ms;

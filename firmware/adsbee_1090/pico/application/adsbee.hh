@@ -484,8 +484,8 @@ class ADSBee {
     SettingsManager::RxPosition rx_position;
     bool rx_position_available = false;
 
-    // Antenna position for feeds (live GNSS fix, else the fixed setting) and the GNSS PPS reference for the MLAT
-    // counter. Updated in Update().
+    // Antenna position for feeds, from rx_position (the live GNSS fix for GNSS, the fixed position for FIXED, else
+    // none), and the GNSS PPS reference for the MLAT counter. Updated in Update().
     ReceiverPosition receiver_position;
     ReceiverPPS receiver_pps;
     // MLAT feed clock epoch: random at boot, since the MLAT counter starts over on every boot.

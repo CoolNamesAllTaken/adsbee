@@ -10,9 +10,9 @@
 #include <string_view>
 
 /**
- * Antenna position of this receiver, for feeds that report where the receiver is (MLAT, ground station status).
- * Live GNSS with a valid fix wins, else the fixed position from the settings, else there is no position.
- * Packed: it is part of the stored Settings and of the RP2040 to ESP32 device status.
+ * Antenna position of this receiver, for feeds that report where the receiver is (MLAT, ground station status). Taken
+ * from AT+RX_POSITION: the live GNSS fix for the GNSS source, the fixed position for FIXED, and no position for the
+ * other sources. Packed: it is part of the RP2040 to ESP32 device status.
  */
 struct __attribute__((packed)) ReceiverPosition {
     enum Source : uint8_t { kSourceNone = 0, kSourceFixed, kSourceGNSS, kNumSources };
@@ -48,149 +48,175 @@ struct __attribute__((packed)) ReceiverPosition {
                height_m > -1000.0f && height_m < 100000.0f;
     }
     static bool AccuracyIsValid(float accuracy_m) { return std::isfinite(accuracy_m) && accuracy_m >= 0.0f; }
+};
+static_assert(sizeof(ReceiverPosition) == 30, "ReceiverPosition is stored and sent between processors as raw bytes.");
+
+/**
+ * Optional AT+RX_POSITION arguments for MLAT, after the arguments of the source:
+ * AT+RX_POSITION=<source>,...,<ellipsoid_height_m>,<hacc_m>,<vacc_m>,<moving>. The height and accuracies describe a
+ * FIXED position; moving applies to every source. Packed: it is part of the stored Settings.
+ */
+struct __attribute__((packed)) RxPositionDetails {
+    static constexpr uint16_t kFirstATArg = 7;  // Index of ellipsoid_height_m in the AT+RX_POSITION arguments.
+    static constexpr uint16_t kNumATArgs = 4;
+    static constexpr float kFeetToMeters = 0.3048f;
+
+    bool ellipsoid_height_set = false;
+    float ellipsoid_height_m = 0.0f;     // Above the WGS84 ellipsoid.
+    float horizontal_accuracy_m = 0.0f;  // One sigma, 0 if unknown.
+    float vertical_accuracy_m = 0.0f;    // One sigma, 0 if unknown.
+    bool moving = false;                 // The receiver may move (vehicle).
+
+    bool operator==(const RxPositionDetails& other) const {
+        return ellipsoid_height_set == other.ellipsoid_height_set && ellipsoid_height_m == other.ellipsoid_height_m &&
+               horizontal_accuracy_m == other.horizontal_accuracy_m &&
+               vertical_accuracy_m == other.vertical_accuracy_m && moving == other.moving;
+    }
+    bool operator!=(const RxPositionDetails& other) const { return !(*this == other); }
 
     /**
-     * Repairs a stored fixed position read from raw flash: anything but a valid kSourceFixed position becomes
-     * kSourceNone, and `moving` becomes 0 or 1.
+     * Repairs details read from raw flash: booleans become 0 or 1, and out of range values are cleared.
      * @retval True if anything was changed.
      */
-    static bool SanitizeStoredFixed(ReceiverPosition& position) {
+    bool Sanitize() {
         bool changed = false;
-        uint8_t raw_moving;
-        memcpy(&raw_moving, &position.moving, sizeof(raw_moving));
-        if (raw_moving > 1) {
-            const uint8_t one = 1;
-            memcpy(&position.moving, &one, sizeof(one));
+        for (bool* flag : {&ellipsoid_height_set, &moving}) {
+            uint8_t raw;
+            memcpy(&raw, flag, sizeof(raw));
+            if (raw > 1) {
+                *flag = true;
+                changed = true;
+            }
+        }
+        float height_m = ellipsoid_height_m;
+        if (!std::isfinite(height_m) || height_m <= -1000.0f || height_m >= 100000.0f ||
+            (!ellipsoid_height_set && height_m != 0.0f)) {
+            ellipsoid_height_set = false;
+            ellipsoid_height_m = 0.0f;
             changed = true;
         }
-        bool moving = position.moving;
-        if (position.source == kSourceNone) {
-            return changed;
+        float accuracy_m = horizontal_accuracy_m;
+        if (!ReceiverPosition::AccuracyIsValid(accuracy_m)) {
+            horizontal_accuracy_m = 0.0f;
+            changed = true;
         }
-        if (position.source != kSourceFixed ||
-            !CoordinatesAreValid(position.latitude_deg, position.longitude_deg, position.height_m) ||
-            !AccuracyIsValid(position.horizontal_accuracy_m) || !AccuracyIsValid(position.vertical_accuracy_m)) {
-            position = ReceiverPosition();
-            position.moving = moving;
+        accuracy_m = vertical_accuracy_m;
+        if (!ReceiverPosition::AccuracyIsValid(accuracy_m)) {
+            vertical_accuracy_m = 0.0f;
             changed = true;
         }
         return changed;
     }
 
     /**
-     * Applies AT+ANTENNA_POSITION=<NONE|FIXED>,<lat_deg>,<lon_deg>,<height_m>,<hacc_m>,<vacc_m>,<moving> to a stored
-     * fixed position. FIXED needs latitude, longitude and height; empty accuracies mean unknown. An empty `moving`
-     * keeps the stored value. NONE ignores the coordinates.
-     * @param[in] args Argument strings (NUL-terminated), num_args of them.
-     * @param[in,out] position Stored fixed position; changed only on success.
+     * Applies the optional AT+RX_POSITION arguments. An empty argument keeps its value, and "-" clears the ellipsoid
+     * height.
+     * @param[in] args The kNumATArgs argument strings (NUL-terminated), from ellipsoid_height_m on.
      * @param[out] error Reason for a failure.
-     * @retval True if the arguments were valid.
+     * @retval True if the arguments were valid. Nothing changes otherwise.
      */
-    static bool ApplyATArgs(const char* const* args, uint16_t num_args, ReceiverPosition& position,
-                            const char*& error) {
-        auto arg = [&](uint16_t i) -> const char* { return i < num_args && args[i] != nullptr ? args[i] : ""; };
-        auto parse_number = [](const char* str, double& value) -> bool {
+    bool ApplyATArgs(const char* const* args, const char*& error) {
+        auto parse_number = [](const char* str, float& value) -> bool {
             char* end = nullptr;
-            value = strtod(str, &end);
+            value = strtof(str, &end);
             return end != str && *end == '\0' && std::isfinite(value);
         };
-        ReceiverPosition result = position;
-        if (strcasecmp(arg(0), "NONE") == 0) {
-            bool moving = result.moving;
-            result = ReceiverPosition();
-            result.moving = moving;
-        } else if (strcasecmp(arg(0), "FIXED") == 0) {
-            double latitude_deg, longitude_deg, height_m;
-            if (!parse_number(arg(1), latitude_deg) || !parse_number(arg(2), longitude_deg) ||
-                !parse_number(arg(3), height_m)) {
-                error = "FIXED needs a numeric latitude, longitude and height.";
+        RxPositionDetails result = *this;
+        if (strcmp(args[0], "-") == 0) {
+            result.ellipsoid_height_set = false;
+            result.ellipsoid_height_m = 0.0f;
+        } else if (args[0][0] != '\0') {
+            float height_m;
+            if (!parse_number(args[0], height_m) || height_m <= -1000.0f || height_m >= 100000.0f) {
+                error = "Ellipsoid height must be a number from -1000 to 100000 m.";
                 return false;
             }
-            if (!CoordinatesAreValid(latitude_deg, longitude_deg, static_cast<float>(height_m))) {
-                error = "Latitude must be -90 to 90, longitude -180 to 180 and height -1000 to 100000 m.";
-                return false;
-            }
-            double accuracies_m[2] = {0.0, 0.0};
-            for (uint16_t i = 0; i < 2; i++) {
-                if (arg(4 + i)[0] == '\0') continue;
-                if (!parse_number(arg(4 + i), accuracies_m[i]) || !AccuracyIsValid(static_cast<float>(accuracies_m[i]))) {
-                    error = "Accuracies must be numbers of at least 0 m.";
-                    return false;
-                }
-            }
-            result.source = kSourceFixed;
-            result.latitude_deg = latitude_deg;
-            result.longitude_deg = longitude_deg;
-            result.height_m = static_cast<float>(height_m);
-            result.horizontal_accuracy_m = static_cast<float>(accuracies_m[0]);
-            result.vertical_accuracy_m = static_cast<float>(accuracies_m[1]);
-        } else if (arg(0)[0] != '\0') {
-            error = "Source must be NONE or FIXED.";
-            return false;
+            result.ellipsoid_height_set = true;
+            result.ellipsoid_height_m = height_m;
         }
-        const char* moving = arg(6);
-        if (strcmp(moving, "0") == 0 || strcmp(moving, "1") == 0) {
-            result.moving = moving[0] == '1';
-        } else if (moving[0] != '\0') {
+        float accuracies_m[2] = {result.horizontal_accuracy_m, result.vertical_accuracy_m};
+        for (uint16_t i = 0; i < 2; i++) {
+            if (args[1 + i][0] == '\0') continue;
+            if (!parse_number(args[1 + i], accuracies_m[i]) || !ReceiverPosition::AccuracyIsValid(accuracies_m[i])) {
+                error = "Accuracies must be numbers of at least 0 m.";
+                return false;
+            }
+        }
+        result.horizontal_accuracy_m = accuracies_m[0];
+        result.vertical_accuracy_m = accuracies_m[1];
+        if (strcmp(args[3], "0") == 0 || strcmp(args[3], "1") == 0) {
+            result.moving = args[3][0] == '1';
+        } else if (args[3][0] != '\0') {
             error = "Moving must be 0 or 1.";
             return false;
         }
-        position = result;
+        *this = result;
         return true;
     }
 
     /**
-     * ApplyATArgs() for AT command arguments as string views (cppAT).
+     * ApplyATArgs() for the full AT+RX_POSITION argument list as string views (cppAT). Arguments past num_args are
+     * empty.
      */
-    static bool ApplyATArgs(const std::string_view* args, uint16_t num_args, ReceiverPosition& position,
-                            const char*& error) {
-        static constexpr uint16_t kNumArgs = 7;
+    bool ApplyATArgs(const std::string_view* args, uint16_t num_args, const char*& error) {
         static constexpr uint16_t kArgMaxLen = 24;
-        char arg_bufs[kNumArgs][kArgMaxLen + 1] = {};
-        const char* arg_ptrs[kNumArgs];
-        for (uint16_t i = 0; i < kNumArgs; i++) {
-            if (i < num_args) {
-                if (args[i].length() > kArgMaxLen) {
+        char arg_bufs[kNumATArgs][kArgMaxLen + 1] = {};
+        const char* arg_ptrs[kNumATArgs];
+        for (uint16_t i = 0; i < kNumATArgs; i++) {
+            uint16_t arg = kFirstATArg + i;
+            if (arg < num_args) {
+                if (args[arg].length() > kArgMaxLen) {
                     error = "Argument too long.";
                     return false;
                 }
-                memcpy(arg_bufs[i], args[i].data(), args[i].length());
+                memcpy(arg_bufs[i], args[arg].data(), args[arg].length());
             }
             arg_ptrs[i] = arg_bufs[i];
         }
-        return ApplyATArgs(arg_ptrs, kNumArgs, position, error);
+        return ApplyATArgs(arg_ptrs, error);
     }
 
     /**
-     * Writes a stored fixed position as the AT+ANTENNA_POSITION arguments, without the leading '='.
+     * Writes the optional AT+RX_POSITION arguments, without a leading comma. An unset ellipsoid height is "-".
      * @retval Number of characters written, as snprintf.
      */
-    static int PrintATArgs(char* buf, size_t buf_len, const ReceiverPosition& position) {
-        return snprintf(buf, buf_len, "%s,%.7f,%.7f,%.2f,%.2f,%.2f,%d",
-                        position.source == kSourceFixed ? "FIXED" : "NONE", position.latitude_deg,
-                        position.longitude_deg, position.height_m, position.horizontal_accuracy_m,
-                        position.vertical_accuracy_m, position.moving);
+    int PrintATArgs(char* buf, size_t buf_len) const {
+        char height[16] = "-";
+        if (ellipsoid_height_set) {
+            snprintf(height, sizeof(height), "%.2f", static_cast<double>(ellipsoid_height_m));
+        }
+        return snprintf(buf, buf_len, "%s,%.2f,%.2f,%d", height, static_cast<double>(horizontal_accuracy_m),
+                        static_cast<double>(vertical_accuracy_m), moving);
     }
 
     /**
-     * Picks the position to report.
-     * @param[in] fixed Stored fixed position: source kSourceFixed if set, kSourceNone otherwise. Its `moving` flag is
-     * the setting for both sources.
+     * The position MLAT reports for an AT+RX_POSITION setting.
+     * @param[in] rx_position Receiver position setting (SettingsManager::RxPosition).
      * @param[in] gnss Live GNSS position, or nullptr without a valid fix.
-     * @retval Live GNSS if available, else the fixed position, else a position with source kSourceNone.
+     * @retval The GNSS fix for the GNSS source, the fixed position for FIXED (with the GNSS altitude as its height if
+     * no ellipsoid height is set), else a position with source kSourceNone. Its moving flag is this setting's.
      */
-    static ReceiverPosition Resolve(const ReceiverPosition& fixed, const ReceiverPosition* gnss) {
+    template <typename RxPosition>
+    ReceiverPosition ForMLAT(const RxPosition& rx_position, const ReceiverPosition* gnss) const {
         ReceiverPosition position;
-        if (gnss != nullptr && gnss->source == kSourceGNSS) {
-            position = *gnss;
-        } else if (fixed.source == kSourceFixed) {
-            position = fixed;
+        if (rx_position.source == RxPosition::kPositionSourceGNSS) {
+            if (gnss != nullptr && gnss->source == ReceiverPosition::kSourceGNSS) {
+                position = *gnss;
+            }
+        } else if (rx_position.source == RxPosition::kPositionSourceFixed) {
+            position.source = ReceiverPosition::kSourceFixed;
+            position.latitude_deg = rx_position.latitude_deg;
+            position.longitude_deg = rx_position.longitude_deg;
+            position.height_m = ellipsoid_height_set ? static_cast<float>(ellipsoid_height_m)
+                                                     : static_cast<float>(rx_position.gnss_altitude_ft) * kFeetToMeters;
+            position.horizontal_accuracy_m = horizontal_accuracy_m;
+            position.vertical_accuracy_m = vertical_accuracy_m;
         }
-        position.moving = fixed.moving;
+        position.moving = moving;
         return position;
     }
 };
-static_assert(sizeof(ReceiverPosition) == 30, "ReceiverPosition is stored and sent between processors as raw bytes.");
+static_assert(sizeof(RxPositionDetails) == 14, "RxPositionDetails is stored as raw bytes.");
 
 /**
  * GNSS pulse per second (PPS) reference for the MLAT timestamp counter.

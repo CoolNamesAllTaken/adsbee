@@ -49,8 +49,8 @@ Settings are hashed as the unit is running now, saved or not. Run `AT+SETTINGS=S
 
 `SETTINGS_FLEET` leaves out the settings that normally differ between units:
 
-- ADSBee 1090: hostname, WiFi access point SSID and channel, feed receiver IDs, Remote ID UAS ID, and the receiver and antenna position values. The receiver position source (`AT+RX_POSITION`) and whether an antenna position is set (`AT+ANTENNA_POSITION`) still count.
-- ADSBee m1421: the receiver and antenna position values.
+- ADSBee 1090: hostname, WiFi access point SSID and channel, feed receiver IDs, Remote ID UAS ID, and the receiver position values. The receiver position source (`AT+RX_POSITION`) and its moving flag still count.
+- ADSBee m1421: the receiver position values.
 
 `SETTINGS_FULL` covers those too. The receiver position values count only for a `FIXED` position, and the ICAO address only for the `ICAO` source, because the other sources update the position while the unit runs.
 

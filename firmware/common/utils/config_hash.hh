@@ -87,17 +87,15 @@ class ConfigHasher {
         }
     }
 
-    void AddReceiverPosition(const ReceiverPosition& position, bool include_values) {
-        AddU8(position.source);
-        AddBool(position.moving);
-        if (!include_values || position.source == ReceiverPosition::kSourceNone) {
+    void AddRxPositionDetails(const RxPositionDetails& details, bool include_values) {
+        AddBool(details.moving);
+        if (!include_values) {
             return;
         }
-        AddDouble(position.latitude_deg);
-        AddDouble(position.longitude_deg);
-        AddFloat(position.height_m);
-        AddFloat(position.horizontal_accuracy_m);
-        AddFloat(position.vertical_accuracy_m);
+        AddBool(details.ellipsoid_height_set);
+        AddFloat(details.ellipsoid_height_m);
+        AddFloat(details.horizontal_accuracy_m);
+        AddFloat(details.vertical_accuracy_m);
     }
 
    private:
