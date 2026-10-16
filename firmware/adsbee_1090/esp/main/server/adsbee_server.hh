@@ -19,7 +19,12 @@ class ADSBeeServer {
     // and Update() drains the queue whenever it is over half full, so 150 leaves >2 arrays of headroom; deeper queues
     // just eat static RAM that the heap needs.
     static const uint16_t kMaxNumModeSPackets = 150;
-    static const uint16_t kMaxNumUATADSBPackets = 20;   // Depth of queue for incoming UAT ADS-B packets from RP2040.
+    // The in-queues hold two composite arrays of UAT packets from the RP2040, or UnpackRawPacketsBufferToQueues() drops
+    // the rest of an array ("Queue full, dropped ... UAT ADS-B").
+    static constexpr uint16_t kMaxNumUATADSBPacketsPerCompositeArray =
+        (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) /
+        sizeof(RawUATADSBPacket);
+    static const uint16_t kMaxNumUATADSBPackets = 2 * kMaxNumUATADSBPacketsPerCompositeArray;
     // A single composite array from the RP2040 can carry this many UAT uplink packets. The in-queue must hold at least
     // that many, or UnpackRawPacketsBufferToQueues() drops the rest of the array ("UAT Uplink queue full, cannot
     // enqueue packet 2 / 3"). The RP2040 flushes every 200 ms, the same as the Update() drain interval, so leave room

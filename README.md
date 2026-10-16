@@ -27,6 +27,10 @@ There are two product lines, which share most of their firmware (`firmware/commo
 | Power | ~1W | ~19 mA at 1.8–3.3 V |
 | Firmware | [`firmware/adsbee_1090/`](firmware/adsbee_1090/) | [`firmware/adsbee_1421/`](firmware/adsbee_1421/) |
 
+## Safety Notice
+
+We work hard to make ADSBee products performant and reliable, but not all aircraft broadcast their location, messages can be lost or corrupted, and hardware or software can fail. ADSBee cannot guarantee detection or accurate reporting of all traffic. Users are responsible for evaluating its suitability for their application and for the safe operation of any system it is integrated into. See our [terms of sale](https://pantsforbirds.com/terms-of-sale/#warranty) and [license](LICENSE) for full terms.
+
 ## Products and Where to Buy
 
 All ADSBee devices are designed and sold by Pants for Birds LLC. Purchasing a device is the best way to support the project. Product pages, datasheets, and the [Quick Start Guide](https://pantsforbirds.com/adsbee/quick-start/) live at [pantsforbirds.com](https://pantsforbirds.com/adsbee/).

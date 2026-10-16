@@ -207,7 +207,16 @@ no transmitter the result is `SKIP` (exit 0, or 1 with `--fail-on-skip`).
   `AT+FEED_ENABLE?` (`=0`) and `AT+FEED?` before the first transmission and after every flash or
   settings reset. For an m1421, stop the host process that forwards its output.
 - Restore the recorded `AT+FEED_ENABLE` and `AT+FEED` values (and save) when the test is over.
-- Use only the reserved synthetic ICAO range `0xADF000`-`0xADF0FF`.
+- Transmit only ICAO addresses `0xBEE000`-`0xBEE0FF`. ICAO Annex 10 Vol III (2nd ed., through
+  Amendment 93), Appendix to Chapter 9, Table 9-1 allocates this block to no state, so a stray frame
+  won't land on a real aircraft's track.
+- Before an RF run, confirm no aircraft from that block is on a public aggregator; after the run, a
+  hit means investigate:
+
+  ```sh
+  curl -s "https://api.adsb.lol/v2/hex/$(python3 -c "print(','.join(f'{0xBEE000 + i:06x}' for i in range(256)))")" \
+      | grep -o '"total": *[0-9]*'  # expect "total": 0
+  ```
 - Never exceed 0 dBm into a receiver input.
 
 **Keep receivers on attenuated coax or behind attenuators.** Full transmitter output can damage a

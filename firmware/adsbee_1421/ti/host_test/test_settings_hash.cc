@@ -69,7 +69,7 @@ TEST(SettingsHash, ReceiverPositionCountsOnlyWhenItIsASetting) {
     // Followed aircraft and GNSS overwrite the position while running.
     SM::Settings a, b;
     b.rx_position.latitude_deg = 47.5f;
-    b.rx_position.icao_address = 0xADF001;
+    b.rx_position.icao_address = 0xBEE001;
     EXPECT_EQ(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 
     a.rx_position.source = b.rx_position.source = SM::RxPosition::kPositionSourceFixed;
