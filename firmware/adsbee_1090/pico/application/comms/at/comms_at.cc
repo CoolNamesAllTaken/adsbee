@@ -6,6 +6,7 @@
 #include "adsbee.hh"
 #include "comms.hh"
 #include "core1.hh"  // For turning multiprocessor on / off during firmware flashing.
+#include "cpu_utils.hh"
 #include "eeprom.hh"
 #include "esp32.hh"  // Access to ESP32 low level SPICoprocessorSlaveInterface.
 #include "esp32_firmware_check.hh"
@@ -25,6 +26,7 @@
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
+#include "unit_conversions.hh"  // ParseDeciNm
 #endif
 
 // For mapping cpp_at_printf
@@ -1277,6 +1279,36 @@ CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATFilterDistanceNMCallback) {
+    using Settings = SettingsManager::Settings;
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d,%lu.%lu", settings_manager.settings.filter_distance_enabled,
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm / 10),
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm % 10));
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            bool enabled = settings_manager.settings.filter_distance_enabled;
+            uint32_t deci_nm = settings_manager.settings.filter_distance_deci_nm;
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+            }
+            if (CPP_AT_HAS_ARG(1) && (!ParseDeciNm(args[1].data(), args[1].size(), deci_nm,
+                                                   Settings::kMaxFilterDistanceDeciNm) ||
+                                      deci_nm < Settings::kMinFilterDistanceDeciNm)) {
+                CPP_AT_ERROR("Distance must be 0.1 to 10000.0 nm, e.g. 50 or 12.5.");
+            }
+            settings_manager.settings.filter_distance_enabled = enabled;
+            settings_manager.settings.filter_distance_deci_nm = deci_nm;
+            settings_manager.SyncToCoprocessors();  // The ESP32 filters its web UI, GDL90 and feeds too.
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 // Prints an interface's IPv6 addresses from ESP32NetworkInfo, if it has any.
 static void PrintIP6Addrs(char* link_local, char* global) {
     link_local[ObjectDictionary::kIP6AddrStrLen] = '\0';
@@ -1641,6 +1673,9 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"ETHERNET\":[%d],", cns.ethernet_enabled);
     CPP_AT_PRINTF("\"ESP32_ENABLE\":[%d],", esp32.IsEnabled());
     CPP_AT_PRINTF("\"FEED_ENABLE\":[%d],", s.feeds_enabled);
+    CPP_AT_PRINTF("\"FILTER_DISTANCE_NM\":[%d,%lu.%lu],", s.filter_distance_enabled,
+                  static_cast<unsigned long>(s.filter_distance_deci_nm / 10),
+                  static_cast<unsigned long>(s.filter_distance_deci_nm % 10));
     CPP_AT_PRINTF("\"GNSS\":[%d,\"%s\",%d],", s.gnss_enabled,
                   GNSSModuleTypeToStr(SettingsToGNSSModuleType(s.gnss_receiver_type)), s.gnss_notify);
     CPP_AT_PRINTF("\"HOSTNAME\":[\"%s\"],", JSONEscapeStr(cns.hostname, esc, sizeof(esc)));
@@ -2118,6 +2153,15 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "all feeds, or 1 to allow feeds marked active. Does not change per-feed active flags set with "
                     "AT+FEED.\r\n\tAT+FEED_ENABLE?\r\n\tQuery whether outbound feeds are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedEnableCallback, comms_manager)},
+    {.command = "FILTER_DISTANCE_NM",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+FILTER_DISTANCE_NM=<enabled [0 1]>,<distance_nm>\r\n\tLeave aircraft farther than distance_nm "
+                    "nautical miles (0.1 to 10000.0, 0.1 nm steps) from the receiver out of aircraft reports (aircraft JSON, the web UI's list and map, GDL90, MAVLink, CSBee). Raw "
+                    "packets (Raw, Beast, MLAT and every feed of them) are never filtered. Aircraft at an unknown distance (no position yet, or "
+                    "no receiver position, see AT+RX_POSITION) are always kept. Default: 0,100.0 (off).\r\n\t"
+                    "AT+FILTER_DISTANCE_NM?\r\n\tQuery whether the filter is enabled and its distance.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterDistanceNMCallback, comms_manager)},
     {.command = "GNSS",
      .min_args = 0,
      .max_args = 3,
@@ -2334,6 +2378,7 @@ bool CommsManager::UpdateAT() {
     // Check for new AT commands from STDIO.
     int ci = getchar_timeout_us(0);
     while (ci != PICO_ERROR_TIMEOUT) {
+        CPUMonitor::WorkScope work;
         switch (stdio_at_line_.Push(static_cast<char>(ci), get_time_since_boot_ms())) {
             case ATLineAssembler<kATCommandBufMaxLen>::kLine:
                 at_parser_.ParseMessage(stdio_at_line_.line());
@@ -2357,6 +2402,7 @@ bool CommsManager::UpdateAT() {
         // Receive incoming network console characters.
         char c;
         while (!at_console_guard_.PayloadInProgress() && esp32_console_rx_queue.Dequeue(c)) {
+            CPUMonitor::WorkScope work;
             switch (network_at_line_.Push(c, get_time_since_boot_ms())) {
                 case ATLineAssembler<kATCommandBufMaxLen>::kLine:
                     CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %.*s\r\n",

@@ -30,8 +30,6 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 2000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
-const uint32_t kRP2040IdleTicksPerUpdateInterval =
-    125e3;  // Arbitrary, assume 1000 instructions per idle loop at 125MHz.
 const uint32_t kRP2040CPUMonitorUpdateIntervalMs = 1000;
 
 // Override default config params here.
@@ -40,10 +38,11 @@ EEPROM eeprom = EEPROM({});
 // out which board configuration we should load (settings in flash, or settings in EEPROM).
 BSP bsp = BSP(eeprom.Init());
 
-CPUMonitor core_0_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP2040IdleTicksPerUpdateInterval,
-                                        .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
-CPUMonitor core_1_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP2040IdleTicksPerUpdateInterval,
-                                        .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
+// Core load is the time of work regions plus interrupt time.
+CPUMonitor core_0_monitor =
+    CPUMonitor({.update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs, .use_busy_time = true});
+CPUMonitor core_1_monitor =
+    CPUMonitor({.update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs, .use_busy_time = true});
 
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
@@ -223,10 +222,12 @@ int main() {
     uint32_t esp32_last_successful_comms_ms = get_time_since_boot_ms();
 #endif
 
+    core_0_monitor.TimeInterrupts();
     while (true) {
         // Loop forever.
-        core_0_monitor.Tick();
-        core_0_monitor.Update();
+        if (core_0_monitor.Update()) {
+            core_0_monitor.TimeInterrupts();  // Picks up interrupts enabled since, e.g. the GNSS UART.
+        }
         core_1_monitor.Update();
 
         decoder.UpdateLogLoop();

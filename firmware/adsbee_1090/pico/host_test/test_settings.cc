@@ -54,7 +54,8 @@ TEST(SettingsMigration, LayoutLockedSizes) {
     EXPECT_EQ(sizeof(settings_v13::RxPosition), sizeof(SettingsManager::RxPosition));
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
-    EXPECT_EQ(sizeof(settings_v17::Settings), sizeof(SettingsManager::Settings));
+    EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1344u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -502,6 +503,62 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
 }
 
+TEST(SettingsMigration, V18ToV19KeepsAutoUpdateAndLeavesDistanceFilterOff) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv6;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
+    v18.auto_update_enabled = true;
+
+    SettingsManager::Settings out;
+    out.filter_distance_enabled = true;
+    out.filter_distance_deci_nm = 12345;
+    ASSERT_TRUE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_FALSE(out.filter_distance_enabled);
+    EXPECT_EQ(out.filter_distance_deci_nm, SettingsManager::Settings::kDefaultFilterDistanceDeciNm);
+    EXPECT_EQ(out.FilterDistanceMeters(), 0u);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+
+    // A blob cut short of the v18 layout is rejected.
+    EXPECT_FALSE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18) - 1, 18, out));
+}
+
+TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
+    SettingsManager manager;
+    EXPECT_FALSE(manager.settings.filter_distance_enabled);
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);  // 100.0 nm.
+    EXPECT_EQ(manager.settings.FilterDistanceMeters(), 0u);      // Off.
+    manager.settings.filter_distance_enabled = true;
+    manager.settings.filter_distance_deci_nm = 355;  // 35.5 nm.
+    EXPECT_EQ(manager.settings.FilterDistanceMeters(), 65746u);
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    EXPECT_NE(dump.find("AT+FILTER_DISTANCE_NM=1,35.5\r\n"), std::string::npos);
+    EXPECT_FALSE(manager.Sanitize());
+
+    // Out-of-range distances and garbage booleans from flash are repaired.
+    manager.settings.filter_distance_deci_nm = 0;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);
+    manager.settings.filter_distance_deci_nm = 100001;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);
+    uint8_t raw = 0x5A;
+    memcpy(&manager.settings.filter_distance_enabled, &raw, 1);
+    EXPECT_TRUE(manager.Sanitize());
+}
+
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     SettingsManager manager;
     EXPECT_FALSE(manager.settings.auto_update_enabled);
@@ -517,12 +574,15 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t wifi = dump.find("AT+WIFI_STA=");
     size_t ip_mode = dump.find("AT+IP_MODE=");
     size_t auto_update = dump.find("AT+AUTO_UPDATE=1");
+    size_t filter_distance = dump.find("AT+FILTER_DISTANCE_NM=");
     ASSERT_NE(wifi, std::string::npos);
     ASSERT_NE(ip_mode, std::string::npos);
     ASSERT_NE(auto_update, std::string::npos);
+    ASSERT_NE(filter_distance, std::string::npos);
     EXPECT_LT(wifi, ip_mode);
     EXPECT_LT(ip_mode, auto_update);
-    EXPECT_EQ(dump.find("AT+", auto_update + 1), std::string::npos);
+    EXPECT_LT(auto_update, filter_distance);
+    EXPECT_EQ(dump.find("AT+", filter_distance + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);

@@ -3,41 +3,79 @@
 #include "fixedmath/fixed_math.hpp"
 #include "stdint.h"
 
-static const uint32_t kBoundingBoxDimensionMeters = 50000;
-
-bool IsWithinBoundingBox(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_awb, uint32_t lon_b_awb);
+/**
+ * Distance and bearing on the WGS-84 ellipsoid in 32-bit fixed point, without lookup tables or floating point (the
+ * RP2040 has no FPU). All targets run the same integer code, so they get identical results.
+ *
+ * Positions are in Angular Weighted Binary (AWB): a full circle is 2^32, so latitudes -90..90 deg are the signed range
+ * -2^30..2^30 and longitude differences wrap across the antimeridian on their own. The central angle and bearing come
+ * from exact spherical formulas written without cancellation; the distance multiplies the central angle by the
+ * ellipsoid's radius of curvature in the direction of travel at the mid latitude. Error against the WGS-84 geodesic at
+ * any latitude: distance < 0.015% + 1 m up to 600 km (< 0.15% up to 5000 km), bearing < 0.2 deg.
+ */
 
 /**
- * @brief Calculates the great circle distance along the surface of the earth between two lat/long coordinate sets.
+ * sin and cos of an angle in AWB, as Q30 fixed point (1.0 = 2^30), accurate to 5e-9.
+ * @param[in] angle_awb Angle, where 2^32 is a full circle.
+ * @param[out] sin_out sin(angle), Q30.
+ * @param[out] cos_out cos(angle), Q30.
+ */
+void SinCosQ30(uint32_t angle_awb, int32_t &sin_out, int32_t &cos_out);
+
+/**
+ * A point that many distances are measured from (the receiver). Caches the trig of its latitude, so each distance and
+ * bearing to it costs two sin/cos evaluations.
+ */
+struct GeoReference {
+    uint32_t lat_awb = 0;
+    uint32_t lon_awb = 0;
+    int32_t sin_lat_q30 = 0;
+    int32_t cos_lat_q30 = 1 << 30;
+
+    GeoReference() {}
+    GeoReference(uint32_t lat_awb_in, uint32_t lon_awb_in) { Set(lat_awb_in, lon_awb_in); }
+    void Set(uint32_t lat_awb_in, uint32_t lon_awb_in);
+};
+
+// Bearings are stored in 1/65536 of a turn (binary angle measurement, BAM).
+inline float Bam16ToDeg(uint16_t bearing_bam16) { return bearing_bam16 * (360.0f / 65536.0f); }
+
+/**
+ * Distance and initial bearing from a reference point to another point.
+ * @param[in] ref Reference point (start).
+ * @param[in] lat_awb Latitude of the other point, in AWB.
+ * @param[in] lon_awb Longitude of the other point, in AWB.
+ * @param[out] distance_m Distance along the surface, in meters.
+ * @param[out] bearing_bam16 Initial bearing from the reference to the point, clockwise from north, in 1/65536 turns.
+ */
+void CalculateDistanceAndBearing(const GeoReference &ref, uint32_t lat_awb, uint32_t lon_awb, uint32_t &distance_m,
+                                 uint16_t &bearing_bam16);
+
+/**
+ * Distance from a reference point to another point, in meters. Same accuracy as CalculateDistanceAndBearing.
+ */
+uint32_t CalculateDistanceMeters(const GeoReference &ref, uint32_t lat_awb, uint32_t lon_awb);
+
+/**
+ * @brief Calculates the distance along the surface of the earth between two lat/long coordinate sets.
  * @param[in] lat_a_awb Latitude of coordinate A, in Angular Weighted Binary format.
  * @param[in] lon_a_awb Longitude of coordinate A, in Angular Weighted Binary format.
  * @param[in] lat_b_awb Latitude of coordinate B, in Angular Weighted Binary format.
  * @param[in] lon_b_awb Longitude of coordinate B, in Angular Weighted Binary format.
- * @retval Great circle distance between points A and B, in meters.
+ * @retval Distance between points A and B, in meters.
  */
 uint32_t CalculateGeoidalDistanceMetersAWB(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_awb,
                                            uint32_t lon_b_awb);
 
+/**
+ * Whether two points are farther apart than a threshold. Exact integer bounds on the latitude and longitude differences
+ * settle most calls in a few cycles; the full distance calculation runs only when the answer is close.
+ * @retval True if the distance exceeds threshold_m. Bounds and full calculation can disagree only within the distance
+ *         error (0.015%) of the threshold.
+ */
+bool IsDistanceGreaterThan(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_awb, uint32_t lon_b_awb,
+                           uint32_t threshold_m);
+
 uint32_t CalculateGeoidalDistanceMetersDeg(float lat_a_deg, float lon_a_deg, float lat_b_deg, float lon_b_deg);
-
-/**
- * @brief Calculates the haversine of an angle, in radians. Exposed for testing.
- * @param[in] theta_awb Angle from 0-360 degrees in Angular Weighted Binary format, where 0 is 0 degrees and
- * UINT32_MAX is 360 degrees.
- * @retval Haversine of theta.
- */
-float hav_awb(uint32_t theta_awb);
-
-/**
- * @brief Calculates distance between to points on Earth given a float as an input that is equivalent to the
- * following expression:
- *      hav(lat_b_rad - lat_a_rad)
- *      + (1 - hav(lat_a_rad - lat_b_rad) - hav(lat_a_rad + lat_b_rad)) * hav(lon_b_rad - lon_a_rad)
- *
- * This function uses a lookup table to calculate 2 * kEarthMeanRadius * asin(sqrt(x)), where x is an input float
- * between 0.0f and 1.0f.
- * @param[in] x Result of the haversine expression
- */
-float havdiff_to_m(float x);
 
 void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float &track_deg, int32_t &speed_kts);

@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
 #include "string.h"  // for memset
@@ -15,7 +16,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 5;
+static constexpr uint32_t kSettingsVersion = 6;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -120,6 +121,10 @@ class SettingsManager {
     // in-RAM instance is aligned separately (see the `settings` member below).
     struct __attribute__((packed)) Settings {
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
+        // AT+FILTER_DISTANCE_NM, in tenths of a nautical mile.
+        static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
+        static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
+        static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
         // NOTE: Lengths do not include null terminator.
         // Single source of truth for the console boot baud rate: CommsManagerConfig defaults to this,
         // and Apply() falls back to it if the stored rate isn't whitelisted.
@@ -171,6 +176,13 @@ class SettingsManager {
         // Receiver position settings
         RxPosition rx_position;
 
+        // Distance filter (AT+FILTER_DISTANCE_NM), added in version 6. When enabled, aircraft known to be farther than
+        // filter_distance_deci_nm tenths of a nautical mile from the receiver are left out of aircraft reports
+        // (aircraft JSON, GDL90, MAVLink, CSBee). Raw packets (Raw, Beast, MLAT) are never filtered. Aircraft at an
+        // unknown distance are always kept.
+        bool filter_distance_enabled = false;
+        uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
+
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
         uint32_t crc = 0;
 
@@ -178,6 +190,14 @@ class SettingsManager {
          * Default constructor.
          */
         Settings() {}
+
+        /**
+         * The distance filter as Aircraft::IsBeyondDistance() takes it.
+         * @retval Filter distance in meters, or 0 when the filter is off.
+         */
+        inline uint32_t FilterDistanceMeters() const {
+            return filter_distance_enabled ? DeciNmToMeters(filter_distance_deci_nm) : 0;
+        }
 
         /**
          * CRC32 over the struct from `magic` up to (not including) `crc`.
@@ -212,6 +232,37 @@ class SettingsManager {
     // trailing padding. Trips if the packed attribute is ever dropped or a member is added after `crc`.
     static_assert(offsetof(Settings, crc) == sizeof(Settings) - sizeof(uint32_t),
                   "Settings::crc must be the last member, with no trailing padding.");
+
+    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled and
+    // filter_distance_deci_nm.
+    static constexpr uint16_t kVersion5SettingsSize = 62;
+    static_assert(kSettingsVersion == 6 &&
+                      offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
+                      sizeof(Settings) == kVersion5SettingsSize + 5,
+                  "Settings changed: update MigrateFromVersion5 or add a migration from version 6.");
+
+    /**
+     * Converts a version 5 settings blob, so a firmware update keeps the user's settings.
+     * @param[in] blob Stored bytes, at least kVersion5SettingsSize long.
+     * @param[out] out Migrated and stamped settings. Untouched unless the blob is an intact version 5 blob.
+     * @retval True if the blob was an intact version 5 blob.
+     */
+    static bool MigrateFromVersion5(const uint8_t *blob, Settings &out) {
+        constexpr uint16_t kFieldBytes = kVersion5SettingsSize - sizeof(uint32_t);  // Everything before the CRC.
+        uint32_t magic, version, crc;
+        memcpy(&magic, blob, sizeof(magic));
+        memcpy(&version, blob + sizeof(magic), sizeof(version));
+        memcpy(&crc, blob + kFieldBytes, sizeof(crc));
+        if (magic != kSettingsMagic || version != 5 || crc != crc32_ieee_802_3(blob, kFieldBytes)) {
+            return false;
+        }
+        out = Settings();
+        memcpy(static_cast<void *>(&out), blob, kFieldBytes);
+        out.filter_distance_enabled = false;
+        out.filter_distance_deci_nm = Settings::kDefaultFilterDistanceDeciNm;
+        out.Stamp();
+        return true;
+    }
 
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {
