@@ -25,6 +25,32 @@ static inline bool EmitterCategoryToStr(char* buf, size_t buf_len, ADSBTypes::Em
 }
 
 /**
+ * Returns the readsb "type" string of a Mode S address type.
+ */
+static inline const char* ModeSAddressTypeToStr(ModeSAircraft::AddressType type) {
+    switch (type) {
+        case ModeSAircraft::kAddressTypeADSBICAO:
+            return "adsb_icao";
+        case ModeSAircraft::kAddressTypeADSBICAONonTransponder:
+            return "adsb_icao_nt";
+        case ModeSAircraft::kAddressTypeADSRICAO:
+            return "adsr_icao";
+        case ModeSAircraft::kAddressTypeTISBICAO:
+            return "tisb_icao";
+        case ModeSAircraft::kAddressTypeADSBOther:
+            return "adsb_other";
+        case ModeSAircraft::kAddressTypeADSROther:
+            return "adsr_other";
+        case ModeSAircraft::kAddressTypeTISBTrackFile:
+            return "tisb_trackfile";
+        case ModeSAircraft::kAddressTypeTISBOther:
+            return "tisb_other";
+        default:
+            return "mode_s";
+    }
+}
+
+/**
  * Serializes a ModeSAircraft to a single-line readsb-compatible JSON object.
  * @param[out] buf Character array of at least kAircraftJSONMessageStrMaxLen bytes.
  * @param[in] aircraft Aircraft to serialize.
@@ -35,23 +61,19 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
     int16_t n = 0;
     const int16_t max = kAircraftJSONMessageStrMaxLen;
 
-    // hex (always)
+    // hex (always). Non-ICAO addresses get a '~' prefix per readsb convention.
+    ModeSAircraft::AddressType address_type = aircraft.GetAddressType();
     n += snprintf(buf + n, max - n,
 #if defined(ON_PICO) || defined(ON_HOST)
-                  "{\"hex\":\"%06x\"",
+                  "{\"hex\":\"%s%06x\"",
 #else
-                  "{\"hex\":\"%06lx\"",
+                  "{\"hex\":\"%s%06lx\"",
 #endif
-                  aircraft.icao_address);
+                  address_type >= ModeSAircraft::kFirstNonICAOAddressType ? "~" : "", aircraft.icao_address);
     n = n < max ? n : max;
 
-    // type
-    const char* type_str = "adsb_icao";
-    if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsNonTransponder)) {
-        type_str = "adsr_icao";
-    } else if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsClassB2GroundVehicle)) {
-        type_str = "adsb_icao_nt";
-    }
+    // type (readsb address types)
+    const char* type_str = ModeSAddressTypeToStr(address_type);
     n += snprintf(buf + n, max - n, ",\"type\":\"%s\",\"link\":\"1090\"", type_str);
     n = n < max ? n : max;
 

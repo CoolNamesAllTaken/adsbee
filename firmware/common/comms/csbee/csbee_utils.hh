@@ -87,7 +87,7 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
                  "%d,"        // SFPS, e.g. 3
                  "%d,",       // ESFPS, e.g. 5
 #endif
-                 aircraft.icao_address,                           // ICAO
+                 Aircraft::UIDToICAOAddress(aircraft.GetUID()),   // ICAO and address qualifier, as for UAT
                  aircraft.flags,                                  // FLAGS
                  aircraft.callsign,                               // CALL
                  squawk_str,                                      // SQUAWK

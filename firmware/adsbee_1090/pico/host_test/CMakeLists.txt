@@ -37,6 +37,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         main.cc
         settings.cc
         # test_ads_b_decoder.cc
+        test_aircraft_dictionary_contact_modes.cc
         test_aircraft_dictionary_mode_s.cc
         test_aircraft_dictionary_allocator.cc
         test_broadcast_ring.cc
