@@ -22,7 +22,7 @@ class RemoteIDGuard {
         kStatusTxBLECodedActive = 1 << 9,     // Advertising Remote ID on BT5 Long Range (Coded PHY).
         kStatusTxWiFiBeaconActive = 1 << 10,  // Injecting Remote ID WiFi beacon frames.
         kStatusTxNoPosition = 1 << 11,        // Transmitting, but rx_position is unavailable (Location sent as unknown).
-        kStatusTxBlocked = 1 << 12,           // Transmit requested but could not start (RAM, radio conflict, or build).
+        kStatusTxBlocked = 1 << 12,           // Transmit requested but could not start (RAM, radio refused, or build).
         // Transmitting, but the rx_position source may not be broadcast as our own (aircraft-derived, or none). Always
         // accompanied by kStatusTxNoPosition.
         kStatusTxPositionSourceNotAllowed = 1 << 13,
@@ -41,14 +41,15 @@ class RemoteIDGuard {
     static constexpr uint8_t kTransportsAll = kTransportsBLE | kTransportWiFiBeacon;
 
     /**
-     * Transports this hardware can run with the enabled network interfaces. Without PSRAM, the BLE stack next to WiFi or
-     * Ethernet leaves too little RAM for the web server; the WiFi beacon transport fits next to Ethernet only.
+     * Transports this hardware can run with the enabled network interfaces. Without PSRAM, nothing fits next to WiFi AP
+     * or STA. Next to Ethernet the trimmed Bluetooth stack fits, but not together with the WiFi beacon sniffer, so
+     * Bluetooth (the more common Remote ID broadcast) gets the RAM.
      */
     static uint8_t AllowedTransports(bool has_psram, bool wifi_ap_enabled, bool wifi_sta_enabled,
                                      bool ethernet_enabled) {
         if (has_psram) return kTransportsAll;
         if (wifi_ap_enabled || wifi_sta_enabled) return 0;
-        if (ethernet_enabled) return kTransportWiFiBeacon;
+        if (ethernet_enabled) return kTransportsBLE;
         return kTransportsAll;
     }
 
@@ -108,12 +109,13 @@ class RemoteIDGuard {
         if (status & kStatusPausedLowHeap) return "paused: ESP32 free memory fell below what the web server needs";
         if (status & kStatusBlockedByNetwork) {
             return (status & kActive)
-                       ? "partly paused: this ESP32 has no PSRAM, so with Ethernet on only the WiFi beacon transport runs"
+                       ? "partly paused: this ESP32 has no PSRAM, so with Ethernet on only the Bluetooth transports run"
                        : "paused: this ESP32 has no PSRAM, so with WiFi on Remote ID can't run, and with Ethernet on "
-                         "only the WiFi beacon transport can";
+                         "only the Bluetooth transports can";
         }
         if (status & kStatusNotInBuild) return "blocked: Bluetooth is not in this firmware";
-        if (status & (kStatusBlockedByRAM | kStatusTxBlocked)) return "blocked: not enough free ESP32 memory";
+        if (status & kStatusBlockedByRAM) return "blocked: not enough free ESP32 memory";
+        if (status & kStatusTxBlocked) return "blocked: the radio could not start transmitting";
         return nullptr;
     }
 };

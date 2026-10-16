@@ -272,9 +272,9 @@ const ridBits = (cmd) => Object.fromEntries(
     input(cmd, 'transports').querySelectorAll('input').map(cb => [cb.dataset.bit, { checked: cb.checked, disabled: cb.disabled }]));
 const notice = (cmd) => document.getElementById(`settings-notice-${cmd}`).textContent;
 
-test('Remote ID on Ethernet without PSRAM: Bluetooth can be turned off but not on', async () => {
-    // Saved before the guard: Bluetooth + WiFi Beacon on, ESP32 runs the WiFi Beacon receiver, Bluetooth paused.
-    const t = makeTransport(() => [ridDump('[1,7,"0x0C",4]', '[0,1,"",1,2,"","0x000C",4]')]);
+test('Remote ID on Ethernet without PSRAM: WiFi Beacon can be turned off but not on', async () => {
+    // Saved before the guard: all transports on, ESP32 runs Bluetooth, the WiFi Beacon receiver is paused.
+    const t = makeTransport(() => [ridDump('[1,7,"0x0B",3]', '[1,4,"",1,2,"","0x1008",3]')]);
     const engine = makeEngine(t);
     await engine.refresh();
     assert.strictEqual(input('REMOTE_ID', 'en').checked, true);
@@ -282,20 +282,20 @@ test('Remote ID on Ethernet without PSRAM: Bluetooth can be turned off but not o
     assert.deepStrictEqual(ridBits('REMOTE_ID'), {
         1: { checked: true, disabled: false }, 2: { checked: true, disabled: false }, 4: { checked: true, disabled: false },
     });
-    assert.match(input('REMOTE_ID', 'status').textContent, /WiFi Beacon receiving, paused for WiFi\/Ethernet/);
-    assert.match(notice('REMOTE_ID'), /only the WiFi Beacon transport/);
-    assert.strictEqual(input('REMOTE_ID_TX', 'status').textContent, 'idle (0x000C)');
-    // Transmit: Bluetooth 4 is off and locked, WiFi Beacon is free.
+    assert.match(input('REMOTE_ID', 'status').textContent, /Bluetooth scanning, Long Range, paused for WiFi\/Ethernet/);
+    assert.match(notice('REMOTE_ID'), /only the Bluetooth transports/);
+    assert.strictEqual(input('REMOTE_ID_TX', 'status').textContent, 'paused for WiFi/Ethernet (no PSRAM) (0x1008)');
+    // Transmit: the Bluetooth options are free, WiFi Beacon is on and can still be turned off.
     assert.deepStrictEqual(ridBits('REMOTE_ID_TX'), {
-        1: { checked: true, disabled: false }, 2: { checked: false, disabled: true }, 4: { checked: false, disabled: false },
+        1: { checked: false, disabled: false }, 2: { checked: false, disabled: false }, 4: { checked: true, disabled: false },
     });
 
-    // Clearing a Bluetooth option locks it.
+    // Clearing the WiFi Beacon option locks it.
     const entry = SETTINGS_SCHEMA_1090.find(e => e.cmd === 'REMOTE_ID');
-    input('REMOTE_ID', 'transports').querySelectorAll('input').find(cb => String(cb.dataset.bit) === '1').checked = false;
+    input('REMOTE_ID', 'transports').querySelectorAll('input').find(cb => String(cb.dataset.bit) === '4').checked = false;
     engine._onFieldChanged(entry);
-    assert.deepStrictEqual(ridBits('REMOTE_ID')[1], { checked: false, disabled: true });
-    assert.deepStrictEqual(engine.entryValues(entry), { en: true, transports: 6 });
+    assert.deepStrictEqual(ridBits('REMOTE_ID')[4], { checked: false, disabled: true });
+    assert.deepStrictEqual(engine.entryValues(entry), { en: true, transports: 3 });
 });
 
 test('Remote ID with WiFi on and no PSRAM: the toggle stays off', async () => {

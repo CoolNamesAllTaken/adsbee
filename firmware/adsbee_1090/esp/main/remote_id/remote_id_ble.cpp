@@ -316,8 +316,8 @@ bool RemoteIDManager::BLEStart(bool enable_coded_phy) {
 
     if (!EnsureHostInitialized()) return false;
     // If the host has already synced (e.g. transmit brought it up first, or scanning was toggled off and on), start
-    // discovery now; otherwise OnHostSync() will start it.
-    if (s_tx_host_ready) StartExtDiscovery();
+    // discovery now; otherwise OnHostSync() will start it. Sync can run first in the host task, so skip if it did.
+    if (s_tx_host_ready && !s_scanning) StartExtDiscovery();
 
     ble_running_ = true;
     ble_coded_running_ = enable_coded_phy;
@@ -364,6 +364,15 @@ void RemoteIDManager::BLETxStop() {
 }
 
 void RemoteIDManager::BLETxServiceTick() {
+    // An instance the controller refused to configure isn't advertising.
+    if (s_tx_host_ready) {
+        if (s_tx_legacy_want && !s_tx_legacy_configured) {
+            status_ = (status_ & ~kStatusTxBLELegacyActive) | kStatusTxBlocked;
+        }
+        if (s_tx_coded_want && !s_tx_coded_configured) {
+            status_ = (status_ & ~kStatusTxBLECodedActive) | kStatusTxBlocked;
+        }
+    }
     if (!s_tx_legacy_configured && !s_tx_coded_configured) return;
     // Refresh the ODID content (position moves, message counters advance) and push it into the running instances.
     if (!tx_.RefreshFromDeviceState()) {

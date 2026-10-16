@@ -33,11 +33,16 @@ The ESP32 firmware in `combined.uf2` runs on both modules used on ADSBee 1090 ha
   that fall back to internal RAM. Never enable `BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL` or
   `SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY` / `..._NOINIT_...`: they crash without PSRAM.
 * **Remote ID:** with PSRAM it runs alongside WiFi and Ethernet. Without PSRAM it can't run while WiFi is on, and
-  only its WiFi beacon transport runs while Ethernet is on (Bluetooth leaves too little RAM for the web server).
+  only its Bluetooth transports run while Ethernet is on (Bluetooth plus the WiFi beacon receiver leave too little RAM
+  for the web server).
   `AT+REMOTE_ID` / `AT+REMOTE_ID_TX` reject other transports, and saved ones pause at boot. `AT+DEVICE_INFO?` shows
   `ESP32 PSRAM: ...` and the ESP32 heap.
 * **Heap reserve:** Remote ID pauses while ESP32 free heap is below `RemoteIDGuard::kReserveFreeBytes`
   (`firmware/common/coprocessor/remote_id_guard.hh`) and retries after a growing hold-off.
+* **Bluetooth RAM:** NimBLE is an observer + broadcaster with trimmed pools (8 HCI event buffers, 1 ACL buffer, 3
+  MSYS_2 blocks, no periodic advertising/sync, 3 controller activities, 3.5 KB host stack). Bluetooth costs about
+  31 KB in the controller and 13 KB in the host while running and frees it all when stopped. Measure before raising
+  any of these.
 * **Code:** gate RAM-hungry features on `HardwareCapabilities` (`main/hardware_capabilities.*`). Heap guards measure
   internal RAM only.
 * `sdkconfig.debug` layers on top (coredump partition at 0x3C0000).

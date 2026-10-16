@@ -713,9 +713,9 @@ static const char* RemoteIDTransportsError(const char* command, uint8_t transpor
                "Ethernet or USB, or use hardware with PSRAM.";
     }
     snprintf(error, sizeof(error),
-             "Only the WiFi beacon transport can run while Ethernet is enabled on this hardware: its ESP32 has no "
-             "PSRAM, so there isn't enough RAM for the web server and Bluetooth at the same time. Use AT+%s=1,%u, "
-             "disable Ethernet, or use hardware with PSRAM.",
+             "Only the Bluetooth transports can run while Ethernet is enabled on this hardware: its ESP32 has no "
+             "PSRAM, so there isn't enough RAM for the web server, Bluetooth and the WiFi beacon receiver at the same "
+             "time. Use AT+%s=1,%u, disable Ethernet, or use hardware with PSRAM.",
              command, allowed);
     return error;
 }
@@ -731,7 +731,7 @@ static void WarnIfNetworkPausesRemoteID() {
     }
     CPP_AT_PRINTF(
         "WARNING: this hardware's ESP32 has no PSRAM, so Remote ID will be paused while WiFi is enabled, and only its "
-        "WiFi beacon transport runs while Ethernet is enabled.\r\n");
+        "Bluetooth transports run while Ethernet is enabled.\r\n");
 }
 
 // Explains why requested Remote ID isn't running, from the ESP32's live status.
@@ -2204,9 +2204,9 @@ const CppAT::ATCommandDef_t at_command_list[] = {
          "future firmware.\r\n\t"
          "AT+REMOTE_ID=<enabled>[,<transport_mask>]\r\n\tEnable/disable Broadcast Remote ID (drone) reception on the "
          "ESP32.\r\n\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7).\r\n\tOn "
-         "hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID only runs with WiFi AP, WiFi Station and "
-         "Ethernet disabled; with PSRAM it runs alongside them (the WiFi beacon receiver then listens on the WiFi "
-         "channel only). Remote ID pauses while ESP32 free memory is below what the web server needs.\r\n\t"
+         "hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID can't run with WiFi AP or WiFi Station "
+         "enabled, and with Ethernet enabled only its Bluetooth transports run; with PSRAM it runs alongside them (the "
+         "WiFi beacon receiver then listens on the WiFi channel only). Remote ID pauses while ESP32 free memory is below what the web server needs.\r\n\t"
          "AT+REMOTE_ID?\r\n\tQuery Remote ID settings, the ESP32's live status bitfield and whether this hardware "
          "can run Remote ID with the enabled network interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRemoteIDCallback, comms_manager)},

@@ -8,9 +8,9 @@ static constexpr uint32_t kKB = 1024;
 TEST(RemoteIDGuard, AllowedTransports) {
     // With PSRAM everything runs next to any network interface.
     EXPECT_EQ(RemoteIDGuard::AllowedTransports(true, true, true, true), RemoteIDGuard::kTransportsAll);
-    // Without PSRAM: everything with no network, WiFi beacon only next to Ethernet, nothing next to WiFi.
+    // Without PSRAM: everything with no network, Bluetooth only next to Ethernet, nothing next to WiFi.
     EXPECT_EQ(RemoteIDGuard::AllowedTransports(false, false, false, false), RemoteIDGuard::kTransportsAll);
-    EXPECT_EQ(RemoteIDGuard::AllowedTransports(false, false, false, true), RemoteIDGuard::kTransportWiFiBeacon);
+    EXPECT_EQ(RemoteIDGuard::AllowedTransports(false, false, false, true), RemoteIDGuard::kTransportsBLE);
     EXPECT_EQ(RemoteIDGuard::AllowedTransports(false, true, false, false), 0);
     EXPECT_EQ(RemoteIDGuard::AllowedTransports(false, false, true, false), 0);
     EXPECT_EQ(RemoteIDGuard::AllowedTransports(false, true, true, true), 0);
@@ -69,10 +69,10 @@ TEST(RemoteIDGuard, HeapWatchHandlesClockWrap) {
 TEST(RemoteIDGuard, BlockedReason) {
     EXPECT_EQ(RemoteIDGuard::BlockedReason(0), nullptr);
     EXPECT_EQ(RemoteIDGuard::BlockedReason(RemoteIDGuard::kStatusBLEActive), nullptr);
-    // Ethernet without PSRAM: Bluetooth paused, WiFi beacon running.
+    // Ethernet without PSRAM: WiFi beacon paused, Bluetooth running.
     EXPECT_STREQ(RemoteIDGuard::BlockedReason(RemoteIDGuard::kStatusBlockedByNetwork |
-                                              RemoteIDGuard::kStatusWiFiSnifferActive),
-                 "partly paused: this ESP32 has no PSRAM, so with Ethernet on only the WiFi beacon transport runs");
+                                              RemoteIDGuard::kStatusBLEActive),
+                 "partly paused: this ESP32 has no PSRAM, so with Ethernet on only the Bluetooth transports run");
     EXPECT_NE(strstr(RemoteIDGuard::BlockedReason(RemoteIDGuard::kStatusBlockedByNetwork), "with WiFi on"), nullptr);
     EXPECT_NE(strstr(RemoteIDGuard::BlockedReason(RemoteIDGuard::kStatusPausedLowHeap), "web server"), nullptr);
     // A heap pause stops everything, so it explains more than a partial network block.
@@ -80,5 +80,8 @@ TEST(RemoteIDGuard, BlockedReason) {
                                                   RemoteIDGuard::kStatusBlockedByNetwork),
                      "web server"),
               nullptr);
-    EXPECT_NE(strstr(RemoteIDGuard::BlockedReason(RemoteIDGuard::kStatusTxBlocked), "memory"), nullptr);
+    EXPECT_NE(strstr(RemoteIDGuard::BlockedReason(RemoteIDGuard::kStatusTxBlocked), "could not start"), nullptr);
+    EXPECT_NE(strstr(RemoteIDGuard::BlockedReason(RemoteIDGuard::kStatusTxBlocked | RemoteIDGuard::kStatusBlockedByRAM),
+                     "memory"),
+              nullptr);
 }

@@ -844,7 +844,7 @@ const SETTINGS_RID = {
         if (a === 7) return '';
         return a === 0
             ? 'This ESP32 has no PSRAM: Remote ID can\u2019t run while WiFi is enabled, so the web server keeps enough memory.'
-            : 'This ESP32 has no PSRAM: while Ethernet is enabled only the WiFi Beacon transport can run, so the web server keeps enough memory.';
+            : 'This ESP32 has no PSRAM: while Ethernet is enabled only the Bluetooth transports can run, so the web server keeps enough memory.';
     },
     statusText(raw, tx) {
         let st = parseInt(raw, 16);
