@@ -134,6 +134,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../../modules" CACHE PATH "Path to adsbee modules directory")
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lr2021)
+add_subdirectory(${CMAKE_SOURCE_DIR}/mlat)
 add_subdirectory(${CMAKE_SOURCE_DIR}/object_dictionary)
 add_subdirectory(${CMAKE_SOURCE_DIR}/target_test)
 add_subdirectory(${CMAKE_SOURCE_DIR}/comms)

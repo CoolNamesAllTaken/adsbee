@@ -61,6 +61,7 @@ bool ESP32::Update() {
         hardware_capabilities = device_status.hardware_capabilities;
         psram_total_kb = device_status.psram_total_kb;
         psram_free_kb = device_status.psram_free_kb;
+        num_network_console_clients_ = device_status.num_network_console_clients;
         network_utc_time_valid = device_status.network_utc_time_valid;
         network_utc_ms_of_day = device_status.network_utc_ms_of_day;
         network_utc_timestamp_ms = get_time_since_boot_ms();
@@ -93,6 +94,7 @@ bool ESP32::Update() {
             CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");
             return false;
         }
+        last_network_console_rx_timestamp_ms_ = get_time_since_boot_ms();
         for (uint16_t i = 0; i < bytes_to_read; i++) {
             char c = (char)buf[i];
             if (!comms_manager.esp32_console_rx_queue.Enqueue(c)) {

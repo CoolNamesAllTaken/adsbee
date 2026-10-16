@@ -110,6 +110,7 @@ int main(void) {
     // Wait for settings data to be received.
     GPIO_write(bsp.kSubGLEDPin, 1);
     while (settings_manager.settings.settings_version == UINT32_MAX) {
+        pico_ll.ProcessPendingTransaction();
     }
     GPIO_write(bsp.kSubGLEDPin, 0);
     CONSOLE_INFO("ADSBeeServer::Init", "Settings data read from Pico.");
@@ -125,6 +126,7 @@ int main(void) {
         user_core_monitor.Tick();
         user_core_monitor.Update();
 
+        pico_ll.ProcessPendingTransaction();
         pico.UpdateLED();
         uat_packet_decoder.Update();
         subg_radio.Update();

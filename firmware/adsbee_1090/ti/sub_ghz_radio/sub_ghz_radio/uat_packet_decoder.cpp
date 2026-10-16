@@ -32,6 +32,7 @@ void UATPacketDecoder::DecodeADSBPackets() {
         if (!got_packet) {
             break;
         }
+        pico_ll.ProcessPendingTransaction();  // Don't keep the RP2040 waiting while a burst is decoded.
         uint16_t packet_len_bytes = packet.buffer_len_bytes;
         // Decode the packet and enqueue the result.
         DecodedUATADSBPacket decoded_packet = DecodedUATADSBPacket(packet);

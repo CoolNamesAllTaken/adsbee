@@ -37,8 +37,11 @@
 
 #include <ti/drivers/dpl/HwiP.h>
 
+#include "cycle_counter.hh"
 #include "hal.hh"
 #include "lr2021.hh"
+#include "mlat/mlat_capture.hh"
+#include "mlat/mlat_clear_dma.hh"
 
 void LR2021::SPICallback(SPI_Handle handle, SPI_Transaction* transaction) {
     (void)handle;
@@ -62,6 +65,13 @@ void LR2021::SPICallback(SPI_Handle handle, SPI_Transaction* transaction) {
             }
             // Loop-drain frame: end the NSS frame immediately so the chip starts processing (BUSY
             // pulse) during main-loop time instead of waiting for the next ServiceRxDrain() call.
+            if (self->mlat_sweep_enabled_ && self->drain_state_ == DrainState::kFifoRead && self->async_ok_ &&
+                !self->IrqLineHigh()) {
+                // The sweep ends with this frame: hand the bus to the uDMA clear once BUSY falls (armed before NSS
+                // rises, as for the chain).
+                self->mlat_arm_on_busy_fall_ = true;
+                self->ArmBusyInterrupt();
+            }
             self->SetNSS(true);
             self->async_in_flight_ = false;
             self->async_done_ = true;  // Written last: thread level reads async_done_ before async_ok_.
@@ -89,6 +99,15 @@ bool LR2021::PostAsyncFrame(const uint8_t* tx_buf, size_t len, uint8_t* rx_buf) 
         .status = SPI_TRANSFER_QUEUED,
     };
     status_tracker_.OnFrame(FrameOpcode(tx_buf, len));  // Which command the next Stat word reports on.
+    if (mlat_clear_dma::Armed()) {
+        // Armed from the BUSY-fall interrupt: a clear may have run since the caller saw BUSY low.
+        mlat_arm_on_busy_fall_ = false;
+        mlat_clear_dma::Disarm();
+        WaitNotBusyUs(kMlatClearBusyWaitUs);
+    }
+    if (mlat_sweep_enabled_) {
+        mlat_nss_counter_ = mlat_capture::Counter();  // Pairing places the level read by its NSS edge.
+    }
     SetNSS(false);
     async_in_flight_ = true;
     if (!SPI_transfer(spi_handle_, &async_txn_)) {
@@ -160,13 +179,27 @@ bool LR2021::StartRxDrain() {
     }
     EnterBusyWait(DrainState::kLevelCmdWait);
     HwiP_restore(key);
+    mlat_clear_dma::Disarm();  // Before the first BUSY check: a clear in progress ends with BUSY high.
     // Field resets after the claim: if the chain steals the drain before they matter, they are
     // re-initialized by the next StartRxDrain anyway.
     drain_irq_flags_ = 0;
     drain_fifo_level_ = 0;
     drain_fifo_full_ = false;
     drain_error_str_ = nullptr;
+    mlat_sweep_ = MlatSweep();
     return true;
+}
+
+bool LR2021::MlatSweepWait(DrainState s, bool wait_done) {
+    if (!mlat_sweep_enabled_ || s >= DrainState::kFifoRead) {
+        return false;
+    }
+    const uint32_t start_cycles = CycleCounter::Now();
+    bool done = false;
+    while (!(done = wait_done ? async_done_ : !IsBusy()) &&
+           CycleCounter::Since(start_cycles) < kMlatSweepWaitMaxUs * (CycleCounter::kCpuHz / 1000000)) {
+    }
+    return done;
 }
 
 LR2021::DrainResult LR2021::ServiceRxDrain() {
@@ -238,11 +271,17 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             case DrainState::kClearFifoRspWait:
             case DrainState::kIrqCmdWait:
             case DrainState::kIrqRspWait: {
-                if (IsBusy()) {
+                if (IsBusy() && !MlatSweepWait(s, false)) {
                     if (get_time_since_boot_ms() - busy_wait_start_ms_ > kBusyTimeoutMs) {
                         return EnterDrainError(s, "BUSY timeout");
                     }
                     return DrainResult::kInProgress;
+                }
+                // An edge came while the sweep held the bus: its clear goes first. Only ahead of a command frame,
+                // never between a command and its response frame (the response answers the frame before it).
+                if (mlat_sweep_enabled_ && (s == DrainState::kLevelCmdWait || s == DrainState::kFifoWait) &&
+                    mlat_clear_dma::ClearPending()) {
+                    break;  // Wait for BUSY again.
                 }
                 uintptr_t key = HwiP_disable();
                 if (drain_state_ != s) {  // Stolen by the chain: re-evaluate.
@@ -255,10 +294,13 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     case DrainState::kLevelCmdWait:
                         PackU16(async_tx_buf_, kOpcodeGetRxFifoLevel);
                         posted = PostAsyncFrame(async_tx_buf_, 2);
+                        mlat_sweep_.level_request_counter = mlat_nss_counter_;
                         next = DrainState::kLevelCmd;
                         break;
                     case DrainState::kLevelRspWait:
+                        // BUSY is low, so the LR2021 has sampled the level.
                         posted = PostAsyncFrame(nullptr, 4);  // 2 (stat) + 2 (level).
+                        mlat_sweep_.level_answer_counter = mlat_nss_counter_;
                         next = DrainState::kLevelRsp;
                         break;
                     case DrainState::kFifoWait:
@@ -297,13 +339,16 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                 if (!posted) {
                     return EnterDrainError(s, "SPI_transfer post failed");
                 }
+                if (mlat_sweep_enabled_ && next < DrainState::kFifoRead) {
+                    break;  // MLAT sweep: wait for this short frame here.
+                }
                 return DrainResult::kInProgress;
             }
 
             // DMA-in-flight states: parse and advance on completion. Transitions are HwiP-guarded
             // (once async_in_flight_ drops, the chain may steal this drain).
             case DrainState::kLevelCmd: {
-                if (!async_done_) {
+                if (!async_done_ && !MlatSweepWait(s, true)) {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
@@ -318,7 +363,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                 break;  // Loop: BUSY may already be low, or we were stolen.
             }
             case DrainState::kLevelRsp: {
-                if (!async_done_) {
+                if (!async_done_ && !MlatSweepWait(s, true)) {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
@@ -381,6 +426,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     if (IrqLineHigh()) {
                         // Payload is parked in async_rx_buf_ while the tail frames run into the
                         // dedicated tail buffers; kDataReady is entered at tail completion.
+                        mlat_sweep_.clear_tail_ran = true;
                         EnterBusyWait(DrainState::kClearFifoWait);
                     } else {
                         drain_state_ = DrainState::kDataReady;
@@ -513,4 +559,30 @@ void LR2021::CancelAsync() {
     drain_state_ = DrainState::kIdle;
     HwiP_restore(key);
     SetNSS(true);  // Harmless DOUT update if the pin was tri-stated by the SYNC ISR.
+}
+
+bool LR2021::ConfigMlatSources(bool enabled) {
+    PackU16(mlat_clear_tx_buf_, kOpcodeClearIrq);
+    PackU32(mlat_clear_tx_buf_ + 2, HostIrqs::kIrqLoRaHeaderValid);  // Valid sync word.
+    // DIO5 accepts no other pull setting.
+    return SetDioFunction(DioNum::kDio5, enabled ? DioFunc::kDioFuncIrq : DioFunc::kDioFuncNone, PullDrive::kPullUp) &&
+           SetDioIrqConfig(DioNum::kDio5, enabled ? static_cast<uint32_t>(HostIrqs::kIrqLoRaHeaderValid) : 0) &&
+           ClearIrq(HostIrqs::kIrqLoRaHeaderValid) && CheckLastCommandStatus("LR2021::ConfigMlatSources");
+}
+
+bool LR2021::MlatClearMayArm(uint32_t max_wait_us) {
+    if (drain_state_ != DrainState::kIdle || kept_read_pending_ || abort_requested_ || spi_handle_ == nullptr) {
+        return false;
+    }
+    return WaitNotBusyUs(max_wait_us);
+}
+
+bool LR2021::WaitNotBusyUs(uint32_t max_us) {
+    const uint32_t start_cycles = CycleCounter::Now();
+    while (IsBusy()) {
+        if (CycleCounter::Since(start_cycles) >= max_us * (CycleCounter::kCpuHz / 1000000)) {
+            return false;
+        }
+    }
+    return true;
 }

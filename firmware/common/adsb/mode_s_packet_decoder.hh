@@ -8,6 +8,9 @@
 class ModeSPacketDecoder {
    public:
     static constexpr uint16_t kPacketQueueLen = 100;
+    // The main loop on core 0 drains the output queue. Under heavy Mode S + UAT traffic one pass can take ~60 ms
+    // (several ESP32 writes waiting for their acks plus CC1312 reads), which is 360 packets at 6,000 packets/s.
+    static constexpr uint16_t kDecodedPacketQueueLen = 512;
     static constexpr uint16_t kDebugMessageQueueLen = 20;
     // Two demodulator state machines can occasionally catch the same transmission. Packets with identical contents
     // whose timestamps fall within this window are treated as duplicates. Distinct transmissions with identical
@@ -55,9 +58,9 @@ class ModeSPacketDecoder {
     // Each is written by the decoder loop (core 1 on the RP2040) and read on core 0: one writer and one reader, so
     // unlocked.
     PFBQueue<DecodedModeSPacket> decoded_mode_s_packet_out_queue = PFBQueue<DecodedModeSPacket>(
-        {.buf_len_num_elements = kPacketQueueLen, .buffer = decoded_mode_s_packet_out_queue_buffer_});
+        {.buf_len_num_elements = kDecodedPacketQueueLen, .buffer = decoded_mode_s_packet_out_queue_buffer_});
     PFBQueue<uint16_t> decoded_mode_s_packet_bit_flip_locations_out_queue =
-        PFBQueue<uint16_t>({.buf_len_num_elements = kPacketQueueLen,
+        PFBQueue<uint16_t>({.buf_len_num_elements = kDecodedPacketQueueLen,
                             .buffer = decoded_mode_s_packet_bit_flip_locations_out_queue_buffer_});
     PFBQueue<DebugMessage> debug_message_out_queue = PFBQueue<DebugMessage>({
         .buf_len_num_elements = kDebugMessageQueueLen,
@@ -69,8 +72,8 @@ class ModeSPacketDecoder {
 
     PacketDecoderConfig config_;
     RawModeSPacket raw_mode_s_packet_in_queue_buffer_[kPacketQueueLen];
-    DecodedModeSPacket decoded_mode_s_packet_out_queue_buffer_[kPacketQueueLen];
-    uint16_t decoded_mode_s_packet_bit_flip_locations_out_queue_buffer_[kPacketQueueLen];
+    DecodedModeSPacket decoded_mode_s_packet_out_queue_buffer_[kDecodedPacketQueueLen];
+    uint16_t decoded_mode_s_packet_bit_flip_locations_out_queue_buffer_[kDecodedPacketQueueLen];
     DebugMessage debug_message_out_queue_buffer_[kDebugMessageQueueLen];
 
     // Last packet pushed from each source, used to drop the same message if it's caught by multiple state machines.

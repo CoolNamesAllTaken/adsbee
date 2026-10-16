@@ -614,6 +614,8 @@ void ObjectDictionary::UpdateDeviceStatus() {
         static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize);
     device_status.num_queued_sc_command_requests = sc_command_request_queue.Length();
     device_status.num_queued_network_console_rx_chars = num_network_console_rx_chars;
+    device_status.num_network_console_clients =
+        static_cast<uint8_t>(MIN(adsbee_server.network_console.GetNumClients(), UINT8_MAX));
     // Length of Remote ID packets queued for the RP2040 to pull (header-only == nothing pending). The RP2040 polls this
     // in ESP32::Update() and issues a kAddrCompositeArrayRawPackets read when it exceeds the header size. Mirrors the
     // CC1312's pending_raw_packets_len_bytes pull mechanism (see the ON_TI branch below).

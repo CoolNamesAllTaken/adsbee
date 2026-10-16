@@ -15,6 +15,9 @@
 // the loop drain's ReadRxFifo frame (HandLoopTailToChain). A read the loop drain had completed is kept for the main
 // loop (kept_read_pending()).
 //
+// A synchronous command owns the bus from its request frame to its response frame (LR2021::BusLock): an edge while
+// it holds the bus starts no chain, and ReleaseBus() retries it.
+//
 // The inter-frame BUSY pulses are absorbed by hardware edges instead of CPU spins. Each GPIO handler
 // is a few microseconds; that matters because GPIO HWIs (0xC0) preempt the UAT RF SWI's ~15 us
 // CMD_PROP_SET_LEN deadline. The main loop parses filled slots later (ADSBee::UpdateLR2021 ->
@@ -43,6 +46,7 @@
 
 #include "hal.hh"
 #include "lr2021.hh"
+#include "mlat/mlat_clear_dma.hh"
 
 // Minimal Stat validation for ISR context: command-status field (bits 11:9) must be CMD_OK / CMD_DAT.
 // last_stat_ is thread-owned and must not be written from here.
@@ -134,6 +138,13 @@ void LR2021::HandleIrqLine() {
         irq_stale_edges = irq_stale_edges + 1;
         return;
     }
+    if (sync_bus_.owned()) {
+        // A synchronous command holds the bus from its request frame to its response frame: a chain frame between
+        // them would take the response. ReleaseBus() retries this edge (the line stays latched).
+        irq_drain_defer_sync = irq_drain_defer_sync + 1;
+        skipped_edge_pending_ = true;
+        return;
+    }
     IrqDrainSlot& slot = irq_slots_[irq_slot_fill_idx_];
     if (slot.filled) {
         irq_drain_skip_slots = irq_drain_skip_slots + 1;
@@ -168,6 +179,7 @@ void LR2021::HandleIrqLine() {
         // dropped a pending read-response, the chip discards it when the next command frame arrives
         // (pipelined protocol).
     }
+    mlat_clear_dma::Disarm();  // Waits a few microseconds at most; StartChainSegment checks BUSY after it.
     irq_drain_count = irq_drain_count + 1;
     slot.timestamp_us = get_time_since_boot_us();
     StartChainSegment();
@@ -204,7 +216,8 @@ void LR2021::RetrySkippedEdge() {
 }
 
 void LR2021::HandleBusyFall() {
-    // GPIO HWI (0xC0): fires only while armed, i.e. a chain frame is pending. Post it.
+    // GPIO HWI (0xC0): fires only while armed: a chain frame is pending (post it), or the loop drain's FIFO read
+    // ended with MLAT on (arm the uDMA clear).
     DisarmBusyInterrupt();
     if (abort_requested_) {
         AbortChainFromIsr();
@@ -219,6 +232,13 @@ void LR2021::HandleBusyFall() {
             PostChainFrame();
             break;
         default:
+            if (mlat_arm_on_busy_fall_) {
+                // The loop drain's FIFO read ended and BUSY fell: the bus is free until the next frame.
+                mlat_arm_on_busy_fall_ = false;
+                if (drain_state_ == DrainState::kFifoRead || drain_state_ == DrainState::kDataReady) {
+                    mlat_clear_dma::Arm();
+                }
+            }
             break;  // Disarmed late / state already advanced (thread assist): nothing to do.
     }
 }

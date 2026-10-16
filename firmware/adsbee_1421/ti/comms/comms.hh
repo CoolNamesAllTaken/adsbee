@@ -31,6 +31,9 @@ class CommsManager {
     static constexpr uint16_t kRawReportMaxModeSPacketsPerUpdate = 3;
     static constexpr uint16_t kRawReportMaxUATADSBPacketsPerUpdate = 2;
     static constexpr uint16_t kRawReportMaxUATUplinkPacketsPerUpdate = 1;
+    // A backlog gets more chunks in one main loop iteration, for up to this long: at a few thousand Mode S frames per
+    // second plus UAT, one chunk per iteration falls behind and the reporting queues overflow.
+    static constexpr uint32_t kRawReportBudgetUs = 1000;
 
     static constexpr uint16_t kATCommandBufMaxLen = 1000;
     static constexpr uint16_t kPrintfBufferMaxSize = 1000;
@@ -239,11 +242,17 @@ class CommsManager {
         kRawReportMaxUATUplinkPacketsPerUpdate * sizeof(RawUATUplinkPacket);
 
     /**
-     * Formats and queues one chunk of raw packet reports (at most kRawReportMax*PacketsPerUpdate of each type) for
-     * the console, taken from the reporting queues. Called once per main loop iteration. If the console reports raw
-     * packets and the TX ring can't take a worst-case chunk, it leaves the packets queued and returns without waiting.
+     * Formats and queues chunks of raw packet reports (at most kRawReportMax*PacketsPerUpdate of each type per chunk)
+     * for the console, taken from the reporting queues, until they are empty or kRawReportBudgetUs has passed. Called
+     * once per main loop iteration. If the console reports raw packets and the TX ring can't take a worst-case chunk,
+     * it leaves the packets queued and returns without waiting.
      */
     void ReportQueuedRawPackets();
+
+    /**
+     * Formats and queues one chunk. Returns false when there was nothing to report or no room for it.
+     */
+    bool ReportQueuedRawPacketsChunk();
 
     // True if a reporting sink uses a protocol that sends raw packets.
     bool ReportsRawPackets() const;
