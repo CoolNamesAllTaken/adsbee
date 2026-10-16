@@ -1572,6 +1572,10 @@
 <td>Set the receiver position (FIXED, GNSS, LOWEST, ICAO, or NONE), used for things like distance to aircraft.</td>
 </tr>
 <tr>
+<td><code>AT+FILTER_DISTANCE_NM=&lt;enabled&gt;,&lt;nm&gt;</code></td>
+<td>Leave aircraft farther than <code>&lt;nm&gt;</code> nautical miles (0.1 nm steps) from the receiver position out of aircraft reports, e.g. <code>AT+FILTER_DISTANCE_NM=1,50</code>. Off by default (<code>0,100.0</code>). Raw, Beast and MLAT output are never filtered, and aircraft without a known distance are always reported.</td>
+</tr>
+<tr>
 <td><code>AT+RX_STATS?</code></td>
 <td>Receiver packet and health counters.</td>
 </tr>
