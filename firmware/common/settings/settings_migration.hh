@@ -40,15 +40,14 @@ class SettingsMigrator {
    private:
     // Per-version upgrade steps, chained: each takes the frozen layout of version N and produces version N+1. Steps that
     // land on an intermediate frozen version write that frozen struct; only the final step (the one that reaches the
-    // current version) writes the live SettingsManager::Settings. To add v21: freeze v20 in settings_versions.hh, change
-    // MigrateV19ToV20 to emit settings_v20::Settings, add MigrateV20ToV21 emitting the live struct, and extend
-    // Migrate()'s dispatch with a `case 20:`.
+    // current version) writes the live SettingsManager::Settings. To add v20: freeze v19 in settings_versions.hh, change
+    // MigrateV18ToV19 to emit settings_v19::Settings, add MigrateV19ToV20 emitting the live struct, and extend
+    // Migrate()'s dispatch with a `case 19:`.
     static void MigrateV12ToV13(const settings_v12::Settings& in, settings_v13::Settings& out);
     static void MigrateV13ToV14(const settings_v13::Settings& in, settings_v14::Settings& out);
     static void MigrateV14ToV15(const settings_v14::Settings& in, settings_v15::Settings& out);
     static void MigrateV15ToV16(const settings_v15::Settings& in, settings_v16::Settings& out);
     static void MigrateV16ToV17(const settings_v16::Settings& in, settings_v17::Settings& out);
     static void MigrateV17ToV18(const settings_v17::Settings& in, settings_v18::Settings& out);
-    static void MigrateV18ToV19(const settings_v18::Settings& in, settings_v19::Settings& out);
-    static void MigrateV19ToV20(const settings_v19::Settings& in, SettingsManager::Settings& out);
+    static void MigrateV18ToV19(const settings_v18::Settings& in, SettingsManager::Settings& out);
 };

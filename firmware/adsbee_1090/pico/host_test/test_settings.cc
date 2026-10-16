@@ -55,9 +55,6 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(settings_v19::Settings), 1344u);
-    EXPECT_EQ(offsetof(settings_v19::Settings, filter_distance_deci_nm),
-              offsetof(SettingsManager::Settings, filter_distance_deci_nm));
     EXPECT_EQ(sizeof(SettingsManager::Settings), 2656u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
@@ -562,29 +559,25 @@ TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
     EXPECT_TRUE(manager.Sanitize());
 }
 
-TEST(SettingsMigration, V19ToV20KeepsDistanceFilterAndFeedsOnTCP) {
+TEST(SettingsMigration, V18ToCurrentKeepsFeedsOnTCP) {
     settings_v15::Settings v15;
     PopulateV15(v15);
-    settings_v19::Settings v19;
-    memset(&v19, 0, sizeof(v19));
-    memcpy(&v19, &v15, sizeof(v15));
-    v19.settings_version = 19;
-    v19.ip_mode = SettingsManager::kIPModeIPv4;
-    strcpy(v19.wifi_sta_extra_networks[0].ssid, "Hangar");
-    v19.auto_update_enabled = true;
-    v19.filter_distance_enabled = true;
-    v19.filter_distance_deci_nm = 355;
-    uint8_t blob[sizeof(settings_v19::Settings)];
-    memcpy(blob, &v19, sizeof(v19));
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv4;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Hangar");
+    v18.auto_update_enabled = true;
+    uint8_t blob[sizeof(settings_v18::Settings)];
+    memcpy(blob, &v18, sizeof(v18));
 
     SettingsManager::Settings out;
     out.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
     strcpy(out.feed_mqtt[0].username, "stale");
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 19, out));
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_TRUE(out.auto_update_enabled);
-    EXPECT_TRUE(out.filter_distance_enabled);
-    EXPECT_EQ(out.filter_distance_deci_nm, 355u);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv4);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Hangar");
     EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
