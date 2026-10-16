@@ -390,4 +390,7 @@ void SettingsManager::PrintAT() {
 
     // AT+ASTERIX_SAC_SIC
     CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
+
+    // AT+NTP_SERVER
+    CONSOLE_PRINTF("AT+NTP_SERVER=%s\r\n", settings.ntp_server);
 }

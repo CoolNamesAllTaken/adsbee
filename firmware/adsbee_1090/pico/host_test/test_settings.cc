@@ -559,7 +559,10 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t asterix = dump.find("AT+ASTERIX_SAC_SIC=0,0");
     ASSERT_NE(asterix, std::string::npos);
     EXPECT_LT(auto_update, asterix);
-    EXPECT_EQ(dump.find("AT+", asterix + 1), std::string::npos);
+    size_t ntp = dump.find("AT+NTP_SERVER=pool.ntp.org");
+    ASSERT_NE(ntp, std::string::npos);
+    EXPECT_LT(asterix, ntp);
+    EXPECT_EQ(dump.find("AT+", ntp + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);
