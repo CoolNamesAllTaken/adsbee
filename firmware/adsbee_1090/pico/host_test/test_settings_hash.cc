@@ -69,8 +69,8 @@ TEST(SettingsHash, SameSettingsSameHashWhateverThePadding) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Host defaults (no device info, access point channel 1). Changes only with the Settings struct or its defaults.
     Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0xD4FBD210u);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xF1F4EF53u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0xDA515065u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x5406F255u);
 }
 
 TEST(SettingsHash, StoredCRCDoesNotCount) {
@@ -150,6 +150,7 @@ TEST(SettingsHash, EverySharedSettingChangesBothHashes) {
     EXPECT_CHANGES_BOTH(strcpy(s.wifi_sta_extra_networks[1].password, "secret"));
     EXPECT_CHANGES_BOTH(s.auto_update_enabled = true);
     EXPECT_CHANGES_BOTH(s.asterix_sac = 25);
+    EXPECT_CHANGES_BOTH(strcpy(s.ntp_server, "time.example.com"));
 }
 
 TEST(SettingsHash, FeedSlotsAreNotInterchangeable) {

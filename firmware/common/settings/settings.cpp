@@ -84,6 +84,7 @@ bool SettingsManager::Sanitize() {
         changed |= SanitizeString(net.ssid, sizeof(net.ssid), "wifi_sta_extra_networks.ssid", i);
         changed |= SanitizeString(net.password, sizeof(net.password), "wifi_sta_extra_networks.password", i);
     }
+    changed |= SanitizeString(settings.ntp_server, sizeof(settings.ntp_server), "ntp_server");
 
     // Baud rate 0 is invalid on hardware UARTs (but normal for the USB console).
     if (settings.baud_rates[SerialInterface::kCommsUART] == 0) {
