@@ -44,7 +44,10 @@
 //   display  read-only informational value populated by parse(); never written
 // Fields may declare visibleIf(values) to show/hide based on sibling values,
 // note: '...' for a hint line under the input, and validate(value) returning an error
-// message (or '') for checks beyond the type's own.
+// message (or '') for checks beyond the type's own. lockOffIf(deviceValues) (bool) and
+// lockOffBits(deviceValues) (bitmask) stop the user from turning a setting or option on
+// while still allowing it to be turned off; entries may declare notice(deviceValues),
+// a line under the help text explaining such a lock.
 //
 // To expose a new AT command in the GUI, add one entry to the product's schema array.
 
@@ -157,6 +160,13 @@ class SettingsEngine {
             el.appendChild(help);
         }
 
+        if (entry.notice) {
+            const notice = document.createElement('div');
+            notice.className = 'settings-note';
+            notice.id = `settings-notice-${entry.cmd}`;
+            el.appendChild(notice);
+        }
+
         for (const field of entry.fields) {
             el.appendChild(this._renderField(entry, field));
         }
@@ -255,7 +265,28 @@ class SettingsEngine {
 
     _onFieldChanged(entry) {
         this._updateVisibility(entry);
+        this._applyLocks(entry);
         this._updateDirtyUI();
+    }
+
+    // Disables options the device says can't be turned on (see lockOffIf / lockOffBits);
+    // ones that are on stay enabled so they can be turned off.
+    _applyLocks(entry) {
+        const device = this.deviceValues[entry.cmd];
+        if (!device || !this.readOk[entry.cmd]) return;
+        for (const field of entry.fields) {
+            const input = this._input(entry, field);
+            if (field.type === 'bool' && field.lockOffIf) {
+                input.disabled = !input.checked && !!field.lockOffIf(device);
+            } else if (field.type === 'bitmask' && field.lockOffBits) {
+                const bits = field.lockOffBits(device);
+                for (const cb of input.querySelectorAll('input[type="checkbox"]')) {
+                    cb.disabled = !cb.checked && (bits & parseInt(cb.dataset.bit, 10)) !== 0;
+                }
+            }
+        }
+        const notice = document.getElementById(`settings-notice-${entry.cmd}`);
+        if (notice) notice.textContent = (entry.notice && entry.notice(device)) || '';
     }
 
     // ── Values ──
@@ -596,6 +627,7 @@ class SettingsEngine {
         }
         this.readOk[entry.cmd] = true;
         this._setEntryEnabled(entry, true);
+        this._applyLocks(entry);
         this._updateVisibility(entry);
         this._entryStatus(entry, '');
         this._validateEntry(entry, new Set());  // clear stale inline errors
@@ -798,6 +830,53 @@ const SETTINGS_RID_TRANSPORTS = [
     { bit: 4, label: 'WiFi Beacon' },
 ];
 
+// Remote ID helpers for the schema below. Status bits: RemoteIDGuard::Status in
+// firmware/common/coprocessor/remote_id_guard.hh.
+const SETTINGS_RID = {
+    // Transports the device can run with its network interfaces; firmware without the
+    // ALLOWED_TRANSPORTS field allows all.
+    allowed(v) {
+        const a = typeof v.allowed === 'number' ? v.allowed : parseInt(v.allowed, 16);
+        return Number.isNaN(a) ? 7 : a;
+    },
+    notice(v) {
+        const a = SETTINGS_RID.allowed(v);
+        if (a === 7) return '';
+        return a === 0
+            ? 'This ESP32 has no PSRAM: Remote ID can\u2019t run while WiFi is enabled, so the web server keeps enough memory.'
+            : 'This ESP32 has no PSRAM: while Ethernet is enabled only the WiFi Beacon transport can run, so the web server keeps enough memory.';
+    },
+    statusText(raw, tx) {
+        const st = parseInt(raw, 16);
+        if (Number.isNaN(st)) return raw;
+        const parts = [];
+        const add = (bit, text) => { if (st & bit) parts.push(text); };
+        if (tx) {
+            add(0x100, 'Bluetooth 4 advertising');
+            add(0x200, 'Bluetooth 5 Long Range advertising');
+            add(0x400, 'WiFi Beacon transmitting');
+            add(0x800, 'no position');
+        } else {
+            add(0x1, 'Bluetooth scanning');
+            add(0x2, 'Long Range');
+            add(0x4, 'WiFi Beacon receiving');
+        }
+        add(0x40, 'paused: low ESP32 memory');
+        add(0x8, 'paused for WiFi/Ethernet (no PSRAM)');
+        add(0x20, 'Bluetooth not in this firmware');
+        add(0x10, 'not enough ESP32 memory');
+        return `${parts.length ? parts.join(', ') : 'idle'} (${raw})`;
+    },
+    enField() { return { id: 'en', label: 'Enabled', type: 'bool', lockOffIf: v => SETTINGS_RID.allowed(v) === 0 }; },
+    transportsField() {
+        return {
+            id: 'transports', label: 'Transports', type: 'bitmask', options: SETTINGS_RID_TRANSPORTS,
+            lockOffBits: v => 7 & ~SETTINGS_RID.allowed(v),
+        };
+    },
+    allowedField() { return { id: 'allowed', label: 'Allowed Transports', type: 'display', visibleIf: () => false }; },
+};
+
 const SETTINGS_SCHEMA_1090 = [
     // ── Network ──
     {
@@ -936,19 +1015,36 @@ const SETTINGS_SCHEMA_1090 = [
     {
         cmd: 'REMOTE_ID', label: 'Remote ID Receive', group: 'Remote ID', experimental: true,
         help: 'Receive Broadcast Remote ID (drone ID) messages. Not yet a stable part of the system \u2014 these settings and their behavior may change in future firmware.',
+        notice: SETTINGS_RID.notice,
         fields: [
-            { id: 'en', label: 'Enabled', type: 'bool' },
-            { id: 'transports', label: 'Transports', type: 'bitmask', options: SETTINGS_RID_TRANSPORTS },
+            SETTINGS_RID.enField(),
+            SETTINGS_RID.transportsField(),
             { id: 'status', label: 'ESP32 Status', type: 'display' },
+            SETTINGS_RID.allowedField(),
         ],
+        // REMOTE_ID=<en>,0xXX(TRANSPORTS),0xXX(ESP32_STATUS),0xXX(ALLOWED_TRANSPORTS)
+        parse(lines) {
+            if (!lines[0]) return null;
+            const args = atSplitArgs(lines[0]).map(atStripAnnotation);
+            return this.parseJson([args[0], parseInt(args[1], 16), args[2], args[3]]);
+        },
+        parseJson(raw) {
+            return {
+                en: raw[0] === 1 || raw[0] === '1' || raw[0] === true,
+                transports: typeof raw[1] === 'number' ? raw[1] : parseInt(raw[1], 10),
+                status: SETTINGS_RID.statusText(raw[2], false),
+                allowed: raw[3],
+            };
+        },
         build(v) { return [`AT+REMOTE_ID=${v.en ? 1 : 0},${v.transports}`]; },
     },
     {
         cmd: 'REMOTE_ID_TX', label: 'Remote ID Transmit', group: 'Remote ID', experimental: true,
         help: 'Transmit Broadcast Remote ID from this device. Only the Fixed and GNSS receiver position sources are transmitted, since they describe this device; the aircraft-derived sources carry a received aircraft\u2019s position, so an unknown position is broadcast instead. Not yet a stable part of the system \u2014 these settings and their behavior may change in future firmware.',
+        notice: SETTINGS_RID.notice,
         fields: [
-            { id: 'en', label: 'Enabled', type: 'bool' },
-            { id: 'transports', label: 'Transports', type: 'bitmask', options: SETTINGS_RID_TRANSPORTS },
+            SETTINGS_RID.enField(),
+            SETTINGS_RID.transportsField(),
             {
                 id: 'uas_id', label: 'UAS ID', type: 'string', maxLen: 20,
                 placeholder: '(device serial)', note: 'Leave blank to use this device\'s serial number.',
@@ -984,9 +1080,10 @@ const SETTINGS_SCHEMA_1090 = [
             },
             { id: 'operator_id', label: 'Operator ID', type: 'string', maxLen: 20, placeholder: '(none)' },
             { id: 'status', label: 'ESP32 Status', type: 'display' },
+            SETTINGS_RID.allowedField(),
         ],
         parse(lines) {
-            // REMOTE_ID_TX=<en>,0xXX(TRANSPORTS),<uas>(UAS_ID),<n>(ID_TYPE),<n>(UA_TYPE),<op>(OPERATOR_ID),0xXXXX(ESP32_STATUS)
+            // REMOTE_ID_TX=<en>,0xXX(TRANSPORTS),<uas>(UAS_ID),<n>(ID_TYPE),<n>(UA_TYPE),<op>(OPERATOR_ID),0xXXXX(ESP32_STATUS),0xXX(ALLOWED_TRANSPORTS)
             if (!lines[0]) return null;
             const args = atSplitArgs(lines[0]).map(atStripAnnotation);
             if (args.length < 7) return null;
@@ -998,7 +1095,21 @@ const SETTINGS_SCHEMA_1090 = [
                 id_type: args[3],
                 ua_type: args[4],
                 operator_id: clearSentinel(args[5], '(none)'),
-                status: args[6],
+                status: SETTINGS_RID.statusText(args[6], true),
+                allowed: args[7],
+            };
+        },
+        // [en, transports, uas_id, id_type, ua_type, operator_id, "0xXXXX", allowed]
+        parseJson(raw) {
+            return {
+                en: raw[0] === 1 || raw[0] === '1' || raw[0] === true,
+                transports: typeof raw[1] === 'number' ? raw[1] : parseInt(raw[1], 10),
+                uas_id: String(raw[2] ?? ''),
+                id_type: String(raw[3]),
+                ua_type: String(raw[4]),
+                operator_id: String(raw[5] ?? ''),
+                status: SETTINGS_RID.statusText(raw[6], true),
+                allowed: raw[7],
             };
         },
         // '-' clears a blank ID so the device falls back to its default.

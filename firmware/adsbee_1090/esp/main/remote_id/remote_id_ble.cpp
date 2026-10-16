@@ -331,8 +331,7 @@ void RemoteIDManager::BLEStop() {
         ble_gap_disc_cancel();
         s_scanning = false;
     }
-    // We intentionally leave the NimBLE host/controller initialized (tearing it down and back up is expensive and
-    // error-prone, and the transmit path may still be using it); scanning is stopped, which is what frees the radio.
+    // The host stays up for the transmit path; BLEReleaseIfIdle() frees it once nothing uses it.
     ble_running_ = false;
     ble_coded_running_ = false;
 }
@@ -374,6 +373,25 @@ void RemoteIDManager::BLETxServiceTick() {
     ServiceAdvertisingPayloads();
 }
 
+void RemoteIDManager::BLEReleaseIfIdle() {
+    if (!s_ble_initialized || ble_running_ || ble_tx_legacy_running_ || ble_tx_coded_running_) return;
+    // Stops the host task and frees the host and controller, which hold most of the Remote ID RAM.
+    int rc = nimble_port_stop();
+    if (rc != 0) {
+        CONSOLE_ERROR("remote_id_ble", "nimble_port_stop failed, rc=%d.", rc);
+        return;
+    }
+    esp_err_t err = nimble_port_deinit();
+    if (err != ESP_OK) {
+        CONSOLE_ERROR("remote_id_ble", "nimble_port_deinit failed: %d.", err);
+    }
+    s_ble_initialized = false;
+    s_tx_host_ready = false;
+    s_scanning = false;
+    s_tx_legacy_configured = false;
+    s_tx_coded_configured = false;
+}
+
 bool RemoteIDManager::BluetoothIsSupported() { return true; }
 
 #else  // Bluetooth not compiled in: no-op stubs so RemoteIDManager links and reports kStatusNotInBuild.
@@ -382,6 +400,7 @@ bool RemoteIDManager::BLEStart(bool) { return false; }
 void RemoteIDManager::BLEStop() {}
 bool RemoteIDManager::BLETxStart(bool, bool) { return false; }
 void RemoteIDManager::BLETxStop() {}
+void RemoteIDManager::BLEReleaseIfIdle() {}
 void RemoteIDManager::BLETxServiceTick() {}
 bool RemoteIDManager::BluetoothIsSupported() { return false; }
 

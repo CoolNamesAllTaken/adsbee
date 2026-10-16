@@ -32,8 +32,12 @@ The ESP32 firmware in `combined.uf2` runs on both modules used on ADSBee 1090 ha
 * **PSRAM:** enabled with `CONFIG_SPIRAM_IGNORE_NOTFOUND`, so modules without PSRAM boot normally. Only use options
   that fall back to internal RAM. Never enable `BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL` or
   `SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY` / `..._NOINIT_...`: they crash without PSRAM.
-* **Remote ID:** with PSRAM it runs alongside WiFi. Without PSRAM it needs WiFi off, and `AT+REMOTE_ID=1` /
-  `AT+REMOTE_ID_TX=1` are rejected while WiFi is on. `AT+DEVICE_INFO?` shows `ESP32 PSRAM: ...`.
+* **Remote ID:** with PSRAM it runs alongside WiFi and Ethernet. Without PSRAM it can't run while WiFi is on, and
+  only its WiFi beacon transport runs while Ethernet is on (Bluetooth leaves too little RAM for the web server).
+  `AT+REMOTE_ID` / `AT+REMOTE_ID_TX` reject other transports, and saved ones pause at boot. `AT+DEVICE_INFO?` shows
+  `ESP32 PSRAM: ...` and the ESP32 heap.
+* **Heap reserve:** Remote ID pauses while ESP32 free heap is below `RemoteIDGuard::kReserveFreeBytes`
+  (`firmware/common/coprocessor/remote_id_guard.hh`) and retries after a growing hold-off.
 * **Code:** gate RAM-hungry features on `HardwareCapabilities` (`main/hardware_capabilities.*`). Heap guards measure
   internal RAM only.
 * `sdkconfig.debug` layers on top (coredump partition at 0x3C0000).

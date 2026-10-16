@@ -61,6 +61,8 @@ bool ESP32::Update() {
         hardware_capabilities = device_status.hardware_capabilities;
         psram_total_kb = device_status.psram_total_kb;
         psram_free_kb = device_status.psram_free_kb;
+        heap_free_bytes = device_status.heap_free_bytes;
+        heap_largest_free_block_bytes = device_status.heap_largest_free_block_bytes;
         num_network_console_clients_ = device_status.num_network_console_clients;
     } else {
         if (!esp32.IsLinkDown()) {  // Don't repeat this every pass while the link is down.

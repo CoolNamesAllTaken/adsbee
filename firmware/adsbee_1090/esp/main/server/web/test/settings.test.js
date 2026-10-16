@@ -262,3 +262,75 @@ test('extra WiFi networks read from AT+WIFI_STA_NETWORK? when the dump lacks the
     assert.strictEqual(input('WIFI_STA_NETWORK', 'ssid3').value, 'lab');
     assert.strictEqual(input('WIFI_STA_NETWORK', 'pwd2').value, '');
 });
+
+// AT+SETTINGS?JSON Remote ID entries from a unit without PSRAM, as [REMOTE_ID, REMOTE_ID_TX].
+function ridDump(rx, tx) {
+    return DUMP.replace('"REMOTE_ID":[0,7,"0x00"]', `"REMOTE_ID":${rx}`)
+        .replace('"REMOTE_ID_TX":[0,7,"",1,2,"","0x0000"]', `"REMOTE_ID_TX":${tx}`);
+}
+const ridBits = (cmd) => Object.fromEntries(
+    input(cmd, 'transports').querySelectorAll('input').map(cb => [cb.dataset.bit, { checked: cb.checked, disabled: cb.disabled }]));
+const notice = (cmd) => document.getElementById(`settings-notice-${cmd}`).textContent;
+
+test('Remote ID on Ethernet without PSRAM: Bluetooth can be turned off but not on', async () => {
+    // Saved before the guard: Bluetooth + WiFi Beacon on, ESP32 runs the WiFi Beacon receiver, Bluetooth paused.
+    const t = makeTransport(() => [ridDump('[1,7,"0x0C",4]', '[0,1,"",1,2,"","0x0000",4]')]);
+    const engine = makeEngine(t);
+    await engine.refresh();
+    assert.strictEqual(input('REMOTE_ID', 'en').checked, true);
+    assert.strictEqual(input('REMOTE_ID', 'en').disabled, false);
+    assert.deepStrictEqual(ridBits('REMOTE_ID'), {
+        1: { checked: true, disabled: false }, 2: { checked: true, disabled: false }, 4: { checked: true, disabled: false },
+    });
+    assert.match(input('REMOTE_ID', 'status').textContent, /WiFi Beacon receiving, paused for WiFi\/Ethernet/);
+    assert.match(notice('REMOTE_ID'), /only the WiFi Beacon transport/);
+    // Transmit: Bluetooth 4 is off and locked, WiFi Beacon is free.
+    assert.deepStrictEqual(ridBits('REMOTE_ID_TX'), {
+        1: { checked: true, disabled: false }, 2: { checked: false, disabled: true }, 4: { checked: false, disabled: false },
+    });
+
+    // Clearing a Bluetooth option locks it.
+    const entry = SETTINGS_SCHEMA_1090.find(e => e.cmd === 'REMOTE_ID');
+    input('REMOTE_ID', 'transports').querySelectorAll('input').find(cb => String(cb.dataset.bit) === '1').checked = false;
+    engine._onFieldChanged(entry);
+    assert.deepStrictEqual(ridBits('REMOTE_ID')[1], { checked: false, disabled: true });
+    assert.deepStrictEqual(engine.entryValues(entry), { en: true, transports: 6 });
+});
+
+test('Remote ID with WiFi on and no PSRAM: the toggle stays off', async () => {
+    const t = makeTransport(() => [ridDump('[0,7,"0x00",0]', '[0,7,"",1,2,"","0x0000",0]')]);
+    const engine = makeEngine(t);
+    await engine.refresh();
+    for (const cmd of ['REMOTE_ID', 'REMOTE_ID_TX']) {
+        assert.strictEqual(input(cmd, 'en').checked, false);
+        assert.strictEqual(input(cmd, 'en').disabled, true, cmd);
+        assert.match(notice(cmd), /can’t run while WiFi is enabled/);
+    }
+    assert.strictEqual(input('REMOTE_ID', 'status').textContent, 'idle (0x00)');
+});
+
+test('Remote ID from firmware without ALLOWED_TRANSPORTS is not locked', async () => {
+    const t = makeTransport(() => [DUMP]);
+    const engine = makeEngine(t);
+    await engine.refresh();
+    assert.strictEqual(input('REMOTE_ID', 'en').disabled, false);
+    assert.ok(Object.values(ridBits('REMOTE_ID')).every(b => !b.disabled));
+    assert.strictEqual(notice('REMOTE_ID'), '');
+});
+
+test('Remote ID query lines carry the allowed transports', async () => {
+    const t = makeTransport((cmd) => {
+        if (cmd === 'AT+SETTINGS?JSON') throw new Error('ERROR');
+        if (cmd === 'AT+REMOTE_ID?') return ['REMOTE_ID=1,0x04(TRANSPORTS),0x04(ESP32_STATUS),0x04(ALLOWED_TRANSPORTS)'];
+        if (cmd === 'AT+REMOTE_ID_TX?') {
+            return ['REMOTE_ID_TX=0,0x07(TRANSPORTS),(device serial)(UAS_ID),1(ID_TYPE),2(UA_TYPE),(none)(OPERATOR_ID),0x0000(ESP32_STATUS),0x04(ALLOWED_TRANSPORTS)'];
+        }
+        throw new Error('ERROR');
+    });
+    const engine = makeEngine(t);
+    await engine.refresh();
+    assert.strictEqual(input('REMOTE_ID', 'status').textContent, 'WiFi Beacon receiving (0x04)');
+    assert.deepStrictEqual(ridBits('REMOTE_ID')[2], { checked: false, disabled: true });
+    assert.deepStrictEqual(ridBits('REMOTE_ID_TX')[1], { checked: true, disabled: false });
+    assert.strictEqual(input('REMOTE_ID_TX', 'uas_id').value, '');
+});
