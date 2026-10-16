@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include "comms.hh"             // For comms_manager (UART I/O + baud) and CONSOLE_* logging.
+#include "cpu_utils.hh"
 #include "hal.hh"               // For get_time_since_boot_ms().
 
 void GNSSReceiver::ClaimUart() {
@@ -168,6 +169,7 @@ bool GNSSReceiver::Update() {
     // Drain all currently available bytes from the GNSS UART.
     char c;
     while (ReadBufferedByte(c)) {
+        CPUMonitor::WorkScope work;
         NMEAParser::SentenceType result = parser_.IngestByte(c);
         // TEMPORARY: also feed the byte to the receiver-specific binary sniffer (UBX for ublox).
         DebugIngestByte(c);
