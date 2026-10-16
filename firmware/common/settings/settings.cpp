@@ -38,6 +38,22 @@ static bool SanitizeString(char* str, size_t size, const char* name, int index =
     return true;
 }
 
+bool SettingsManager::ProtocolInUse(const Settings& settings, ReportingProtocol protocol) {
+    if (settings.reporting_protocols[SerialInterface::kConsole] == protocol ||
+        settings.reporting_protocols[SerialInterface::kCommsUART] == protocol) {
+        return true;
+    }
+    if (!settings.feeds_enabled) {
+        return false;
+    }
+    for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
+        if (settings.feed_is_active[i] && settings.feed_protocols[i] == protocol) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool SettingsManager::Sanitize() {
     bool changed = false;
 

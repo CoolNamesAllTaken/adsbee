@@ -1095,6 +1095,24 @@ TEST(SettingsManager, SanitizeDisablesGNSSWithoutReceiverType) {
     EXPECT_TRUE(s.gnss_enabled);
 }
 
+TEST(Settings, ProtocolInUseCountsSerialOutputsAndActiveFeeds) {
+    SettingsManager::Settings s;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+
+    s.reporting_protocols[SettingsManager::kCommsUART] = SettingsManager::kASTERIX;
+    EXPECT_TRUE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.reporting_protocols[SettingsManager::kCommsUART] = SettingsManager::kNoReports;
+
+    s.feed_protocols[2] = SettingsManager::kASTERIX;
+    s.feed_is_active[2] = false;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.feed_is_active[2] = true;
+    s.feeds_enabled = true;
+    EXPECT_TRUE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.feeds_enabled = false;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+}
+
 TEST(Settings, NTPServerDefaultsToPoolAndIsSanitized) {
     SettingsManager manager;
     EXPECT_STREQ(manager.settings.ntp_server, "pool.ntp.org");

@@ -669,6 +669,11 @@ class SettingsManager {
     void PrintAT();
 
     /**
+     * @retval True if the console, the comms UART or an active network feed reports the protocol.
+     */
+    static bool ProtocolInUse(const Settings& settings, ReportingProtocol protocol);
+
+    /**
      * Takes a password as a string and fills a buffer with the corresponding number of asterix.
      * @param[in] password_buf Buffer to read the password from. Must be at least password_len+1 chars.
      * @param[out] redacted_password_buf Buffer to write the asterix to. Must be at least password_len+1 chars.

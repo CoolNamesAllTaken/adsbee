@@ -182,6 +182,10 @@ class ObjectDictionary {
         uint8_t hardware_capabilities = 0;
         uint16_t psram_total_kb = 0;  // PSRAM heap size (0 if no PSRAM).
         uint16_t psram_free_kb = 0;   // Free PSRAM heap (0 if no PSRAM).
+
+        // UTC from SNTP, valid while an output uses ASTERIX and the ESP32 has synced. Holds UTC at timestamp_ms.
+        bool network_utc_time_valid = false;
+        uint32_t network_utc_ms_of_day = 0;
     };
 
     enum ESP32HardwareCapability : uint8_t {

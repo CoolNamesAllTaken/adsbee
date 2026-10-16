@@ -8,6 +8,7 @@
 #include "comms.hh"
 #include "aircraftjson_utils.hh"
 #include "auto_update_manager.hh"
+#include "network_time.hh"
 #include "gdl90/gdl90_utils.hh"
 #include "heap_diagnostics.hh"
 #include "json_utils.hh"
@@ -235,6 +236,7 @@ bool ADSBeeServer::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
     auto_update_manager.Update();
+    network_time.Update();
 
     // Ingest any Broadcast Remote ID advertisements received on the BLE/WiFi radios into the local aircraft dictionary
     // (and forward rate-limited copies up to the RP2040), then service the WiFi channel hopper. Done on this task so all
@@ -952,6 +954,13 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              ", \"auto_update\": { \"enabled\": %s, \"state\": \"%s\", \"version\": \"%s\", \"progress\": %u }",
              auto_update.enabled ? "true" : "false", auto_update.state, auto_update.version,
              auto_update.progress_percent);
+    NetworkTime::Status sntp;
+    network_time.GetStatus(sntp);
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"sntp\": { \"enabled\": %s, \"server\": \"%s\", \"synced\": %s, \"last_sync_age_s\": %lu }",
+             sntp.enabled ? "true" : "false", sntp.server, sntp.synced ? "true" : "false",
+             static_cast<unsigned long>(sntp.last_sync_age_s));
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
 

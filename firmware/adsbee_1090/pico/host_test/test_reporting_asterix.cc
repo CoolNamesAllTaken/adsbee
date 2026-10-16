@@ -87,6 +87,40 @@ TEST(ASTERIXUtils, TimeOfDayWithoutUTCCountsFromBoot) {
     EXPECT_EQ(clock.TimeOfDay(ASTERIXReporter::kMsPerDay + 1000), 128u);
 }
 
+TEST(ASTERIXUtils, GNSSTimeWinsOverNetworkTime) {
+    ASTERIXReporter::Clock clock;
+    clock.SetUTC(kUTCMsOfDay + 250, 1000, ASTERIXReporter::Clock::kSourceNetwork);
+    EXPECT_TRUE(clock.utc_valid);
+    EXPECT_EQ(clock.source, ASTERIXReporter::Clock::kSourceNetwork);
+    EXPECT_EQ(clock.TimeOfDay(1000), kTimeOfDayTicks + 32);
+
+    clock.SetUTC(kUTCMsOfDay, 1000, ASTERIXReporter::Clock::kSourceGNSS);
+    EXPECT_EQ(clock.source, ASTERIXReporter::Clock::kSourceGNSS);
+    EXPECT_EQ(clock.TimeOfDay(1000), kTimeOfDayTicks);
+
+    // Network time set after GNSS time doesn't replace it.
+    clock.SetUTC(kUTCMsOfDay + 250, 1000, ASTERIXReporter::Clock::kSourceNetwork);
+    EXPECT_EQ(clock.source, ASTERIXReporter::Clock::kSourceGNSS);
+    EXPECT_EQ(clock.TimeOfDay(1000), kTimeOfDayTicks);
+}
+
+TEST(ASTERIXUtils, NetworkTimeIsValidTime) {
+    ModeSAircraft aircraft = AirborneModeSAircraft();
+    ASTERIXReporter::ReportContext ctx;
+    ctx.clock.SetUTC(kUTCMsOfDay, 3000, ASTERIXReporter::Clock::kSourceNetwork);
+    ctx.timestamp_ms = 3000;
+    CAT021TargetReport r;
+    ASSERT_TRUE(ASTERIXReporter::BuildCAT021Report(r, aircraft, ctx));
+    EXPECT_FALSE(r.no_go);
+
+    // CAT023 ground station status: neither NOGO nor TSV (time source invalid).
+    uint8_t buf[ASTERIXReporter::kCAT023RecordMaxLenBytes];
+    uint16_t len = ASTERIXReporter::WriteCAT023GroundStationStatusRecord(
+        buf, sizeof(buf), 0, 1, ctx.clock.TimeOfDay(3000), ctx.clock.utc_valid, false, 1);
+    ASSERT_EQ(len, 9u);
+    EXPECT_EQ(buf[7] & 0x88, 0);
+}
+
 TEST(ASTERIXUtils, SquawkToMode3A) {
     uint16_t code = 0;
     EXPECT_TRUE(ASTERIXReporter::SquawkToMode3A(7700, code));

@@ -42,18 +42,28 @@ class ASTERIXReporter {
 
     // Converts receiver time to the ASTERIX time of day (1/128 s since midnight UTC).
     struct Clock {
+        // Where UTC came from, in increasing priority.
+        enum Source : uint8_t { kSourceNone = 0, kSourceNetwork, kSourceGNSS };
+
         bool utc_valid = false;
+        Source source = kSourceNone;
         // UTC milliseconds of day minus receiver milliseconds since boot. With no UTC the offset stays 0 and times
         // count from boot, modulo one day.
         int64_t utc_minus_local_ms = 0;
 
         /**
-         * Sets the offset from a UTC time of day observed at a receiver timestamp.
+         * Sets the offset from a UTC time of day observed at a receiver timestamp, unless UTC from a higher priority
+         * source is already set.
          * @param[in] utc_ms_of_day UTC milliseconds since midnight.
          * @param[in] local_ms Receiver milliseconds since boot at which that UTC time held.
+         * @param[in] utc_source Where the UTC time came from.
          */
-        void SetUTC(uint32_t utc_ms_of_day, uint32_t local_ms) {
+        void SetUTC(uint32_t utc_ms_of_day, uint32_t local_ms, Source utc_source = kSourceGNSS) {
+            if (utc_source < source) {
+                return;
+            }
             utc_valid = true;
+            source = utc_source;
             utc_minus_local_ms = static_cast<int64_t>(utc_ms_of_day) - static_cast<int64_t>(local_ms);
         }
 
@@ -81,7 +91,7 @@ class ASTERIXReporter {
         AltitudeReportingCapability altitude_reporting_capability = kARCUnknown;
         bool from_field_monitor = false;  // RAB: fixed beacon.
         bool on_ground = false;           // GBS.
-        bool no_go = false;               // NOGO: mirrors I023/100, set while the time source is invalid.
+        bool no_go = false;               // NOGO: mirrors I023/100, set while there is no UTC.
 
         bool has_track_number = false;
         uint16_t track_number = 0;  // 12 bits.
