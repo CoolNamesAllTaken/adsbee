@@ -7,9 +7,6 @@
 
 extern CPUMonitor core_1_monitor;
 
-// Core 1 load is the time of the loop passes that demodulated or decoded something, including interrupts during them.
-// Interrupts during idle passes are not counted; they are a small share of the core.
-
 #ifdef HARDWARE_UNIT_TESTS
 void RunPendingTestFunctionOnCore1();  // Defined in target_test/hardware_unit_tests.cc.
 #endif
@@ -21,9 +18,10 @@ inline void main_core1() {
     irq_set_enabled(IO_IRQ_BANK0, false);  // Disable GPIO IRQs (OnDemodBegin) on this core.
     irq_set_enabled(PIO0_IRQ_0, false);    // Disable PIO0 IRQ0 (OnDemodComplete) on this core.
 #endif  // ISRS_ON_CORE1
+    core_1_monitor.TimeInterrupts();
 
     while (true) {
-        uint32_t iteration_start_us = time_us_32();
+        core_1_monitor.BeginPass();
 #ifdef ISRS_ON_CORE1
         // Core 0 may try to toggle the 1090 receiver on and off. Keep an eye on it and turn it on and off here, since
         // it can't be toggle from core 0 without accidentally duplicating all the ISR stuff on that core.
@@ -34,12 +32,11 @@ inline void main_core1() {
 #ifdef HARDWARE_UNIT_TESTS
         RunPendingTestFunctionOnCore1();  // Lets hardware unit tests read core 1 state, e.g. its SysTick.
 #endif
-        bool did_work = adsbee.DemodulateCaptures();
-        did_work |= decoder.raw_mode_s_packet_in_queue.Length() > 0;
-        decoder.UpdateDecoderLoop();
-        if (did_work) {
-            core_1_monitor.AddBusyTimeUs(time_us_32() - iteration_start_us);
+        if (adsbee.DemodulateCaptures() || decoder.raw_mode_s_packet_in_queue.Length() > 0) {
+            core_1_monitor.MarkWork();
         }
+        decoder.UpdateDecoderLoop();
+        core_1_monitor.EndPass();
     }
 }
 
@@ -58,6 +55,7 @@ inline void StopCore1() {
         return;
     }
     adsbee.DeInitISRs();  // Clean up DMA channels and other ISR resources before stopping core
+    core_1_monitor.StopTimingInterrupts();  // InitISRs() sets the handlers again on restart.
     multicore_reset_core1();
 }
 

@@ -6,6 +6,7 @@
 #include "adsbee.hh"
 #include "comms.hh"
 #include "core1.hh"  // For turning multiprocessor on / off during firmware flashing.
+#include "cpu_utils.hh"
 #include "eeprom.hh"
 #include "esp32.hh"  // Access to ESP32 low level SPICoprocessorSlaveInterface.
 #include "esp32_firmware_check.hh"
@@ -30,6 +31,8 @@
 #include <cstdarg>
 // #include "printf.h" // for using custom printf defined in printf.h
 #include <cstdio>  // for using regular printf
+
+extern CPUMonitor core_0_monitor;
 
 // This is intended to stop people from accidentally modifying serial number information on their device.
 const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;
@@ -2293,6 +2296,7 @@ bool CommsManager::UpdateAT() {
     // Check for new AT commands from STDIO.
     int ci = getchar_timeout_us(0);
     while (ci != PICO_ERROR_TIMEOUT) {
+        core_0_monitor.MarkWork();
         switch (stdio_at_line_.Push(static_cast<char>(ci), get_time_since_boot_ms())) {
             case ATLineAssembler<kATCommandBufMaxLen>::kLine:
                 at_parser_.ParseMessage(stdio_at_line_.line());
@@ -2316,6 +2320,7 @@ bool CommsManager::UpdateAT() {
         // Receive incoming network console characters.
         char c;
         while (!at_console_guard_.PayloadInProgress() && esp32_console_rx_queue.Dequeue(c)) {
+            core_0_monitor.MarkWork();
             switch (network_at_line_.Push(c, get_time_since_boot_ms())) {
                 case ATLineAssembler<kATCommandBufMaxLen>::kLine:
                     CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %.*s\r\n",

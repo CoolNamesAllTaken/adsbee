@@ -25,6 +25,7 @@
 #include <string.h>  // for strcat
 
 #include "comms.hh"           // For debug prints.
+#include "cpu_utils.hh"
 #include "gnss_interface.hh"  // For the gnss receiver instance.
 
 // Uncomment to measure the demodulation time in DemodulateCaptures() and print avg/max once per second.
@@ -65,6 +66,8 @@ constexpr int32_t kFirstSampleDelay48MHzCounts = 1;
 constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
 ADSBee* isr_access = nullptr;
+
+extern CPUMonitor core_0_monitor;
 
 /** Begin pass-through functions for public access **/
 void __time_critical_func(on_systick_exception)() { isr_access->OnSysTickWrap(); }
@@ -745,6 +748,10 @@ void ADSBee::IngestAndForwardPackets() {
     // Explicitly count the number of packets to process so that we don't get stuck in this loop if the decoder
     // keeps outputting packets.
     uint16_t num_decoded_mode_s_packets = decoder.decoded_mode_s_packet_out_queue.Length();
+    if (num_decoded_mode_s_packets > 0 || raw_uat_adsb_packet_queue.Length() > 0 ||
+        raw_uat_uplink_packet_queue.Length() > 0 || raw_remote_id_packet_queue.Length() > 0) {
+        core_0_monitor.MarkWork();
+    }
     for (uint16_t i = 0;
          i < num_decoded_mode_s_packets && decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet); i++) {
         // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\tdf=%d icao_address=0x%06x",
@@ -970,6 +977,7 @@ void ADSBee::PruneAircraftDictionary() {
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
+        core_0_monitor.MarkWork();
         aircraft_dictionary.Update(timestamp_ms);
         if (esp32.IsEnabled()) {
             // Send fresh aircraft dictionary stats to ESPS32.
@@ -1039,6 +1047,7 @@ void ADSBee::UpdateNoiseFloor() {
         return;
     }
 
+    core_0_monitor.MarkWork();
     int32_t sample_mv = ReadSignalStrengthMilliVoltsBlocking();
 
     // Discard the sample if a demodulation began during the conversion: the RSSI line was rising and the ISR's
@@ -1080,6 +1089,7 @@ void ADSBee::UpdateTLLearning() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (tl_learning_temperature_mv_ > 0 &&
         timestamp_ms - tl_learning_cycle_start_timestamp_ms_ > kTLLearningIntervalMs) {
+        core_0_monitor.MarkWork();
         // Trigger level learning is active and due for an update.
         // Is this neighbor (current value for tl_mv) worth traversing to?
         float valid_packet_ratio = (tl_learning_num_valid_packets_ - tl_learning_prev_num_valid_packets_) /
