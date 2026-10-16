@@ -503,7 +503,7 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
 }
 
-TEST(SettingsMigration, V18ToV19KeepsAutoUpdateAndLeavesMaxDistanceOff) {
+TEST(SettingsMigration, V18ToV19KeepsAutoUpdateAndLeavesDistanceFilterOff) {
     settings_v15::Settings v15;
     PopulateV15(v15);
     settings_v18::Settings v18;
@@ -515,10 +515,13 @@ TEST(SettingsMigration, V18ToV19KeepsAutoUpdateAndLeavesMaxDistanceOff) {
     v18.auto_update_enabled = true;
 
     SettingsManager::Settings out;
-    out.max_distance_m = 12345;
+    out.filter_distance_enabled = true;
+    out.filter_distance_deci_nm = 12345;
     ASSERT_TRUE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
-    EXPECT_EQ(out.max_distance_m, 0u);
+    EXPECT_FALSE(out.filter_distance_enabled);
+    EXPECT_EQ(out.filter_distance_deci_nm, SettingsManager::Settings::kDefaultFilterDistanceDeciNm);
+    EXPECT_EQ(out.FilterDistanceMeters(), 0u);
     EXPECT_TRUE(out.auto_update_enabled);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
@@ -530,15 +533,30 @@ TEST(SettingsMigration, V18ToV19KeepsAutoUpdateAndLeavesMaxDistanceOff) {
     EXPECT_FALSE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18) - 1, 18, out));
 }
 
-TEST(Settings, MaxDistanceDefaultsOffAndRoundTrips) {
+TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
     SettingsManager manager;
-    EXPECT_EQ(manager.settings.max_distance_m, 0u);
-    manager.settings.max_distance_m = 25000;
+    EXPECT_FALSE(manager.settings.filter_distance_enabled);
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);  // 100.0 nm.
+    EXPECT_EQ(manager.settings.FilterDistanceMeters(), 0u);      // Off.
+    manager.settings.filter_distance_enabled = true;
+    manager.settings.filter_distance_deci_nm = 355;  // 35.5 nm.
+    EXPECT_EQ(manager.settings.FilterDistanceMeters(), 65746u);
     testing::internal::CaptureStdout();
     manager.PrintAT();
     std::string dump = testing::internal::GetCapturedStdout();
-    EXPECT_NE(dump.find("AT+MAX_DISTANCE=25000\r\n"), std::string::npos);
-    EXPECT_FALSE(manager.Sanitize());  // Any distance is valid.
+    EXPECT_NE(dump.find("AT+FILTER_DISTANCE_NM=1,35.5\r\n"), std::string::npos);
+    EXPECT_FALSE(manager.Sanitize());
+
+    // Out-of-range distances and garbage booleans from flash are repaired.
+    manager.settings.filter_distance_deci_nm = 0;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);
+    manager.settings.filter_distance_deci_nm = 100001;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);
+    uint8_t raw = 0x5A;
+    memcpy(&manager.settings.filter_distance_enabled, &raw, 1);
+    EXPECT_TRUE(manager.Sanitize());
 }
 
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
@@ -556,15 +574,15 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t wifi = dump.find("AT+WIFI_STA=");
     size_t ip_mode = dump.find("AT+IP_MODE=");
     size_t auto_update = dump.find("AT+AUTO_UPDATE=1");
-    size_t max_distance = dump.find("AT+MAX_DISTANCE=");
+    size_t filter_distance = dump.find("AT+FILTER_DISTANCE_NM=");
     ASSERT_NE(wifi, std::string::npos);
     ASSERT_NE(ip_mode, std::string::npos);
     ASSERT_NE(auto_update, std::string::npos);
-    ASSERT_NE(max_distance, std::string::npos);
+    ASSERT_NE(filter_distance, std::string::npos);
     EXPECT_LT(wifi, ip_mode);
     EXPECT_LT(ip_mode, auto_update);
-    EXPECT_LT(auto_update, max_distance);
-    EXPECT_EQ(dump.find("AT+", max_distance + 1), std::string::npos);
+    EXPECT_LT(auto_update, filter_distance);
+    EXPECT_EQ(dump.find("AT+", filter_distance + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);

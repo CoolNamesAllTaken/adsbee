@@ -249,12 +249,9 @@ void SettingsManager::Print() {
     // MAVLINK settings
     CONSOLE_PRINTF("\tMAVLink System ID: %u\r\n", settings.mavlink_system_id);
     CONSOLE_PRINTF("\tMAVLink Component ID: %u\r\n", settings.mavlink_component_id);
-    uint32_t max_distance_m = settings.max_distance_m;
-    if (max_distance_m == 0) {
-        CONSOLE_PRINTF("\tMax Distance: OFF\r\n");
-    } else {
-        CONSOLE_PRINTF("\tMax Distance: %lu m\r\n", (unsigned long)max_distance_m);
-    }
+    CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
+                   (unsigned long)(settings.filter_distance_deci_nm / 10),
+                   (unsigned long)(settings.filter_distance_deci_nm % 10));
 
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
@@ -278,6 +275,11 @@ void SettingsManager::PrintAT() {
 
     // AT+DEVICE_INFO: Don't store this.
 
+    // AT+FILTER_DISTANCE_NM
+    CONSOLE_PRINTF("AT+FILTER_DISTANCE_NM=%d,%lu.%lu\r\n", settings.filter_distance_enabled,
+                   (unsigned long)(settings.filter_distance_deci_nm / 10),
+                   (unsigned long)(settings.filter_distance_deci_nm % 10));
+
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);
 
@@ -288,9 +290,6 @@ void SettingsManager::PrintAT() {
 
     // AT+MAVLINK_ID
     CONSOLE_PRINTF("AT+MAVLINK_ID=%u,%u\r\n", settings.mavlink_system_id, settings.mavlink_component_id);
-
-    // AT+MAX_DISTANCE
-    CONSOLE_PRINTF("AT+MAX_DISTANCE=%lu\r\n", (unsigned long)settings.max_distance_m);
 
     // AT+PROTOCOL_OUT
     for (uint16_t i = 0; i < SerialInterface::kNumSerialInterfaces; i++) {

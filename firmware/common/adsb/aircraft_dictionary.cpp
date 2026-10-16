@@ -2311,14 +2311,6 @@ void AircraftDictionary::UpdateDistanceAndBearing(Aircraft &aircraft, bool posit
                                 aircraft.bearing_bam16);
 }
 
-uint32_t AircraftDictionary::GetDistanceM(uint32_t uid) {
-    auto it = dict.find(uid);
-    if (it == dict.end()) {
-        return Aircraft::kDistanceUnknown;
-    }
-    return std::visit([](const Aircraft &aircraft) { return aircraft.distance_m; }, it->second);
-}
-
 bool ModeSAircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms) {
     if (n_lat_cpr > kCPRLatLonMaxCount || n_lon_cpr > kCPRLatLonMaxCount) {
         CONSOLE_ERROR("ModeSAircraft::SetCPRLatLon",

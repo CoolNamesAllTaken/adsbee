@@ -125,7 +125,8 @@ class Aircraft {
     uint16_t distance_reference_epoch = 0;  // AircraftDictionary reference epoch distance_m was computed in.
 
     /**
-     * Whether a distance filter drops this aircraft. Aircraft at an unknown distance are kept.
+     * Whether the distance filter (AT+FILTER_DISTANCE_NM) leaves this aircraft out of aircraft reports. Raw packets are
+     * never filtered. Aircraft at an unknown distance are kept.
      * @param[in] max_distance_m Largest distance from the receiver to keep, in meters. 0 turns the filter off.
      * @retval True if the aircraft is known to be farther than max_distance_m.
      */
@@ -1218,6 +1219,29 @@ class AircraftDictionary {
     bool IsPreferredReportForAddress(uint32_t uid, uint32_t timestamp_ms) const;
 
     /**
+     * Lists the aircraft that aircraft reports (CSBee, MAVLink, GDL90, aircraft JSON) cover in a reporting round: every
+     * tracked aircraft except those the distance filter (AT+FILTER_DISTANCE_NM) leaves out. Raw packets don't go
+     * through here and are never filtered. Aircraft at an unknown distance are kept.
+     * @param[out] uids Filled with up to max_uids aircraft UIDs.
+     * @param[in] max_uids Capacity of uids.
+     * @param[in] filter_distance_m Settings::FilterDistanceMeters(): largest distance to report, 0 for no filter.
+     * @retval Number of UIDs written.
+     */
+    uint16_t GetReportUIDs(uint32_t uids[], uint16_t max_uids, uint32_t filter_distance_m) const {
+        uint16_t count = 0;
+        for (const auto& itr : dict) {
+            if (count >= max_uids) {
+                break;
+            }
+            if (!std::visit([filter_distance_m](const Aircraft& a) { return a.IsBeyondDistance(filter_distance_m); },
+                            itr.second)) {
+                uids[count++] = itr.first;
+            }
+        }
+        return count;
+    }
+
+    /**
      * Used to enable or disable the CPR position filter.
      * @param[in] enabled True to enable the filter, false to disable it.
      */
@@ -1237,27 +1261,6 @@ class AircraftDictionary {
      * CPR decoded against a bogus reference silently yields a wrong position.
      */
     void ClearReferencePosition();
-
-    /**
-     * Distance from the receiver of a tracked aircraft, for filtering its packets before they are reported.
-     * @param[in] uid UID of the aircraft.
-     * @retval Distance in meters, or Aircraft::kDistanceUnknown if the aircraft or its distance is unknown.
-     */
-    uint32_t GetDistanceM(uint32_t uid);
-
-    /**
-     * Whether a distance filter drops packets from an aircraft. Aircraft at an unknown distance are kept.
-     * @param[in] uid UID of the aircraft.
-     * @param[in] max_distance_m Largest distance from the receiver to keep, in meters. 0 turns the filter off.
-     * @retval True if the aircraft is known to be farther than max_distance_m.
-     */
-    inline bool IsBeyondDistance(uint32_t uid, uint32_t max_distance_m) {
-        if (max_distance_m == 0) {
-            return false;
-        }
-        uint32_t distance_m = GetDistanceM(uid);
-        return distance_m != Aircraft::kDistanceUnknown && distance_m > max_distance_m;
-    }
 
     /**
      * Check whether a valid reference position has been set.

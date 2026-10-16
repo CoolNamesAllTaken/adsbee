@@ -627,7 +627,7 @@ TEST(AircraftJSON, DistanceAndBearingFromReceiver) {
 }
 
 // The Live Map leaves out aircraft beyond the distance filter and keeps those at an unknown distance.
-TEST_F(PreferredReportForAddress, LiveMapArraysApplyMaxDistance) {
+TEST_F(PreferredReportForAddress, LiveMapArraysApplyDistanceFilter) {
     ModeSAircraft* near = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00001));
     near->distance_m = 10000;
     ModeSAircraft* far = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00002));

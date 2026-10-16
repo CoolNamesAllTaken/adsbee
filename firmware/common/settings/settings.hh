@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
 #include "string.h"  // for memset
@@ -140,6 +141,10 @@ class SettingsManager {
     struct alignas(4) Settings {
         static constexpr int kDefaultTLOffsetMV = 600;  // [mV]
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
+        // AT+FILTER_DISTANCE_NM, in tenths of a nautical mile.
+        static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
+        static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
+        static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
         // For settings struct backwards compatibility. ESP IDF can't handle the full length SSID and password, so length was reduced.
@@ -315,9 +320,21 @@ class SettingsManager {
         // Opt-in: the ESP32 checks adsbee.aero for firmware and installs what it recommends. Off by default.
         bool auto_update_enabled = false;
 
-        // Aircraft known to be farther than this from the receiver are left out of reports and feeds, in meters.
-        // 0 turns the filter off. Aircraft at an unknown distance are always kept.
-        uint32_t max_distance_m = 0;
+        // Distance filter (AT+FILTER_DISTANCE_NM). When enabled, aircraft known to be farther than
+        // filter_distance_deci_nm tenths of a nautical mile from the receiver are left out of aircraft reports (aircraft
+        // JSON, the web UI's list and map, GDL90, MAVLink, CSBee). Raw packets (Raw, Beast, MLAT and every feed of them)
+        // are never filtered. Aircraft at an unknown distance are always kept. filter_distance_enabled sits in what was
+        // auto_update_enabled's tail padding.
+        bool filter_distance_enabled = false;
+        uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
+
+        /**
+         * The distance filter as Aircraft::IsBeyondDistance() takes it.
+         * @retval Filter distance in meters, or 0 when the filter is off.
+         */
+        inline uint32_t FilterDistanceMeters() const {
+            return filter_distance_enabled ? DeciNmToMeters(filter_distance_deci_nm) : 0;
+        }
 
         /**
          * Default constructor.
@@ -759,6 +776,7 @@ static_assert(offsetof(SettingsManager::Settings, rx_position) == 1112, "Setting
 static_assert(offsetof(SettingsManager::Settings, ip_mode) == 1141, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, wifi_sta_extra_networks) == 1142, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, auto_update_enabled) == 1338, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, max_distance_m) == 1340, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_distance_enabled) == 1339, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_distance_deci_nm) == 1340, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

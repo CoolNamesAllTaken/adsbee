@@ -682,11 +682,6 @@ void ADSBee::IngestAndForwardPackets() {
         // dictionary didn't know what to do with them.
         if (decoded_packet.is_valid) {
             lr2021_frames_since_valid_ = 0;  // Healthy stream: reset the validity watchdog.
-            if (aircraft_dictionary.IsBeyondDistance(
-                    Aircraft::ICAOToUID(decoded_packet.icao_address, Aircraft::kAircraftTypeModeS),
-                    settings_manager.settings.max_distance_m)) {
-                continue;  // AT+MAX_DISTANCE.
-            }
             // Counted, not logged: at high packet rates a per-packet CONSOLE_ERROR here floods the UART
             // TX ring and stalls the main loop -- the very thing that makes the queue overflow.
             if (comms_manager.mode_s_packet_reporting_queue.IsFull()) {
@@ -704,11 +699,6 @@ void ADSBee::IngestAndForwardPackets() {
          i++) {
         aircraft_dictionary.IngestDecodedUATADSBPacket(decoded_uat_adsb_packet);
         aircraft_dictionary.RecordSubGHzMetrics(0, 1, 0, 0);
-        if (aircraft_dictionary.IsBeyondDistance(
-                Aircraft::ICAOToUID(decoded_uat_adsb_packet.GetICAOAddress(), Aircraft::kAircraftTypeUAT),
-                settings_manager.settings.max_distance_m)) {
-            continue;  // AT+MAX_DISTANCE.
-        }
         if (!comms_manager.uat_adsb_packet_reporting_queue.Enqueue(decoded_uat_adsb_packet.raw)) {
             comms_manager.uat_report_queue_ovf_count++;  // Counted, not logged (see the Mode S queue above).
         }

@@ -87,7 +87,8 @@ inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) 
                          sizeof(settings.wifi_sta_extra_networks[i].password));
     }
     hasher.AddBool(settings.auto_update_enabled);
-    hasher.AddU32(settings.max_distance_m);
+    hasher.AddBool(settings.filter_distance_enabled);
+    hasher.AddU32(settings.filter_distance_deci_nm);
 
     return hasher.Value();
 }

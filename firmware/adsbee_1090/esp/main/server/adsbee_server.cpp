@@ -486,7 +486,7 @@ bool ADSBeeServer::ReportGDL90() {
         if (!aircraft_dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
             continue;  // Another entry (e.g. the aircraft's own ADS-B) is reported for this ICAO address.
         }
-        if (std::visit([](const Aircraft& a) { return a.IsBeyondDistance(settings_manager.settings.max_distance_m); },
+        if (std::visit([](const Aircraft& a) { return a.IsBeyondDistance(settings_manager.settings.FilterDistanceMeters()); },
                        itr.second)) {
             continue;
         }
@@ -1159,5 +1159,5 @@ void ADSBeeServer::SendAircraftJSONMessages() {
     char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
     WriteAircraftJSONLiveMapArrays(aircraft_dictionary, get_time_since_boot_ms(), batch_buf, sizeof(batch_buf),
                                    [this](const char* buf, uint16_t len) { network_aircraft.BroadcastMessage(buf, len); },
-                                   settings_manager.settings.max_distance_m);
+                                   settings_manager.settings.FilterDistanceMeters());
 }

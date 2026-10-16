@@ -60,7 +60,7 @@ TEST(Settings, TornOrChangedBlobIsRejected) {
     EXPECT_FALSE(settings.IsValid());
 }
 
-TEST(Settings, Version5BlobMigratesWithMaxDistanceOff) {
+TEST(Settings, Version5BlobMigratesWithDistanceFilterOff) {
     // A version 5 blob is today's struct up to rx_position, then its CRC.
     SM::Settings v6;
     v6.mavlink_system_id = 42;
@@ -75,14 +75,17 @@ TEST(Settings, Version5BlobMigratesWithMaxDistanceOff) {
     memcpy(blob + SM::kVersion5SettingsSize - sizeof(uint32_t), &crc, sizeof(crc));
 
     SM::Settings out;
-    out.max_distance_m = 777;
+    out.filter_distance_enabled = true;
+    out.filter_distance_deci_nm = 777;
     ASSERT_TRUE(SM::MigrateFromVersion5(blob, out));
     EXPECT_TRUE(out.IsValid());
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_EQ(out.mavlink_system_id, 42);
     EXPECT_EQ(out.r1090_preamble_mode, SM::kR1090PreambleModeDF17);
     EXPECT_EQ(out.rx_position.icao_address, 0xBEE001u);
-    EXPECT_EQ(out.max_distance_m, 0u);
+    EXPECT_FALSE(out.filter_distance_enabled);
+    EXPECT_EQ(out.filter_distance_deci_nm, SM::Settings::kDefaultFilterDistanceDeciNm);
+    EXPECT_EQ(out.FilterDistanceMeters(), 0u);
 
     // A torn version 5 blob, or a blob of another version, is left to the reset path.
     blob[10] ^= 1;

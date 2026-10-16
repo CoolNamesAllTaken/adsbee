@@ -1,8 +1,15 @@
+#include <algorithm>
+#include <cstring>
+#include <vector>
+
 #include "aircraft_dictionary.hh"
+#include "beast_utils.hh"
 #include "decode_utils.hh"  // for location calculation utility functions
 #include "gtest/gtest.h"
 #include "hal_god_powers.hh"  // for changing timestamp
 #include "mode_s_packet.hh"
+#include "raw_utils.hh"
+#include "settings.hh"
 
 constexpr float kLatDegCloseEnough = 0.001f;
 constexpr float kLonDegCloseEnough = 0.0001f;
@@ -1877,18 +1884,14 @@ TEST(AircraftDictionary, DistanceAndBearingFromReceiver) {
     dictionary.SetReferencePosition(48.0f, 18.0f);
     ModeSAircraft* aircraft = IngestPositionPair(dictionary);
     ASSERT_TRUE(aircraft);
-    uint32_t uid = aircraft->GetUID();
     // WGS-84 geodesic from 48 N 18 E: 84585 m at 37.95 deg.
     EXPECT_NEAR(aircraft->distance_m, 84585, 30);
     EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 37.95f, 0.2f);
-    EXPECT_EQ(dictionary.GetDistanceM(uid), aircraft->distance_m);
 
-    // Distance filter: 0 is off, aircraft beyond the limit are dropped.
-    EXPECT_FALSE(dictionary.IsBeyondDistance(uid, 0));
-    EXPECT_FALSE(dictionary.IsBeyondDistance(uid, 100000));
-    EXPECT_TRUE(dictionary.IsBeyondDistance(uid, 50000));
+    // Distance filter: 0 is off, aircraft beyond the limit are left out.
+    EXPECT_FALSE(aircraft->IsBeyondDistance(0));
+    EXPECT_FALSE(aircraft->IsBeyondDistance(100000));
     EXPECT_TRUE(aircraft->IsBeyondDistance(50000));
-    EXPECT_FALSE(dictionary.IsBeyondDistance(0x123456, 50000));  // Not tracked: unknown distance.
 
     // Moving the receiver by less than kReferenceMoveThresholdMeters keeps the distances; moving it farther makes
     // Update() recompute them.
@@ -1904,7 +1907,45 @@ TEST(AircraftDictionary, DistanceAndBearingFromReceiver) {
     dictionary.ClearReferencePosition();
     dictionary.Update(get_time_since_boot_ms());
     EXPECT_EQ(aircraft->distance_m, Aircraft::kDistanceUnknown);
-    EXPECT_FALSE(dictionary.IsBeyondDistance(uid, 1));
+    EXPECT_FALSE(aircraft->IsBeyondDistance(1));
+}
+
+// AT+FILTER_DISTANCE_NM gates aircraft reports only. An aircraft 45.7 nm out with the filter at 35 nm is left out of
+// the report UID snapshot (CSBee, MAVLink, GDL90, aircraft JSON), while its packets still make the same Raw and Beast
+// frames, which take no filter at all.
+TEST(AircraftDictionary, DistanceFilterGatesAircraftReportsNotRawPackets) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    ModeSAircraft* far = IngestPositionPair(dictionary);  // 84.6 km = 45.7 nm.
+    ASSERT_TRUE(far);
+    ModeSAircraft* near = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xBEE001));
+    near->distance_m = 20000;
+    ModeSAircraft* unknown = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xBEE002));  // No position.
+
+    SettingsManager::Settings settings;
+    settings.filter_distance_deci_nm = 350;
+    uint32_t uids[10];
+    for (bool enabled : {false, true}) {
+        settings.filter_distance_enabled = enabled;
+        uint16_t n = dictionary.GetReportUIDs(uids, 10, settings.FilterDistanceMeters());
+        std::vector<uint32_t> reported(uids, uids + n);
+        auto has = [&](const ModeSAircraft* a) {
+            return std::find(reported.begin(), reported.end(), a->GetUID()) != reported.end();
+        };
+        EXPECT_TRUE(has(near));
+        EXPECT_TRUE(has(unknown));  // Unknown distance: always kept.
+        EXPECT_EQ(has(far), !enabled);
+    }
+    EXPECT_EQ(dictionary.GetReportUIDs(uids, 1, 0), 1u);  // Capacity respected.
+
+    // The far aircraft's packet still encodes to the full Raw and Beast frames with the filter on.
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8D48922358C387D91DF354DCCCB8");
+    ASSERT_TRUE(far->IsBeyondDistance(settings.FilterDistanceMeters()));
+    char raw_frame[kRawModeSFrameMaxNumChars];
+    EXPECT_GT(BuildRawModeSFrame(packet.raw, raw_frame), 0);
+    EXPECT_NE(strstr(raw_frame, "8D48922358C387D91DF354DCCCB8"), nullptr);
+    uint8_t beast_frame[BeastReporter::kModeSBeastFrameMaxLenBytes];
+    EXPECT_GT(BeastReporter::BuildModeSBeastFrame(beast_frame, packet), 0);
 }
 
 TEST(AircraftDictionary, DistanceUnknownWithoutReceiverPosition) {
