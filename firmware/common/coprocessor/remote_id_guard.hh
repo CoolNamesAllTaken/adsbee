@@ -100,35 +100,15 @@ class RemoteIDGuard {
     }
 
     /**
-     * Parses transports: names joined with '+' (BT4+BT5_LR), ALL, NONE, or the older numeric mask (decimal or 0x hex).
-     * @retval False if the text isn't one of those or has unknown bits.
+     * Parses transports: names joined with '+' (BT4+BT5_LR), ALL or NONE. Numbers aren't accepted.
+     * @retval False if the text isn't one of those.
      */
     static bool ParseTransports(std::string_view text, uint8_t& transports) {
-        if (text.empty()) return false;
-        uint32_t value = 0;
+        uint8_t value = 0;
         if (text == "ALL") {
             value = kTransportsAll;
-        } else if (text == "NONE") {
-            value = 0;
-        } else if (text[0] >= '0' && text[0] <= '9') {
-            const bool hex = text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X');
-            for (size_t i = hex ? 2 : 0; i < text.size(); i++) {
-                const char c = text[i];
-                uint32_t digit;
-                if (c >= '0' && c <= '9') {
-                    digit = c - '0';
-                } else if (hex && c >= 'a' && c <= 'f') {
-                    digit = c - 'a' + 10;
-                } else if (hex && c >= 'A' && c <= 'F') {
-                    digit = c - 'A' + 10;
-                } else {
-                    return false;
-                }
-                value = value * (hex ? 16 : 10) + digit;
-                if (value > kTransportsAll) return false;
-            }
-        } else {
-            while (!text.empty()) {
+        } else if (text != "NONE") {
+            while (true) {
                 const size_t plus = text.find('+');
                 const std::string_view name = text.substr(0, plus);
                 bool found = false;
@@ -138,13 +118,12 @@ class RemoteIDGuard {
                         found = true;
                     }
                 }
-                if (!found) return false;
+                if (!found) return false;  // Also an empty name: "", "+BT4", "BT4++BT5_LR", "BT4+".
                 if (plus == std::string_view::npos) break;
                 text.remove_prefix(plus + 1);
-                if (text.empty()) return false;  // Trailing '+'.
             }
         }
-        transports = static_cast<uint8_t>(value);
+        transports = value;
         return true;
     }
 

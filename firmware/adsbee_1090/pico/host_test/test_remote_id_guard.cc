@@ -125,16 +125,11 @@ TEST(RemoteIDGuard, ParseTransports) {
     EXPECT_EQ(t, RemoteIDGuard::kTransportsAll);
     EXPECT_TRUE(RemoteIDGuard::ParseTransports("NONE", t));
     EXPECT_EQ(t, 0);
-    // The older numeric mask still works.
-    EXPECT_TRUE(RemoteIDGuard::ParseTransports("3", t));
-    EXPECT_EQ(t, 3);
-    EXPECT_TRUE(RemoteIDGuard::ParseTransports("0x07", t));
-    EXPECT_EQ(t, 7);
-    EXPECT_TRUE(RemoteIDGuard::ParseTransports("0", t));
-    EXPECT_EQ(t, 0);
 
+    // Numbers (the old mask) are refused.
     t = 5;
-    for (const char* bad : {"", "8", "0x10", "BT6", "bt4", "BT4+", "+BT4", "BT4++BT5_LR", "BT4,BT5_LR", "3a", "0x"}) {
+    for (const char* bad : {"", "0", "3", "7", "0x07", "8", "BT6", "bt4", "all", "BT4+", "+BT4", "BT4++BT5_LR",
+                            "BT4,BT5_LR", "BT4+NONE", "ALL+BT4"}) {
         EXPECT_FALSE(RemoteIDGuard::ParseTransports(bad, t)) << bad;
         EXPECT_EQ(t, 5) << bad;
     }

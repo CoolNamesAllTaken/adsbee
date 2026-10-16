@@ -871,6 +871,11 @@ const SETTINGS_RID = {
     transportBits(raw) {
         return SETTINGS_RID.parseBits(raw, Object.fromEntries(SETTINGS_RID_TRANSPORTS.map(t => [t.name, t.bit])));
     },
+    // Transport names for AT+REMOTE_ID / AT+REMOTE_ID_TX, which take no numbers.
+    transportNames(bits) {
+        const names = SETTINGS_RID_TRANSPORTS.filter(t => bits & t.bit).map(t => t.name);
+        return names.length ? names.join('+') : 'NONE';
+    },
     // Transports the device can run with its network interfaces; firmware without the
     // ALLOWED_TRANSPORTS field allows all.
     allowed(v) {
@@ -1080,8 +1085,7 @@ const SETTINGS_SCHEMA_1090 = [
                 allowed: raw[3],
             };
         },
-        // The numeric mask, which older firmware also takes (the console page talks to any version).
-        build(v) { return [`AT+REMOTE_ID=${v.en ? 1 : 0},${v.transports}`]; },
+        build(v) { return [`AT+REMOTE_ID=${v.en ? 1 : 0},${SETTINGS_RID.transportNames(v.transports)}`]; },
     },
     {
         cmd: 'REMOTE_ID_TX', label: 'Remote ID Transmit', group: 'Remote ID', experimental: true,
@@ -1157,9 +1161,9 @@ const SETTINGS_SCHEMA_1090 = [
                 allowed: raw[7],
             };
         },
-        // '-' clears a blank ID so the device falls back to its default. Numeric transports, as above.
+        // '-' clears a blank ID so the device falls back to its default.
         build(v) {
-            return [`AT+REMOTE_ID_TX=${v.en ? 1 : 0},${v.transports},${v.uas_id || '-'},${v.id_type},${v.ua_type},${v.operator_id || '-'}`];
+            return [`AT+REMOTE_ID_TX=${v.en ? 1 : 0},${SETTINGS_RID.transportNames(v.transports)},${v.uas_id || '-'},${v.id_type},${v.ua_type},${v.operator_id || '-'}`];
         },
     },
     // ── Serial ──

@@ -38,7 +38,7 @@ The ESP32 firmware in `combined.uf2` runs on both modules used on ADSBee 1090 ha
   `AT+REMOTE_ID` / `AT+REMOTE_ID_TX` reject other transports, and saved ones pause at boot. `AT+DEVICE_INFO?` shows
   `ESP32 PSRAM: ...` and the ESP32 heap.
 * **Remote ID AT:** transports are names joined with `+` (`BT4`, `BT5_LR`, `WIFI_BEACON`), or `ALL` / `NONE`, e.g.
-  `AT+REMOTE_ID=1,BT4+BT5_LR`; the older numeric mask still works. Queries print names and the ESP32 status as words
+  `AT+REMOTE_ID=1,BT4+BT5_LR` (numbers are refused). Queries print names and the ESP32 status as words
   (`RemoteIDGuard::kStatusNames`), e.g.
   `REMOTE_ID=1,BT4+BT5_LR(TRANSPORTS),BT_SCANNING+BT5_LR_SCANNING(ESP32_STATUS),BT4+BT5_LR(ALLOWED_TRANSPORTS)`.
   `AT+SETTINGS?JSON` keeps the numbers.

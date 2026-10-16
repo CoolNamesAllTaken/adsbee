@@ -792,8 +792,10 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDCallback) {
             CPP_AT_TRY_ARG2NUM(0, rx_enabled);
             uint8_t transports = settings_manager.settings.remote_id_transports;
             if (CPP_AT_HAS_ARG(1) && !RemoteIDGuard::ParseTransports(args[1], transports)) {
-                CPP_AT_ERROR("Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE.",
-                             static_cast<int>(args[1].length()), args[1].data());
+                CPP_AT_ERROR(
+                    "Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with + (e.g. BT4+BT5_LR), ALL or "
+                    "NONE. Numeric masks are no longer accepted.",
+                    static_cast<int>(args[1].length()), args[1].data());
             }
             const char* transports_error = RemoteIDTransportsError("REMOTE_ID", transports);
             if (rx_enabled && transports_error != nullptr) {
@@ -834,8 +836,7 @@ void ATRemoteIDTxHelpCallback() {
         "\tAT+REMOTE_ID_TX=<enabled>[,<transports>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
         "\tTransmit Broadcast Remote ID (drone ID) from this device, for use as a Remote ID test transmitter or as a "
         "combined ADS-B receiver / Remote ID transmitter on a drone. No WiFi AP/STA is required.\r\n"
-        "\ttransports = BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE (default ALL), e.g. BT4+BT5_LR. The\r\n"
-        "\tolder numeric mask (1=BT4, 2=BT5_LR, 4=WIFI_BEACON, added up) is still accepted.\r\n"
+        "\ttransports = BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE (default ALL), e.g. BT4+BT5_LR.\r\n"
         "\tuas_id = UAS serial / registration, up to %d chars ('-' to clear and use this device's serial).\r\n"
         "\tid_type = [1 SERIAL, 2 CAA_REGISTRATION, 3 UTM_UUID, 4 SESSION_ID].\r\n"
         "\tua_type = [1 AEROPLANE, 2 HELICOPTER_MULTIROTOR, ... 15 OTHER].\r\n"
@@ -884,8 +885,10 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
             CPP_AT_TRY_ARG2NUM(0, tx_enabled);
             uint8_t tx_transports = settings_manager.settings.remote_id_tx_transports;
             if (CPP_AT_HAS_ARG(1) && !RemoteIDGuard::ParseTransports(args[1], tx_transports)) {
-                CPP_AT_ERROR("Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE.",
-                             static_cast<int>(args[1].length()), args[1].data());
+                CPP_AT_ERROR(
+                    "Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with + (e.g. BT4+BT5_LR), ALL or "
+                    "NONE. Numeric masks are no longer accepted.",
+                    static_cast<int>(args[1].length()), args[1].data());
             }
             const char* transports_error = RemoteIDTransportsError("REMOTE_ID_TX", tx_transports);
             if (tx_enabled && transports_error != nullptr) {
@@ -2268,9 +2271,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
          "future firmware.\r\n\t"
          "AT+REMOTE_ID=<enabled>[,<transports [BT4 BT5_LR WIFI_BEACON] joined with +, ALL or NONE>]\r\n\t"
          "Enable/disable Broadcast Remote ID (drone) reception on the ESP32, e.g. AT+REMOTE_ID=1,BT4+BT5_LR.\r\n\t"
-         "BT4 = Bluetooth 4 legacy, BT5_LR = Bluetooth 5 Long Range, WIFI_BEACON = WiFi beacon (default ALL). The older "
-         "numeric mask (1, 2, 4 added up) is still accepted.\r\n\tOn "
-         "hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID can't run with WiFi AP or WiFi Station "
+         "BT4 = Bluetooth 4 legacy, BT5_LR = Bluetooth 5 Long Range, WIFI_BEACON = WiFi beacon (default ALL).\r\n\t"
+         "On hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID can't run with WiFi AP or WiFi Station "
          "enabled, and with Ethernet enabled only its Bluetooth transports run; with PSRAM it runs alongside them (the "
          "WiFi beacon receiver then listens on the WiFi channel only). Remote ID pauses while ESP32 free memory is below what the web server needs.\r\n\t"
          "AT+REMOTE_ID?\r\n\tQuery Remote ID settings, the ESP32's live receive status and the transports this "

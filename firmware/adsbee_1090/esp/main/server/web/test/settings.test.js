@@ -407,4 +407,25 @@ test('Remote ID transport and status names match RemoteIDGuard', () => {
     assert.strictEqual(SETTINGS_RID.transportBits('ALL'), 7);
     assert.strictEqual(SETTINGS_RID.transportBits('NONE'), 0);
     assert.ok(Number.isNaN(SETTINGS_RID.transportBits('BT6')));
+    assert.strictEqual(SETTINGS_RID.transportNames(3), 'BT4+BT5_LR');
+    assert.strictEqual(SETTINGS_RID.transportNames(7), 'BT4+BT5_LR+WIFI_BEACON');
+    assert.strictEqual(SETTINGS_RID.transportNames(0), 'NONE');
+});
+
+test('Remote ID saves send transport names', async () => {
+    const sent = [];
+    const t = makeTransport((cmd) => {
+        sent.push(cmd);
+        if (cmd === 'AT+SETTINGS?JSON') return [ridDump('[1,7,"0x07",7]', '[0,7,"",1,2,"","0x0000",7]')];
+        return ['OK'];
+    });
+    const engine = makeEngine(t);
+    await engine.refresh();
+    const entry = SETTINGS_SCHEMA_1090.find(e => e.cmd === 'REMOTE_ID');
+    input('REMOTE_ID', 'transports').querySelectorAll('input').find(cb => String(cb.dataset.bit) === '4').checked = false;
+    engine._onFieldChanged(entry);
+    const tx = SETTINGS_SCHEMA_1090.find(e => e.cmd === 'REMOTE_ID_TX');
+    assert.deepStrictEqual(entry.build(engine.entryValues(entry)), ['AT+REMOTE_ID=1,BT4+BT5_LR']);
+    assert.deepStrictEqual(tx.build({ en: false, transports: 0, uas_id: '', id_type: '1', ua_type: '2', operator_id: '' }),
+        ['AT+REMOTE_ID_TX=0,NONE,-,1,2,-']);
 });
