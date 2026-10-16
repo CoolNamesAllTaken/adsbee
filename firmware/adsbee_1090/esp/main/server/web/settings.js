@@ -847,8 +847,10 @@ const SETTINGS_RID = {
             : 'This ESP32 has no PSRAM: while Ethernet is enabled only the WiFi Beacon transport can run, so the web server keeps enough memory.';
     },
     statusText(raw, tx) {
-        const st = parseInt(raw, 16);
+        let st = parseInt(raw, 16);
         if (Number.isNaN(st)) return raw;
+        // The low byte is receive state; its blocked bits apply to transmit only with kStatusTxBlocked.
+        if (tx) st &= (st & 0x1000) ? 0xFF78 : 0xFF00;
         const parts = [];
         const add = (bit, text) => { if (st & bit) parts.push(text); };
         if (tx) {
@@ -1299,5 +1301,5 @@ const settingsTab = {
 
 // Host-side tests (test/settings.test.js) load this file under Node.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { SettingsEngine, Settings1090Transport, SETTINGS_SCHEMA_1090 };
+    module.exports = { SettingsEngine, Settings1090Transport, SETTINGS_SCHEMA_1090, SETTINGS_RID };
 }

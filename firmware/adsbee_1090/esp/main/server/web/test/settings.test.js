@@ -274,7 +274,7 @@ const notice = (cmd) => document.getElementById(`settings-notice-${cmd}`).textCo
 
 test('Remote ID on Ethernet without PSRAM: Bluetooth can be turned off but not on', async () => {
     // Saved before the guard: Bluetooth + WiFi Beacon on, ESP32 runs the WiFi Beacon receiver, Bluetooth paused.
-    const t = makeTransport(() => [ridDump('[1,7,"0x0C",4]', '[0,1,"",1,2,"","0x0000",4]')]);
+    const t = makeTransport(() => [ridDump('[1,7,"0x0C",4]', '[0,1,"",1,2,"","0x000C",4]')]);
     const engine = makeEngine(t);
     await engine.refresh();
     assert.strictEqual(input('REMOTE_ID', 'en').checked, true);
@@ -284,6 +284,7 @@ test('Remote ID on Ethernet without PSRAM: Bluetooth can be turned off but not o
     });
     assert.match(input('REMOTE_ID', 'status').textContent, /WiFi Beacon receiving, paused for WiFi\/Ethernet/);
     assert.match(notice('REMOTE_ID'), /only the WiFi Beacon transport/);
+    assert.strictEqual(input('REMOTE_ID_TX', 'status').textContent, 'idle (0x000C)');
     // Transmit: Bluetooth 4 is off and locked, WiFi Beacon is free.
     assert.deepStrictEqual(ridBits('REMOTE_ID_TX'), {
         1: { checked: true, disabled: false }, 2: { checked: false, disabled: true }, 4: { checked: false, disabled: false },
@@ -307,6 +308,14 @@ test('Remote ID with WiFi on and no PSRAM: the toggle stays off', async () => {
         assert.match(notice(cmd), /can’t run while WiFi is enabled/);
     }
     assert.strictEqual(input('REMOTE_ID', 'status').textContent, 'idle (0x00)');
+    assert.strictEqual(input('REMOTE_ID_TX', 'status').textContent, 'idle (0x0000)');
+});
+
+test('Remote ID transmit status shows the shared blocked bits only when transmit is blocked', () => {
+    const { SETTINGS_RID } = require('../settings.js');
+    assert.strictEqual(SETTINGS_RID.statusText('0x1048', true), 'paused: low ESP32 memory, paused for WiFi/Ethernet (no PSRAM) (0x1048)');
+    assert.strictEqual(SETTINGS_RID.statusText('0x0404', true), 'WiFi Beacon transmitting (0x0404)');
+    assert.strictEqual(SETTINGS_RID.statusText('0x48', false), 'paused: low ESP32 memory, paused for WiFi/Ethernet (no PSRAM) (0x48)');
 });
 
 test('Remote ID from firmware without ALLOWED_TRANSPORTS is not locked', async () => {
