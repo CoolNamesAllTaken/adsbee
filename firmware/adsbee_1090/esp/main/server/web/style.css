@@ -517,6 +517,8 @@ body {
     padding: 28px 36px;
     min-width: 360px;
     max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
     width: 90vw;
     color: #fff;
     font-family: Arial, sans-serif;
@@ -547,8 +549,16 @@ body {
     margin-bottom: 4px;
 }
 
+.feed-mqtt-topics {
+    font-size: 0.8em;
+    color: #aaa;
+    margin: 0 0 12px;
+    overflow-wrap: anywhere;
+}
+
 .feed-field input[type="text"],
 .feed-field input[type="number"],
+.feed-field input[type="password"],
 .feed-field select {
     background: #2a2a2a;
     border: 1px solid #444;

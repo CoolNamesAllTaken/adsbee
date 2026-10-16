@@ -69,8 +69,8 @@ TEST(SettingsHash, SameSettingsSameHashWhateverThePadding) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Host defaults (no device info, access point channel 1). Changes only with the Settings struct or its defaults.
     Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0xDA515065u);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x5406F255u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0xD63F2DDBu);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x949D02BCu);
 }
 
 TEST(SettingsHash, StoredCRCDoesNotCount) {
@@ -149,6 +149,12 @@ TEST(SettingsHash, EverySharedSettingChangesBothHashes) {
     EXPECT_CHANGES_BOTH(strcpy(s.wifi_sta_extra_networks[1].ssid, "net"));
     EXPECT_CHANGES_BOTH(strcpy(s.wifi_sta_extra_networks[1].password, "secret"));
     EXPECT_CHANGES_BOTH(s.auto_update_enabled = true);
+    EXPECT_CHANGES_BOTH(s.feed_transports[0] = SettingsManager::kFeedTransportMQTT);
+    EXPECT_CHANGES_BOTH(strcpy(s.feed_mqtt[0].topic_prefix, "home"));
+    EXPECT_CHANGES_BOTH(strcpy(s.feed_mqtt[0].username, "bee"));
+    EXPECT_CHANGES_BOTH(strcpy(s.feed_mqtt[0].password, "secret"));
+    EXPECT_CHANGES_BOTH(s.feed_mqtt[0].tls = true);
+    EXPECT_CHANGES_BOTH(s.feed_mqtt[0].qos = 1);
     EXPECT_CHANGES_BOTH(s.asterix_sac = 25);
     EXPECT_CHANGES_BOTH(strcpy(s.ntp_server, "time.example.com"));
 }
