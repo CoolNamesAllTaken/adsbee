@@ -55,7 +55,11 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(SettingsManager::Settings), 1408u);
+    EXPECT_EQ(offsetof(settings_v18::Settings, auto_update_enabled),
+              offsetof(SettingsManager::Settings, auto_update_enabled));
+    EXPECT_EQ(sizeof(settings_v19::Settings), 2652u);
+    EXPECT_EQ(offsetof(settings_v19::Settings, feed_mqtt), offsetof(SettingsManager::Settings, feed_mqtt));
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 2716u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -503,7 +507,7 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
 }
 
-TEST(SettingsMigration, V18ToV19KeepsEverythingAndDefaultsASTERIXAndNTP) {
+TEST(SettingsMigration, V18ToV20KeepsEverythingAndDefaultsASTERIXAndNTP) {
     settings_v15::Settings v15;
     PopulateV15(v15);
     // 0xFF past the v18 struct, as Load() reads erased EEPROM there.
@@ -534,6 +538,141 @@ TEST(SettingsMigration, V18ToV19KeepsEverythingAndDefaultsASTERIXAndNTP) {
     EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
     EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
+}
+
+TEST(SettingsMigration, V18ToV20KeepsFeedsOnTCPAndAutoUpdate) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv4;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Hangar");
+    v18.auto_update_enabled = true;
+    uint8_t blob[sizeof(settings_v18::Settings)];
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
+    strcpy(out.feed_mqtt[0].username, "stale");
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv4);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Hangar");
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.feed_protocols[0], v15.feed_protocols[0]);
+    EXPECT_EQ(out.feed_ports[0], v15.feed_ports[0]);
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        EXPECT_EQ(out.feed_transports[i], SettingsManager::kFeedTransportTCP);
+        EXPECT_STREQ(out.feed_mqtt[i].topic_prefix, "");
+        EXPECT_STREQ(out.feed_mqtt[i].username, "");
+        EXPECT_STREQ(out.feed_mqtt[i].password, "");
+        EXPECT_FALSE(out.feed_mqtt[i].tls);
+        EXPECT_EQ(out.feed_mqtt[i].qos, 0);
+    }
+}
+
+TEST(Settings, FeedTransportStrings) {
+    SettingsManager::FeedTransport transport = SettingsManager::kFeedTransportTCP;
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("udp", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportUDP);
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("MQTT", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportMQTT);
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("TCP", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportTCP);
+    EXPECT_FALSE(SettingsManager::FeedTransportFromStr("WS", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportTCP);
+    for (uint16_t i = 0; i < SettingsManager::kNumFeedTransports; i++) {
+        EXPECT_TRUE(SettingsManager::FeedTransportFromStr(SettingsManager::kFeedTransportStrs[i], transport));
+        EXPECT_EQ(transport, i);
+    }
+}
+
+TEST(Settings, FeedTransportDumpReplaysOnOlderFirmware) {
+    SettingsManager manager;
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        EXPECT_EQ(manager.settings.feed_transports[i], SettingsManager::kFeedTransportTCP);
+    }
+    manager.settings.feed_transports[2] = SettingsManager::kFeedTransportUDP;
+    manager.settings.feed_transports[3] = SettingsManager::kFeedTransportMQTT;
+    SettingsManager::Settings::FeedMQTT& mqtt = manager.settings.feed_mqtt[3];
+    strcpy(mqtt.topic_prefix, "home/adsb");
+    strcpy(mqtt.username, "bee");
+    strcpy(mqtt.password, "pollen");
+    mqtt.tls = true;
+    mqtt.qos = 1;
+
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    // The five-argument AT+FEED lines stay where older firmware expects them; the new arguments come last.
+    EXPECT_NE(dump.find("AT+FEED=2,,0,0,NONE\r\n"), std::string::npos);
+    size_t auto_update = dump.find("AT+AUTO_UPDATE=");
+    size_t udp = dump.find("AT+FEED=2,,,,,UDP\r\n");
+    size_t mqtt_transport = dump.find("AT+FEED=3,,,,,MQTT\r\n");
+    size_t mqtt_options = dump.find("AT+FEED_MQTT=3,home/adsb,bee,pollen,1,1\r\n");
+    ASSERT_NE(auto_update, std::string::npos);
+    ASSERT_NE(udp, std::string::npos);
+    ASSERT_NE(mqtt_transport, std::string::npos);
+    ASSERT_NE(mqtt_options, std::string::npos);
+    EXPECT_LT(auto_update, udp);
+    EXPECT_LT(mqtt_transport, mqtt_options);
+    EXPECT_EQ(dump.find("AT+FEED=0,,,,,"), std::string::npos);  // TCP is the default: nothing to replay.
+    EXPECT_EQ(dump.find("AT+FEED_MQTT=2"), std::string::npos);
+
+    // Out-of-range values from a corrupted blob.
+    manager.settings.feed_transports[4] = static_cast<SettingsManager::FeedTransport>(7);
+    manager.settings.feed_mqtt[4].qos = 9;
+    memset(manager.settings.feed_mqtt[5].password, 'x', sizeof(manager.settings.feed_mqtt[5].password));
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.feed_transports[4], SettingsManager::kFeedTransportTCP);
+    EXPECT_EQ(manager.settings.feed_mqtt[4].qos, SettingsManager::Settings::kFeedMQTTMaxQoS);
+    EXPECT_EQ(strlen(manager.settings.feed_mqtt[5].password), SettingsManager::Settings::kFeedMQTTPasswordMaxLen);
+    EXPECT_FALSE(manager.Sanitize());
+}
+
+TEST(SettingsMigration, V19ToV20KeepsFeedTransportsAndDefaultsASTERIXAndNTP) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    static settings_v19::Settings v19;
+    memset(&v19, 0, sizeof(v19));
+    memcpy(&v19, &v15, sizeof(v15));
+    v19.settings_version = 19;
+    v19.auto_update_enabled = true;
+    v19.feed_transports[1] = SettingsManager::kFeedTransportUDP;
+    v19.feed_transports[2] = SettingsManager::kFeedTransportMQTT;
+    strcpy(v19.feed_mqtt[2].topic_prefix, "home/adsb");
+    strcpy(v19.feed_mqtt[2].username, "bee");
+    strcpy(v19.feed_mqtt[2].password, "pollen");
+    v19.feed_mqtt[2].tls = true;
+    v19.feed_mqtt[2].qos = 1;
+    // 0xFF past the v19 struct, as Load() reads erased EEPROM there.
+    static uint8_t blob[sizeof(SettingsManager::Settings)];
+    memset(blob, 0xFF, sizeof(blob));
+    memcpy(blob, &v19, sizeof(v19));
+
+    SettingsManager::Settings out;
+    out.asterix_sac = 0x55;
+    strcpy(out.ntp_server, "stale.example.com");
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 19, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.feed_transports[0], SettingsManager::kFeedTransportTCP);
+    EXPECT_EQ(out.feed_transports[1], SettingsManager::kFeedTransportUDP);
+    EXPECT_EQ(out.feed_transports[2], SettingsManager::kFeedTransportMQTT);
+    EXPECT_STREQ(out.feed_mqtt[2].topic_prefix, "home/adsb");
+    EXPECT_STREQ(out.feed_mqtt[2].username, "bee");
+    EXPECT_STREQ(out.feed_mqtt[2].password, "pollen");
+    EXPECT_TRUE(out.feed_mqtt[2].tls);
+    EXPECT_EQ(out.feed_mqtt[2].qos, 1);
+    EXPECT_EQ(out.asterix_sac, 0);
+    EXPECT_EQ(out.asterix_sic, 0);
+    EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v19::Settings) - 1, 19, out));
 }
 
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {

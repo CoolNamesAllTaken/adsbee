@@ -512,6 +512,7 @@ function whereplaneMapUrl(uri, protocol, receiverId) {
 class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
         'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX'];
+    static TRANSPORTS = ['TCP', 'UDP', 'MQTT'];
 
     static async open(feedSlot) {
         const modal = document.getElementById('feed-modal');
@@ -539,15 +540,40 @@ class FeedEditor {
             .map(p => `<option value="${p}"${p === current.protocol ? ' selected' : ''}>${p}</option>`)
             .join('');
         FeedEditor.receiverId = current.receiver_id;
+        const transport = current.transport || 'TCP';
+        const transportSel = document.getElementById('feed-transport');
+        transportSel.innerHTML = FeedEditor.TRANSPORTS
+            .map(t => `<option value="${t}"${t === transport ? ' selected' : ''}>${t}</option>`)
+            .join('');
+        const mqtt = current.mqtt || {};
+        document.getElementById('feed-mqtt-prefix').value = mqtt.topic_prefix || '';
+        document.getElementById('feed-mqtt-username').value = mqtt.username || '';
+        const password = document.getElementById('feed-mqtt-password');
+        password.value = '';
+        password.placeholder = mqtt.has_password ? '(unchanged)' : 'none';
+        document.getElementById('feed-mqtt-tls').checked = !!mqtt.tls;
+        document.getElementById('feed-mqtt-qos').value = String(mqtt.qos || 0);
         document.getElementById('feed-uri').oninput = FeedEditor.updateMapLink;
         sel.onchange = FeedEditor.updateMapLink;
+        transportSel.onchange = FeedEditor.updateMapLink;
+        document.getElementById('feed-mqtt-prefix').oninput = FeedEditor.updateMapLink;
         FeedEditor.updateMapLink();
         statusEl.textContent = '';
         document.getElementById('feed-form').style.display = '';
     }
 
-    // Shows the whereplane.xyz map link while the form describes a Beast feed to whereplane.
+    // Shows the whereplane.xyz map link while the form describes a Beast feed to whereplane, and the MQTT options and
+    // topics while the transport is MQTT.
     static updateMapLink() {
+        const isMqtt = document.getElementById('feed-transport').value === 'MQTT';
+        document.getElementById('feed-mqtt').style.display = isMqtt ? '' : 'none';
+        if (isMqtt) {
+            const prefix = document.getElementById('feed-mqtt-prefix').value.trim() || 'adsbee';
+            const base = `${prefix}/${String(FeedEditor.receiverId).toLowerCase()}`;
+            const protocol = document.getElementById('feed-protocol').value.toLowerCase();
+            document.getElementById('feed-mqtt-topics').textContent =
+                `Publishes ${base}/${protocol}, ${base}/status and ${base}/metrics.`;
+        }
         const url = whereplaneMapUrl(document.getElementById('feed-uri').value,
             document.getElementById('feed-protocol').value, FeedEditor.receiverId);
         const link = document.getElementById('feed-map-link');
@@ -570,7 +596,7 @@ class FeedEditor {
         const statusEl = document.getElementById('feed-modal-status');
         statusEl.textContent = 'Removing...';
         try {
-            await consoleWebSocket.sendAndCapture(`AT+FEED=${slot},-,0,0,NONE\r\n`, 'OK', 5000);
+            await consoleWebSocket.sendAndCapture(`AT+FEED=${slot},-,0,0,NONE,TCP\r\n`, 'OK', 5000);
             await consoleWebSocket.sendAndCapture(`AT+SETTINGS=SAVE\r\n`, 'OK', 5000);
             statusEl.textContent = 'Removed.';
             setTimeout(() => FeedEditor.close(), 800);
@@ -585,11 +611,24 @@ class FeedEditor {
         const port = document.getElementById('feed-port').value;
         const active = document.getElementById('feed-active').checked ? 1 : 0;
         const protocol = document.getElementById('feed-protocol').value;
+        const transport = document.getElementById('feed-transport').value || 'TCP';
         const statusEl = document.getElementById('feed-modal-status');
 
         statusEl.textContent = 'Saving...';
         try {
-            await consoleWebSocket.sendAndCapture(`AT+FEED=${slot},${uri},${port},${active},${protocol}\r\n`, 'OK', 5000);
+            await consoleWebSocket.sendAndCapture(
+                `AT+FEED=${slot},${uri},${port},${active},${protocol},${transport}\r\n`, 'OK', 5000);
+            if (transport === 'MQTT') {
+                // "-" clears a string; an empty password keeps the stored one unless the username is cleared.
+                const prefix = document.getElementById('feed-mqtt-prefix').value.trim() || '-';
+                const username = document.getElementById('feed-mqtt-username').value.trim() || '-';
+                let password = document.getElementById('feed-mqtt-password').value;
+                if (username === '-') password = '-';
+                const tls = document.getElementById('feed-mqtt-tls').checked ? 1 : 0;
+                const qos = document.getElementById('feed-mqtt-qos').value;
+                await consoleWebSocket.sendAndCapture(
+                    `AT+FEED_MQTT=${slot},${prefix},${username},${password},${tls},${qos}\r\n`, 'OK', 5000);
+            }
             await consoleWebSocket.sendAndCapture(`AT+SETTINGS=SAVE\r\n`, 'OK', 5000);
             statusEl.textContent = 'Saved.';
             setTimeout(() => FeedEditor.close(), 800);
