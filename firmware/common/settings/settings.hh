@@ -17,7 +17,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 22;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 19;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -816,7 +816,7 @@ extern SettingsManager settings_manager;
 //      settings_migration.cpp (see the recipe at the top of settings_versions.hh).
 //   3. Update the version and the numbers below to the new layout.
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
-static_assert(kSettingsVersion == 22,
+static_assert(kSettingsVersion == 19,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
 static_assert(sizeof(SettingsManager::Settings) == 2736,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");

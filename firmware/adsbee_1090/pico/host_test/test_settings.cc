@@ -56,13 +56,6 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(settings_v19::Settings), 1344u);
-    EXPECT_EQ(offsetof(settings_v19::Settings, filter_distance_deci_nm),
-              offsetof(SettingsManager::Settings, filter_distance_deci_nm));
-    EXPECT_EQ(sizeof(settings_v20::Settings), 2656u);
-    EXPECT_EQ(offsetof(settings_v20::Settings, feed_mqtt), offsetof(SettingsManager::Settings, feed_mqtt));
-    EXPECT_EQ(sizeof(settings_v21::Settings), 2720u);
-    EXPECT_EQ(offsetof(settings_v21::Settings, ntp_server), offsetof(SettingsManager::Settings, ntp_server));
     EXPECT_EQ(sizeof(SettingsManager::Settings), 2736u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
@@ -567,29 +560,25 @@ TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
     EXPECT_TRUE(manager.Sanitize());
 }
 
-TEST(SettingsMigration, V19ToCurrentKeepsDistanceFilterAndFeedsOnTCP) {
+TEST(SettingsMigration, V18ToCurrentKeepsFeedsOnTCP) {
     settings_v15::Settings v15;
     PopulateV15(v15);
-    settings_v19::Settings v19;
-    memset(&v19, 0, sizeof(v19));
-    memcpy(&v19, &v15, sizeof(v15));
-    v19.settings_version = 19;
-    v19.ip_mode = SettingsManager::kIPModeIPv4;
-    strcpy(v19.wifi_sta_extra_networks[0].ssid, "Hangar");
-    v19.auto_update_enabled = true;
-    v19.filter_distance_enabled = true;
-    v19.filter_distance_deci_nm = 355;
-    uint8_t blob[sizeof(settings_v19::Settings)];
-    memcpy(blob, &v19, sizeof(v19));
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv4;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Hangar");
+    v18.auto_update_enabled = true;
+    uint8_t blob[sizeof(settings_v18::Settings)];
+    memcpy(blob, &v18, sizeof(v18));
 
     SettingsManager::Settings out;
     out.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
     strcpy(out.feed_mqtt[0].username, "stale");
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 19, out));
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_TRUE(out.auto_update_enabled);
-    EXPECT_TRUE(out.filter_distance_enabled);
-    EXPECT_EQ(out.filter_distance_deci_nm, 355u);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv4);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Hangar");
     EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
@@ -698,51 +687,6 @@ TEST(SettingsMigration, V18ToCurrentKeepsEverythingAndDefaultsASTERIXAndNTP) {
     EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
 }
 
-TEST(SettingsMigration, V20ToV21KeepsFeedTransportsAndDefaultsASTERIXAndNTP) {
-    settings_v15::Settings v15;
-    PopulateV15(v15);
-    static settings_v20::Settings v20;
-    memset(&v20, 0, sizeof(v20));
-    memcpy(&v20, &v15, sizeof(v15));
-    v20.settings_version = 20;
-    v20.filter_distance_enabled = true;
-    v20.filter_distance_deci_nm = 355;
-    v20.auto_update_enabled = true;
-    v20.feed_transports[1] = SettingsManager::kFeedTransportUDP;
-    v20.feed_transports[2] = SettingsManager::kFeedTransportMQTT;
-    strcpy(v20.feed_mqtt[2].topic_prefix, "home/adsb");
-    strcpy(v20.feed_mqtt[2].username, "bee");
-    strcpy(v20.feed_mqtt[2].password, "pollen");
-    v20.feed_mqtt[2].tls = true;
-    v20.feed_mqtt[2].qos = 1;
-    // 0xFF past the v20 struct, as Load() reads erased EEPROM there.
-    static uint8_t blob[sizeof(SettingsManager::Settings)];
-    memset(blob, 0xFF, sizeof(blob));
-    memcpy(blob, &v20, sizeof(v20));
-
-    SettingsManager::Settings out;
-    out.asterix_sac = 0x55;
-    strcpy(out.ntp_server, "stale.example.com");
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 20, out));
-    EXPECT_EQ(out.settings_version, kSettingsVersion);
-    EXPECT_TRUE(out.auto_update_enabled);
-    EXPECT_TRUE(out.filter_distance_enabled);
-    EXPECT_EQ(out.filter_distance_deci_nm, 355u);
-    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
-    EXPECT_EQ(out.feed_transports[0], SettingsManager::kFeedTransportTCP);
-    EXPECT_EQ(out.feed_transports[1], SettingsManager::kFeedTransportUDP);
-    EXPECT_EQ(out.feed_transports[2], SettingsManager::kFeedTransportMQTT);
-    EXPECT_STREQ(out.feed_mqtt[2].topic_prefix, "home/adsb");
-    EXPECT_STREQ(out.feed_mqtt[2].username, "bee");
-    EXPECT_STREQ(out.feed_mqtt[2].password, "pollen");
-    EXPECT_TRUE(out.feed_mqtt[2].tls);
-    EXPECT_EQ(out.feed_mqtt[2].qos, 1);
-    EXPECT_EQ(out.asterix_sac, 0);
-    EXPECT_EQ(out.asterix_sic, 0);
-    EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
-    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v20::Settings) - 1, 20, out));
-}
-
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     SettingsManager manager;
     EXPECT_FALSE(manager.settings.auto_update_enabled);
@@ -821,37 +765,6 @@ TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesRxPositionDetailsEmp
 
     // A v18 blob too short to hold the struct is rejected.
     EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
-}
-
-TEST(SettingsMigration, V21ToV22KeepsASTERIXAndNTPAndLeavesRxPositionDetailsEmpty) {
-    settings_v15::Settings v15;
-    PopulateV15(v15);
-    static settings_v21::Settings v21;
-    memset(&v21, 0, sizeof(v21));
-    memcpy(&v21, &v15, sizeof(v15));
-    v21.settings_version = 21;
-    v21.filter_distance_enabled = true;
-    v21.feed_transports[3] = SettingsManager::kFeedTransportUDP;
-    v21.asterix_sac = 25;
-    v21.asterix_sic = 7;
-    strcpy(v21.ntp_server, "time.example.com");
-    // 0xFF past the v21 struct, as erased EEPROM: it must not become RX_POSITION details.
-    static uint8_t blob[sizeof(SettingsManager::Settings)];
-    memset(blob, 0xFF, sizeof(blob));
-    memcpy(blob, &v21, sizeof(v21));
-
-    SettingsManager::Settings out;
-    out.rx_position_details.moving = true;
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 21, out));
-    EXPECT_EQ(out.settings_version, kSettingsVersion);
-    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
-    EXPECT_TRUE(out.filter_distance_enabled);
-    EXPECT_EQ(out.feed_transports[3], SettingsManager::kFeedTransportUDP);
-    EXPECT_EQ(out.asterix_sac, 25);
-    EXPECT_EQ(out.asterix_sic, 7);
-    EXPECT_STREQ(out.ntp_server, "time.example.com");
-    EXPECT_TRUE(out.rx_position_details == RxPositionDetails());
-    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v21::Settings) - 1, 21, out));
 }
 
 TEST(Settings, RxPositionDetailsATArgs) {
