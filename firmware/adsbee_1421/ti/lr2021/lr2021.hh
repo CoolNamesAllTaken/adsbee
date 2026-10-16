@@ -278,6 +278,29 @@ class LR2021 {
     void FinishRxDrain();
     bool DrainIdle() const { return drain_state_ == DrainState::kIdle; }
 
+    // MLAT timestamps (mlat/mlat_pairing.hh)
+    //
+    // Routes SyncwordValid to DIO5 as a latched level and builds the ClearIrq frame the uDMA clear sends, or releases
+    // DIO5. Synchronous; call with the drain idle.
+    bool ConfigMlatSources(bool enabled);
+    // ClearIrq(SyncwordValid), 6 bytes, for mlat_clear_dma. Valid after ConfigMlatSources(true).
+    const uint8_t* mlat_clear_frame() const { return mlat_clear_tx_buf_; }
+    // While enabled, a loop drain sweep waits for its short frames in place (kMlatSweepWaitMaxUs each at most) and
+    // posts the FIFO read in the pass it started in: pairing needs the level read close to the packets. Before each
+    // command frame it lets a pending uDMA clear run (mlat_clear_dma::ClearPending), and after its FIFO read it arms
+    // the uDMA clear from the BUSY-fall interrupt. Enable only with the MLAT capture timer and mlat_clear_dma running.
+    void SetMlatSweepEnabled(bool enabled) { mlat_sweep_enabled_ = enabled; }
+    // The bus is free for the uDMA clear: no drain or chain, no kept read, and BUSY low within max_wait_us (the
+    // BUSY pulse of the sweep's last frame).
+    bool MlatClearMayArm(uint32_t max_wait_us);
+    // Capture timer values of the sweep that just returned kDataReady or kNoData.
+    struct MlatSweep {
+        uint32_t level_request_counter = 0;  // Just before the NSS falling edge of the GetRxFifoLevel request.
+        uint32_t level_answer_counter = 0;   // After the LR2021 sampled the level.
+        bool clear_tail_ran = false;         // LR_IRQ was high: the FIFO held 9 packets or more at some point.
+    };
+    const MlatSweep& mlat_sweep() const { return mlat_sweep_; }
+
     // IRQ-paced RX drain chain (lr2021_irq_drain.cpp)
     //
     // The LR2021 raises its DIO6 IRQ line (-> CC1314 LR_IRQ pin, rising edge) when the RX FIFO crosses
@@ -296,7 +319,9 @@ class LR2021 {
     // A healthy chain finishes in ~300 us; a chain stuck longer than this is cancelled by
     // ServiceRxDrain() at thread level.
     static constexpr uint32_t kIrqChainTimeoutMs = 10;
-    static constexpr uint8_t kNumIrqDrainSlots = 2;
+    // Staging slots the chain fills until the main loop parses them, 9 packets each. With the FIFO's own 18 packets,
+    // 6 slots ride out a main loop pass of about 18 ms at 4000 frames/s before the FIFO overflows.
+    static constexpr uint8_t kNumIrqDrainSlots = 6;
 
     // Staging slot: filled by the chain (ISR/SWI context), parsed and released by the main loop.
     // timestamp_us is captured at the IRQ edge -- closer to reception than parse-time stamping.
@@ -327,6 +352,7 @@ class LR2021 {
     volatile uint32_t fifo_overflow_count = 0;     // FIFO overflow sub-flag observations (either drain path).
     volatile uint32_t drain_dma_timeouts = 0;      // Loop-drain DMA completions that never arrived (cancelled).
     volatile uint32_t irq_stale_edges = 0;         // Latched LR_IRQ edges ignored because the line had dropped.
+    volatile uint32_t irq_drain_defer_sync = 0;    // Edge deferred: a synchronous command held the bus.
     // Latched when either drain tail observes the FIFO overflow sub-flag: the FIFO byte stream may be
     // torn mid-packet, and 14-byte-aligned reads would stay misaligned (every slice failing CRC) until
     // the FIFO is flushed. Set from the chain SWI or the loop-drain thread parse; cleared only by the
@@ -1385,6 +1411,28 @@ class LR2021 {
     /** Drives NSS high, ending the current SPI frame. */
     void EndTransaction();
 
+    // Synchronous bus ownership (lr2021_drain_state.hh LR2021SyncBus). Every command holds a BusLock from its
+    // request frame through its response frame, so no drain or chain frame can come between them. Acquiring waits
+    // for (and advances) a drain or chain in flight; an LR_IRQ edge while held starts the chain at release. A frame
+    // outside a BusLock holds the bus for itself only.
+    bool AcquireBus();
+    void ReleaseBus();
+    class BusLock {
+       public:
+        explicit BusLock(LR2021* lr) : lr_(lr), held_(lr->AcquireBus()) {}
+        ~BusLock() {
+            if (held_) {
+                lr_->ReleaseBus();
+            }
+        }
+        BusLock(const BusLock&) = delete;
+        BusLock& operator=(const BusLock&) = delete;
+
+       private:
+        LR2021* lr_;
+        bool held_;  // False only on abort: BeginTransaction then fails too.
+    };
+
     /**
      * Decodes a raw 16-bit Stat word into last_stat_.
      *
@@ -1507,6 +1555,21 @@ class LR2021 {
     // async_rx_buf_, so its frames must not touch the async buffers (would clobber the unparsed
     // payload / break the async_tx_buf_ "[2..] zeros" invariant).
     uint8_t tail_tx_buf_[4] = {};
+    // ClearIrq(SyncwordValid), built by ConfigMlatSources() and sent by the uDMA clear.
+    uint8_t mlat_clear_tx_buf_[6] = {};
+    volatile bool mlat_sweep_enabled_ = false;
+    // Set when the sweep's FIFO read ends: the BUSY-fall interrupt arms the uDMA clear.
+    volatile bool mlat_arm_on_busy_fall_ = false;
+    MlatSweep mlat_sweep_;
+    static constexpr uint32_t kMlatSweepWaitMaxUs = 200;
+    // MLAT sweep, frames ahead of the FIFO read: waits for the frame in flight (wait_done) or for BUSY low.
+    // False: not an MLAT sweep, or still waiting after kMlatSweepWaitMaxUs.
+    bool MlatSweepWait(DrainState s, bool wait_done);
+    uint32_t mlat_nss_counter_ = 0;  // Capture timer just before the NSS falling edge of the last posted frame.
+    // Longest wait for BUSY low after a uDMA clear: the LR2021 runs ClearIrq after NSS rises.
+    static constexpr uint32_t kMlatClearBusyWaitUs = 50;
+    // Busy-waits for BUSY low. False: still high after max_us.
+    bool WaitNotBusyUs(uint32_t max_us);
     uint8_t tail_rx_buf_[8] = {};
     volatile bool async_ok_ = false;         // Transfer status; written by SPICallback before async_done_.
     volatile bool async_done_ = false;       // Set last by SPICallback; cleared when posting a frame.
@@ -1517,6 +1580,10 @@ class LR2021 {
     bool drain_fifo_full_ = false;
     volatile bool kept_read_pending_ = false;  // Set by the chain (HWI/SWI) on a takeover, cleared by ReleaseKeptRead().
     volatile bool skipped_edge_pending_ = false;  // HandleIrqLine() skipped an edge that RetrySkippedEdge() retries.
+    LR2021SyncBus sync_bus_;
+    bool frame_holds_bus_ = false;  // BeginTransaction() acquired the bus for one frame outside a BusLock.
+    // A held command read or cleared the FIFO: an edge skipped before it no longer guarantees a full threshold.
+    bool sync_popped_fifo_ = false;
     const char* drain_error_str_ = nullptr;
 
     // Synchronous shim state (see SPITransfer() in lr2021_ll.cpp).

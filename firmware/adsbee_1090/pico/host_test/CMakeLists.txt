@@ -59,6 +59,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         ${CMAKE_SOURCE_DIR}/application/peripherals/gnss/nmea_parser.cc
         test_platform.cc
         test_reporting_aircraftjson.cc
+        test_reporting_asterix.cc
         test_reporting_beast.cc
         test_reporting_csbee.cc
         test_reporting_gdl90.cc
@@ -72,6 +73,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_at_console_guard.cc
         test_auto_update.cc
         test_wifi_network_selector.cc
+        test_feed_datagram.cc
         test_feed_send_buffer.cc
         test_log_message.cc
         test_squitter_packets.cc

@@ -789,6 +789,7 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
     // Non-latching bit flags.
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection, true);
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalSpeed, true);
+    last_velocity_update_ms = get_time_since_boot_ms();
 
     // Decode vertical rate.
     int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
@@ -1211,6 +1212,7 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
         state_vector.horizontal_velocity, state_vector.air_ground_state, direction_deg, speed_kts);
     WriteBitFlag(BitFlag::kBitFlagUpdatedDirection, true);
     WriteBitFlag(BitFlag::kBitFlagUpdatedHorizontalSpeed, true);
+    last_velocity_update_ms = last_message_timestamp_ms;  // Local time for UAT.
 
     // Parse direction type and use it to set flags.
     bool direction_valid = false;

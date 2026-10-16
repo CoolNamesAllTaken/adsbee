@@ -146,7 +146,22 @@ Here are a few apps that can be used with ADSBee 1090. If you have one that you 
    - `<protocol>`: What protocol to use when feeding. Currently, only `BEAST` and `BEAST_RAW` are supported.
      - `BEAST` = All received transponder packets with a valid checksum.
      - `BEAST_RAW` = All received transponder packets, regardless of whether they had a valid checksum.
+   - `<transport>` (optional sixth argument): `TCP` (default) connects to a server, `UDP` sends datagrams to a host, broadcast (e.g. `192.168.1.255`) or multicast address, `MQTT` publishes to an MQTT broker.
 5. Check that your values were set correctly with `AT+FEED?`. You should see a sparkline graph below the terminal indicating a non-zero number of packets per second being forwarded to your feed (assuming your ADSBee is receiving packets).
+
+### MQTT feeds { #mqtt-feeds }
+
+An MQTT feed publishes to a broker such as Mosquitto, for Home Assistant or Node-RED.
+
+1. Set up the feed with the `MQTT` transport, e.g. `AT+FEED=4,192.168.1.10,1883,1,AIRCRAFT_JSON,MQTT`.
+2. Set the broker options with `AT+FEED_MQTT=<feed_index>,<topic_prefix>,<username>,<password>,<tls>,<qos>`. Leave an argument empty to keep it, or use `-` to clear it. TLS checks the broker's certificate against the built-in list of public certificate authorities (port 8883 is usual).
+3. Save with `AT+SETTINGS=SAVE`.
+
+Topics, with `<topic_prefix>` defaulting to `adsbee` and `<receiver_id>` shown by `AT+FEED?`:
+
+- `<topic_prefix>/<receiver_id>/<protocol>`: the feed's data in lower case protocol name, e.g. `aircraft_json` (one JSON object per aircraft per message) or `beast` (binary frames).
+- `<topic_prefix>/<receiver_id>/status`: `online` or `offline`, retained.
+- `<topic_prefix>/<receiver_id>/metrics`: JSON with firmware version, uptime, aircraft count and feed message rate, every 10 seconds.
 
 Want to check the status of your feed? Use the links below to see your feed status for various aggregators. Note that values other than aircraft location, e.g. RSSI, are often shown for aircraft that are aggregated across all feeders, and may not reflect what your ADSBee is receiving.
 

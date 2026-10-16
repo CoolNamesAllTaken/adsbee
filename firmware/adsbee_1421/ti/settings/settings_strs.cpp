@@ -12,7 +12,8 @@ const char
                                            [SettingsManager::kReportingProtocolStrMaxLen] = {
                                                "NONE",  "RAW",      "BEAST",    "BEAST_NO_UAT", "BEAST_NO_UAT_UPLINK",
                                                "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90", "AIRCRAFT_JSON",
-                                               "GDL90_NO_UAT_UPLINK", "AIRCRAFT_JSON_UAT_UPLINK", "MLAT"};
+                                               "GDL90_NO_UAT_UPLINK", "AIRCRAFT_JSON_UAT_UPLINK", "ASTERIX",
+                                               "MLAT"};
 
 const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioModes]
                                            [SettingsManager::kSubGHzModeStrMaxLen] = {

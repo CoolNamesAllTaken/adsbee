@@ -15,8 +15,8 @@ TEST(SettingsHash, SameSettingsSameHash) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Changes only with the Settings struct or its defaults.
     SM::Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x12516FADu);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x12516FADu);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x1970B893u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xBB1D5DCBu);
 }
 
 TEST(SettingsHash, MagicAndStoredCRCDoNotCount) {
@@ -58,6 +58,14 @@ TEST(SettingsHash, EverySettingChangesBothHashes) {
     ExpectChangesBoth("antenna_position.source",
                       [](SM::Settings& s) { s.antenna_position.source = ReceiverPosition::kSourceFixed; });
     ExpectChangesBoth("antenna_position.moving", [](SM::Settings& s) { s.antenna_position.moving = true; });
+    ExpectChangesBoth("asterix_sac", [](SM::Settings& s) { s.asterix_sac = 25; });
+}
+
+TEST(SettingsHash, ASTERIXSICCountsOnlyInTheFullHash) {
+    SM::Settings a, b;
+    b.asterix_sic = 7;
+    EXPECT_EQ(SettingsHash::Compute(a, kScopeFleet), SettingsHash::Compute(b, kScopeFleet));
+    EXPECT_NE(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 }
 
 TEST(SettingsHash, AntennaCoordinatesChangeOnlyTheFullHash) {
@@ -72,7 +80,7 @@ TEST(SettingsHash, ReceiverPositionCountsOnlyWhenItIsASetting) {
     // Followed aircraft and GNSS overwrite the position while running.
     SM::Settings a, b;
     b.rx_position.latitude_deg = 47.5f;
-    b.rx_position.icao_address = 0xADF001;
+    b.rx_position.icao_address = 0xBEE001;
     EXPECT_EQ(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 
     a.rx_position.source = b.rx_position.source = SM::RxPosition::kPositionSourceFixed;

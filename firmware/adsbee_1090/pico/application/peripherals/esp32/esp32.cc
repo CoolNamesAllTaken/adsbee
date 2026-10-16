@@ -61,6 +61,10 @@ bool ESP32::Update() {
         hardware_capabilities = device_status.hardware_capabilities;
         psram_total_kb = device_status.psram_total_kb;
         psram_free_kb = device_status.psram_free_kb;
+        num_network_console_clients_ = device_status.num_network_console_clients;
+        network_utc_time_valid = device_status.network_utc_time_valid;
+        network_utc_ms_of_day = device_status.network_utc_ms_of_day;
+        network_utc_timestamp_ms = get_time_since_boot_ms();
     } else {
         if (!esp32.IsLinkDown()) {  // Don't repeat this every pass while the link is down.
             CONSOLE_ERROR("ESP32::Update", "Unable to read ESP32 status.");
@@ -90,6 +94,7 @@ bool ESP32::Update() {
             CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");
             return false;
         }
+        last_network_console_rx_timestamp_ms_ = get_time_since_boot_ms();
         for (uint16_t i = 0; i < bytes_to_read; i++) {
             char c = (char)buf[i];
             if (!comms_manager.esp32_console_rx_queue.Enqueue(c)) {
@@ -134,10 +139,18 @@ bool ESP32::Update() {
 
     // Send the RP2040's status to the ESP32.
     const NMEAParser::GNSSFix& gnss_fix = gnss->fix();
+    uint32_t status_timestamp_ms = get_time_since_boot_ms();
+    // UTC at the time of this status, so the ESP32 can read it as its current time.
+    static constexpr uint32_t kMsPerDay = 86400000;
+    uint32_t utc_ms_of_day =
+        ((((gnss_fix.utc_hour * 60u + gnss_fix.utc_minute) * 60u + gnss_fix.utc_second) * 1000u +
+          gnss_fix.utc_millisecond) +
+         (status_timestamp_ms - gnss_fix.last_update_timestamp_ms)) %
+        kMsPerDay;
     ObjectDictionary::CompositeDeviceStatus composite_status = {
         .rp2040 =
             {
-                .timestamp_ms = get_time_since_boot_ms(),
+                .timestamp_ms = status_timestamp_ms,
                 .temperature_deg_c = (int8_t)(core_0_monitor.ReadTemperatureDegC()),
                 .core_0_usage_percent = core_0_monitor.GetUsagePercent(),
                 .core_1_usage_percent = core_1_monitor.GetUsagePercent(),
@@ -152,10 +165,10 @@ bool ESP32::Update() {
                 .gnss_speed_kts = gnss_fix.speed_kts,
                 .gnss_num_satellites = gnss_fix.num_satellites,
                 .gnss_utc_time_valid = gnss_fix.utc_time_valid,
-                .gnss_utc_hour = gnss_fix.utc_hour,
-                .gnss_utc_minute = gnss_fix.utc_minute,
-                .gnss_utc_second = gnss_fix.utc_second,
-                .gnss_utc_millisecond = gnss_fix.utc_millisecond,
+                .gnss_utc_hour = static_cast<uint8_t>(utc_ms_of_day / 3600000),
+                .gnss_utc_minute = static_cast<uint8_t>(utc_ms_of_day / 60000 % 60),
+                .gnss_utc_second = static_cast<uint8_t>(utc_ms_of_day / 1000 % 60),
+                .gnss_utc_millisecond = static_cast<uint16_t>(utc_ms_of_day % 1000),
                 .noise_floor_mv = static_cast<uint16_t>(adsbee.GetNoiseFloorMilliVolts()),
                 .noise_floor_dbm = static_cast<int16_t>(adsbee.GetNoiseFloordBm()),
                 .receiver_position = adsbee.receiver_position,

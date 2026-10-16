@@ -69,8 +69,8 @@ TEST(SettingsHash, SameSettingsSameHashWhateverThePadding) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Host defaults (no device info, access point channel 1). Changes only with the Settings struct or its defaults.
     Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0xCF61043Bu);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xF1F4EF53u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0xA30A96C1u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xC9DFABF6u);
 }
 
 TEST(SettingsHash, StoredCRCDoesNotCount) {
@@ -151,6 +151,14 @@ TEST(SettingsHash, EverySharedSettingChangesBothHashes) {
     EXPECT_CHANGES_BOTH(s.auto_update_enabled = true);
     EXPECT_CHANGES_BOTH(s.antenna_position.source = ReceiverPosition::kSourceFixed);
     EXPECT_CHANGES_BOTH(s.antenna_position.moving = true);
+    EXPECT_CHANGES_BOTH(s.feed_transports[0] = SettingsManager::kFeedTransportMQTT);
+    EXPECT_CHANGES_BOTH(strcpy(s.feed_mqtt[0].topic_prefix, "home"));
+    EXPECT_CHANGES_BOTH(strcpy(s.feed_mqtt[0].username, "bee"));
+    EXPECT_CHANGES_BOTH(strcpy(s.feed_mqtt[0].password, "secret"));
+    EXPECT_CHANGES_BOTH(s.feed_mqtt[0].tls = true);
+    EXPECT_CHANGES_BOTH(s.feed_mqtt[0].qos = 1);
+    EXPECT_CHANGES_BOTH(s.asterix_sac = 25);
+    EXPECT_CHANGES_BOTH(strcpy(s.ntp_server, "time.example.com"));
 }
 
 TEST(SettingsHash, FeedSlotsAreNotInterchangeable) {
@@ -166,6 +174,7 @@ TEST(SettingsHash, PerUnitSettingsChangeOnlyTheFullHash) {
     EXPECT_CHANGES_FULL_ONLY(s.core_network_settings.wifi_ap_channel = 11);
     EXPECT_CHANGES_FULL_ONLY(s.feed_receiver_ids[9][7] = 0x42);
     EXPECT_CHANGES_FULL_ONLY(strcpy(s.remote_id_tx_uas_id, "SERIAL123"));
+    EXPECT_CHANGES_FULL_ONLY(s.asterix_sic = 7);
 }
 
 TEST(SettingsHash, AntennaCoordinatesChangeOnlyTheFullHash) {
@@ -180,7 +189,7 @@ TEST(SettingsHash, ReceiverPositionCountsOnlyWhenItIsASetting) {
     // Followed aircraft and GNSS overwrite the position while running.
     Settings a, b;
     b.rx_position.latitude_deg = 47.5f;
-    b.rx_position.icao_address = 0xADF001;
+    b.rx_position.icao_address = 0xBEE001;
     EXPECT_EQ(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 
     a.rx_position.source = b.rx_position.source = SettingsManager::RxPosition::kPositionSourceFixed;

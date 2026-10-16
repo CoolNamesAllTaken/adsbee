@@ -37,21 +37,22 @@ TEST(Settings, R1090PreambleModeNamesSelectTheirModes) {
 }
 
 TEST(Settings, VersionNumberingModesIsCurrent) {
-    // Version 6 numbers R1090PreambleMode as above (since version 5).
-    EXPECT_EQ(kSettingsVersion, 6u);
+    // Version 5 numbered R1090PreambleMode as above; version 6 appends the ASTERIX SAC/SIC, version 7 the antenna
+    // position.
+    EXPECT_EQ(kSettingsVersion, 7u);
     SM::Settings settings;
     settings.Stamp();
     EXPECT_TRUE(settings.IsValid());
 }
 
 TEST(Settings, BlobFromAnOlderVersionIsRejected) {
-    // A valid version 4 blob (0.3.11-rc4) or 5 fails the check, so Load() resets to factory defaults.
+    // A valid version 5 blob (0.3.11-rc6) or 6 fails the check, so Load() resets to factory defaults.
     SM::Settings settings;
     settings.Stamp();
-    settings.settings_version = 4;
+    settings.settings_version = 5;
     settings.crc = settings.ComputeCRC();
     EXPECT_FALSE(settings.IsValid());
-    settings.settings_version = 5;
+    settings.settings_version = 6;
     settings.crc = settings.ComputeCRC();
     EXPECT_FALSE(settings.IsValid());
 }
@@ -61,4 +62,11 @@ TEST(Settings, TornOrChangedBlobIsRejected) {
     settings.Stamp();
     settings.r1090_preamble_mode = SM::kR1090PreambleModeDF17;  // Changed after stamping: stale CRC.
     EXPECT_FALSE(settings.IsValid());
+}
+
+TEST(Settings, ASTERIXDataSourceDefaultsToZero) {
+    SM::Settings settings;
+    EXPECT_EQ(settings.asterix_sac, 0);
+    EXPECT_EQ(settings.asterix_sic, 0);
+    EXPECT_EQ(sizeof(SM::Settings), 94u);
 }

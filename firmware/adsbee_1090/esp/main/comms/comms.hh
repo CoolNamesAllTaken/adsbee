@@ -17,6 +17,7 @@
 #include "feed_send_buffer.hh"
 #include "lwip/sockets.h"  // For port definition.
 #include "mode_s_packet.hh"
+#include "mqtt_client.h"
 #include "nvs_flash.h"
 #include "object_dictionary.hh"
 #include "settings.hh"
@@ -287,6 +288,11 @@ class CommsManager {
      */
     bool SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, uint16_t num_msgs = 1);
 
+    /**
+     * Handles events of the MQTT client of a feed. Public so that the pass-through function can access it.
+     */
+    void FeedMQTTEventHandler(uint16_t feed_index, int32_t event_id, esp_mqtt_event_handle_t event);
+
    private:
     /**
      * Opens the socket for a feed, or advances a connect that is already in progress. Never blocks on the connect.
@@ -297,6 +303,21 @@ class CommsManager {
     bool PollFeedSocketConnect(uint16_t feed_index);
     bool FinishFeedSocketConnect(uint16_t feed_index);
     void CloseFeedSocket(uint16_t feed_index);
+
+    // CRC of the settings a feed connects with, to reconnect it when they change.
+    uint32_t FeedConfigCRC(uint16_t feed_index);
+
+    bool ConnectFeedUDP(uint16_t feed_index);
+    bool SendFeedDatagrams(uint16_t feed_index, const char* buf, uint16_t buf_len, uint16_t num_msgs);
+
+    // Starts the feed's MQTT client, which then reconnects by itself. True once it is connected to the broker.
+    bool ConnectFeedMQTT(uint16_t feed_index);
+    void CloseFeedMQTT(uint16_t feed_index);
+    bool PublishFeedMQTT(uint16_t feed_index, const char* buf, uint16_t buf_len, uint16_t num_msgs);
+    // Writes <topic prefix>/<receiver ID>/<suffix>.
+    void FeedMQTTTopic(uint16_t feed_index, const char* suffix, char* topic, size_t topic_size);
+    // Publishes each connected MQTT feed's metrics topic, at most once per interval.
+    void PublishFeedMQTTMetrics();
 
     /**
      * Whether free memory is below the back-pressure thresholds, in which case feed sockets are given no data.
@@ -409,6 +430,11 @@ class CommsManager {
     bool feed_sock_is_connected_[SettingsManager::Settings::kMaxNumFeeds] = {false};
     bool feed_sock_is_connecting_[SettingsManager::Settings::kMaxNumFeeds] = {false};  // Non-blocking connect pending.
     uint32_t feed_sock_last_connect_timestamp_ms_[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    // Transport and settings CRC each feed connected with.
+    SettingsManager::FeedTransport feed_transports_in_use_[SettingsManager::Settings::kMaxNumFeeds] = {};
+    uint32_t feed_config_crcs_[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    esp_mqtt_client_handle_t feed_mqtt_clients_[SettingsManager::Settings::kMaxNumFeeds] = {nullptr};
+    uint32_t feed_mqtt_metrics_last_publish_timestamp_ms_ = 0;
     // Each feed sends through its own buffer so that a slow or stalled feed only loses its own messages.
     FeedSendBuffer feed_send_buffers_[SettingsManager::Settings::kMaxNumFeeds];
     uint32_t feed_num_dropped_msgs_[SettingsManager::Settings::kMaxNumFeeds] = {0};
@@ -463,6 +489,10 @@ class CommsManager {
     uint16_t aircraftjson_report_uid_index_ = 0;
     bool aircraftjson_round_active_ = false;
     bool aircraftjson_overrun_reported_ = false;
+
+    uint16_t asterix_report_uid_index_ = 0;
+    bool asterix_round_active_ = false;
+    bool asterix_overrun_reported_ = false;
 };
 
 extern CommsManager comms_manager;

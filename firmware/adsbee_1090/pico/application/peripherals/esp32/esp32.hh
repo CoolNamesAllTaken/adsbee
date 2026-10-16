@@ -72,6 +72,21 @@ class ESP32 : public SPICoprocessorSlaveInterface {
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true);
 
+    /**
+     * True while something on the network reads the console: a /console client is connected, or console input came
+     * from the network recently (an AT command or OTA session expects its reply). Also true until the first status
+     * read, so nothing is lost while the ESP32 boots.
+     */
+    bool NetworkConsoleHasConsumers() const {
+        return num_network_console_clients_ != 0 ||
+               get_time_since_boot_ms() - last_network_console_rx_timestamp_ms_ < kNetworkConsoleReplyWindowMs;
+    }
+
+    // Console output keeps going to the network this long after the last console input from the network.
+    static constexpr uint32_t kNetworkConsoleReplyWindowMs = 10'000;
+    int16_t num_network_console_clients_ = -1;  // -1 until the first ESP32 status read.
+    uint32_t last_network_console_rx_timestamp_ms_ = 0;
+
    private:
     ESP32Config config_;
     bool enabled_ = false;

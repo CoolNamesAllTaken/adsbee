@@ -42,10 +42,10 @@ global.document = new FakeDocument();
 global.confirm = () => true;
 const { SettingsEngine, SETTINGS_SCHEMA_1090 } = require('../settings.js');
 
-// The AT+SETTINGS?JSON line from an ADSBee 1090 running 0.9.1-rc8, plus ANTENNA_POSITION.
-const DUMP = 'SETTINGS={"ANTENNA_POSITION":["NONE",0.0000000,0.0000000,0.00,0.00,0.00,0,"none"],"AUTO_UPDATE":[0],"BAUD_RATE":[115207,9600],"BIAS_TEE_ENABLE":[0,0],"ETHERNET":[1],"ESP32_ENABLE":[1],' +
+// The AT+SETTINGS?JSON line from an ADSBee 1090 running 0.9.1-rc8, plus ANTENNA_POSITION, ASTERIX_SAC_SIC and NTP_SERVER.
+const DUMP = 'SETTINGS={"ANTENNA_POSITION":["NONE",0.0000000,0.0000000,0.00,0.00,0.00,0,"none"],"ASTERIX_SAC_SIC":[0,0],"AUTO_UPDATE":[0],"BAUD_RATE":[115207,9600],"BIAS_TEE_ENABLE":[0,0],"ETHERNET":[1],"ESP32_ENABLE":[1],' +
     '"FEED_ENABLE":[1],"GNSS":[0,"NONE",0],"HOSTNAME":["test-bee"],"IP_MODE":["DUAL"],"LED_ENABLE":[1],"LOG_LEVEL":["WARNINGS"],' +
-    '"MAVLINK_ID":[1,156],"PROTOCOL_OUT":["NONE","NONE"],"REMOTE_ID":[0,7,"0x00"],' +
+    '"MAVLINK_ID":[1,156],"NTP_SERVER":["pool.ntp.org"],"PROTOCOL_OUT":["NONE","NONE"],"REMOTE_ID":[0,7,"0x00"],' +
     '"REMOTE_ID_TX":[0,7,"",1,2,"","0x0000"],"RX_ENABLE":[1,1],' +
     '"RX_POSITION":["LOWEST","OK",37.000000,-122.000000,-50,125,317.7,74,"000000"],"SUBG_ENABLE":["1"],' +
     '"TL_OFFSET":[600,"-104 dBm"],"WATCHDOG":[10],"WIFI_AP":[0,"test-bee","yummyflowers",1],"WIFI_STA":[0,""],' +

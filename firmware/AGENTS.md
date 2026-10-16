@@ -242,7 +242,10 @@ Before driving an ADSBee from a Bee Wiggler, Pluto wiggler or any other SDR:
    - An m1421 has no network of its own: stop whatever host process forwards its output.
    - Restore: record `AT+FEED_ENABLE?` and `AT+FEED?` before the test, put them back (plus
      `AT+SETTINGS=SAVE`) once the transmitter is off, and say so in your report.
-2. **Use the reserved synthetic ICAO range `0xADF000`-`0xADF0FF`** for every frame you transmit.
+2. **Transmit only ICAO addresses `0xBEE000`-`0xBEE0FF`.** ICAO Annex 10 Vol III (2nd ed., through
+   Amendment 93), Appendix to Chapter 9, Table 9-1 allocates this block to no state, so a stray frame
+   won't land on a real aircraft's track. Before an RF run, confirm no aircraft from the block shows
+   on a public aggregator (command in `ci/hil/README.md`); after the run, a hit means investigate.
 3. **Never exceed 0 dBm into a receiver input.**
 
 ---

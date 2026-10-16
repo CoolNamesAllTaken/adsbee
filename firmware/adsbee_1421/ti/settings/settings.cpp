@@ -249,6 +249,10 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tMAVLink System ID: %u\r\n", settings.mavlink_system_id);
     CONSOLE_PRINTF("\tMAVLink Component ID: %u\r\n", settings.mavlink_component_id);
 
+    // ASTERIX settings
+    CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
+    CONSOLE_PRINTF("\tASTERIX SIC: %u\r\n", settings.asterix_sic);
+
     char antenna_args[96];
     ReceiverPosition::PrintATArgs(antenna_args, sizeof(antenna_args), settings.antenna_position);
     CONSOLE_PRINTF("\tAntenna Position: %s\r\n", antenna_args);
@@ -329,6 +333,9 @@ void SettingsManager::PrintAT() {
 
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", adsbee.GetWatchdogTimeoutSec());
+
+    // AT+ASTERIX_SAC_SIC
+    CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
 
     // AT+ANTENNA_POSITION: last, since older firmware stops replaying at the first command it doesn't know.
     char antenna_args[96];

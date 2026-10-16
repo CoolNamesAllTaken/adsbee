@@ -38,6 +38,22 @@ static bool SanitizeString(char* str, size_t size, const char* name, int index =
     return true;
 }
 
+bool SettingsManager::ProtocolInUse(const Settings& settings, ReportingProtocol protocol) {
+    if (settings.reporting_protocols[SerialInterface::kConsole] == protocol ||
+        settings.reporting_protocols[SerialInterface::kCommsUART] == protocol) {
+        return true;
+    }
+    if (!settings.feeds_enabled) {
+        return false;
+    }
+    for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
+        if (settings.feed_is_active[i] && settings.feed_protocols[i] == protocol) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool SettingsManager::Sanitize() {
     bool changed = false;
 
@@ -79,11 +95,31 @@ bool SettingsManager::Sanitize() {
         changed |= SanitizeBool(settings.feed_is_active[i], "feed_is_active", i);
         changed |= SanitizeString(settings.feed_uris[i], sizeof(settings.feed_uris[i]), "feed_uris", i);
     }
+    for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
+        Settings::FeedMQTT& mqtt = settings.feed_mqtt[i];
+        changed |= SanitizeBool(mqtt.tls, "feed_mqtt.tls", i);
+        changed |= SanitizeString(mqtt.topic_prefix, sizeof(mqtt.topic_prefix), "feed_mqtt.topic_prefix", i);
+        changed |= SanitizeString(mqtt.username, sizeof(mqtt.username), "feed_mqtt.username", i);
+        changed |= SanitizeString(mqtt.password, sizeof(mqtt.password), "feed_mqtt.password", i);
+        if (mqtt.qos > Settings::kFeedMQTTMaxQoS) {
+            CONSOLE_ERROR("SettingsManager::Sanitize", "feed_mqtt[%u].qos=%u out of range, resetting to %u.", i,
+                          mqtt.qos, Settings::kFeedMQTTMaxQoS);
+            mqtt.qos = Settings::kFeedMQTTMaxQoS;
+            changed = true;
+        }
+        if (settings.feed_transports[i] >= kNumFeedTransports) {
+            CONSOLE_ERROR("SettingsManager::Sanitize", "feed_transports[%u]=%u out of range, resetting to TCP.", i,
+                          settings.feed_transports[i]);
+            settings.feed_transports[i] = kFeedTransportTCP;
+            changed = true;
+        }
+    }
     for (uint16_t i = 0; i < Settings::kWiFiSTANumExtraNetworks; i++) {
         Settings::WiFiNetwork& net = settings.wifi_sta_extra_networks[i];
         changed |= SanitizeString(net.ssid, sizeof(net.ssid), "wifi_sta_extra_networks.ssid", i);
         changed |= SanitizeString(net.password, sizeof(net.password), "wifi_sta_extra_networks.password", i);
     }
+    changed |= SanitizeString(settings.ntp_server, sizeof(settings.ntp_server), "ntp_server");
 
     // Baud rate 0 is invalid on hardware UARTs (but normal for the USB console).
     if (settings.baud_rates[SerialInterface::kCommsUART] == 0) {
@@ -309,9 +345,11 @@ void SettingsManager::Print() {
     print_buf_len = 0;
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
         print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
-                                  "\t\t%d URI:%s Port:%d %s Protocol:%s ID:0x", i, settings.feed_uris[i],
-                                  settings.feed_ports[i], settings.feed_is_active[i] ? "ACTIVE" : "INACTIVE",
-                                  kReportingProtocolStrs[settings.feed_protocols[i]]);
+                                  "\t\t%d URI:%s Port:%d %s Protocol:%s Transport:%s ID:0x", i,
+                                  settings.feed_uris[i], settings.feed_ports[i],
+                                  settings.feed_is_active[i] ? "ACTIVE" : "INACTIVE",
+                                  kReportingProtocolStrs[settings.feed_protocols[i]],
+                                  kFeedTransportStrs[settings.feed_transports[i]]);
         for (int16_t feeder_id_byte_index = 0; feeder_id_byte_index < Settings::kFeedReceiverIDNumBytes;
              feeder_id_byte_index++) {
             print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "%02x",
@@ -399,6 +437,25 @@ void SettingsManager::PrintAT() {
 
     // AT+AUTO_UPDATE
     CONSOLE_PRINTF("AT+AUTO_UPDATE=%d\r\n", settings.auto_update_enabled);
+
+    // AT+FEED transport and AT+FEED_MQTT, for feeds that don't use the default TCP transport. "-" is an empty string.
+    for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
+        if (settings.feed_transports[i] == kFeedTransportTCP) {
+            continue;
+        }
+        CONSOLE_PRINTF("AT+FEED=%d,,,,,%s\r\n", i, kFeedTransportStrs[settings.feed_transports[i]]);
+        if (settings.feed_transports[i] == kFeedTransportMQTT) {
+            const Settings::FeedMQTT& mqtt = settings.feed_mqtt[i];
+            CONSOLE_PRINTF("AT+FEED_MQTT=%d,%s,%s,%s,%d,%u\r\n", i, mqtt.topic_prefix[0] ? mqtt.topic_prefix : "-",
+                           mqtt.username[0] ? mqtt.username : "-", mqtt.password[0] ? mqtt.password : "-", mqtt.tls,
+                           mqtt.qos);
+        }
+    }
+    // AT+ASTERIX_SAC_SIC
+    CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
+
+    // AT+NTP_SERVER
+    CONSOLE_PRINTF("AT+NTP_SERVER=%s\r\n", settings.ntp_server);
 
     // AT+ANTENNA_POSITION
     char antenna_args[96];

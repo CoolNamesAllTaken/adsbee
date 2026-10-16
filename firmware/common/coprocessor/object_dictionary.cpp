@@ -8,6 +8,7 @@
 #include "esp32_firmware_check.hh"
 #include "esp_app_desc.h"
 #include "esp_system.h"
+#include "network_time.hh"
 #include "pico.hh"               // pico_ll.ForceBlinkNetworkLED() for kAddrLEDBlink.
 #include "remote_id_manager.hh"  // remote_id_manager.GetOutQueue() for the ESP32 -> RP2040 Remote ID pull.
 #include "task_utils.hh"
@@ -26,7 +27,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 8;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 9;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -613,11 +614,19 @@ void ObjectDictionary::UpdateDeviceStatus() {
         static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize);
     device_status.num_queued_sc_command_requests = sc_command_request_queue.Length();
     device_status.num_queued_network_console_rx_chars = num_network_console_rx_chars;
+    device_status.num_network_console_clients =
+        static_cast<uint8_t>(MIN(adsbee_server.network_console.GetNumClients(), UINT8_MAX));
     // Length of Remote ID packets queued for the RP2040 to pull (header-only == nothing pending). The RP2040 polls this
     // in ESP32::Update() and issues a kAddrCompositeArrayRawPackets read when it exceeds the header size. Mirrors the
     // CC1312's pending_raw_packets_len_bytes pull mechanism (see the ON_TI branch below).
     device_status.pending_raw_packets_len_bytes = CompositeArray::CalculateRawPacketsBufferLength(
         nullptr, nullptr, nullptr, remote_id_manager.GetOutQueue());
+    static constexpr uint32_t kMsPerDay = 86400000;
+    uint32_t utc_ms_of_day, utc_local_ms;
+    device_status.network_utc_time_valid = network_time.GetUTC(utc_ms_of_day, utc_local_ms);
+    // Bring UTC back to timestamp_ms.
+    device_status.network_utc_ms_of_day =
+        (utc_ms_of_day + kMsPerDay - (utc_local_ms - device_status.timestamp_ms)) % kMsPerDay;
 #elif defined(ON_TI)
     device_status = {
         .timestamp_ms = get_time_since_boot_ms(),

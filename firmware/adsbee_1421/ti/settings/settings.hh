@@ -16,7 +16,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 6;
+static constexpr uint32_t kSettingsVersion = 7;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -56,6 +56,7 @@ class SettingsManager {
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
+        kASTERIX,                // EUROCONTROL ASTERIX CAT021 target reports and CAT023 status.
         kMLAT,  // Beast Mode S with 48 MHz timestamps and receiver info frames (software/adsbee_mlat/PROTOCOL.md).
         kNumProtocols
     };
@@ -172,6 +173,10 @@ class SettingsManager {
 
         // Receiver position settings
         RxPosition rx_position;
+
+        // ASTERIX data source identifier (I021/010, I023/010): System Area Code and System Identification Code.
+        uint8_t asterix_sac = 0;
+        uint8_t asterix_sic = 0;
 
         // Antenna position entered by the operator for MLAT (source kSourceFixed, or kSourceNone if not set).
         ReceiverPosition antenna_position;

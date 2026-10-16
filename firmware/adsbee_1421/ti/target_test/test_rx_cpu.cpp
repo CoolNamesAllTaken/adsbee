@@ -13,7 +13,7 @@
 
 class ADSBeeTestAccessor {
    public:
-    static void Parse(const uint8_t* buf, uint16_t len) { adsbee.ParseLR2021RxFifo(buf, len, 0); }
+    static void Parse(const uint8_t* buf, uint16_t len) { adsbee.ParseLR2021RxFifo(buf, len, 0, false); }
     // Changes only what the parser and the decoder read; the radio keeps its configuration.
     static SettingsManager::R1090PreambleMode SwapMode(SettingsManager::R1090PreambleMode mode) {
         const SettingsManager::R1090PreambleMode old = adsbee.r1090_preamble_mode_;

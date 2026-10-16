@@ -96,6 +96,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATAntennaPositionCallback);
     CPP_AT_CALLBACK(ATAutoUpdateCallback);
     CPP_AT_CALLBACK(ATFeedEnableCallback);
+    CPP_AT_CALLBACK(ATFeedMQTTCallback);
     CPP_AT_CALLBACK(ATRemoteIDCallback);
     CPP_AT_CALLBACK(ATRemoteIDTxCallback);
     CPP_AT_CALLBACK(ATGNSSCallback);
@@ -107,7 +108,9 @@ class CommsManager {
     CPP_AT_CALLBACK(ATOTACallback);
     CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);
     CPP_AT_CALLBACK(ATLogLevelCallback);
+    CPP_AT_CALLBACK(ATASTERIXSACSICCallback);
     CPP_AT_CALLBACK(ATMAVLINKIDCallback);
+    CPP_AT_CALLBACK(ATNTPServerCallback);
     CPP_AT_CALLBACK(ATNetworkInfoCallback);
     CPP_AT_CALLBACK(ATProtocolOutCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolOutHelpCallback);
@@ -156,6 +159,9 @@ class CommsManager {
      */
     bool iface_write(SettingsManager::SerialInterface iface, const char* buf, uint16_t len);
 
+    // Console output goes to the ESP32 network console only while something on the network reads it, since every
+    // byte costs core 0 an SPI write.
+    bool MirrorToNetworkConsole();
     bool network_console_putc(char c);
     bool network_console_puts(const char* buf, uint16_t len = UINT16_MAX);
 
@@ -320,6 +326,10 @@ class CommsManager {
     uint16_t aircraftjson_report_uid_index_ = 0;
     bool aircraftjson_round_active_ = false;
     bool aircraftjson_overrun_reported_ = false;
+
+    uint16_t asterix_report_uid_index_ = 0;
+    bool asterix_round_active_ = false;
+    bool asterix_overrun_reported_ = false;
 };
 
 extern CommsManager comms_manager;

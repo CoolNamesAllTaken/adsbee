@@ -187,6 +187,12 @@ bool ADSBee::Init() {
 }
 
 bool ADSBee::InitISRs() {
+    // Claimed before PIOInit() enables the capture interrupts, whose RearmSampler() uses them; kept on DeInitISRs().
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        if (mlat_jitter_dma_channel_[sm_index] < 0) {
+            mlat_jitter_dma_channel_[sm_index] = dma_claim_unused_channel(true);
+        }
+    }
     PIOInit();
     MLATCounterInit();
     PIOEnable();
@@ -200,11 +206,11 @@ bool ADSBee::DeInitISRs() {
         pio_sm_set_enabled(config_.pulse_sampler_pio, pulse_sampler_sm_[sm_index], false);
     }
 
-    // Stop and unclaim DMA channels used for MLAT jitter counters
+    // Stop the MLAT jitter DMA channels but keep them claimed (see mlat_jitter_dma_channel_): unclaimed, core 0 could
+    // claim one (e.g. for the OTA CRC) while the restarted core 1 still aborts and restarts it from RearmSampler().
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        dma_channel_abort(mlat_jitter_dma_channel_[sm_index]);
-        if (dma_channel_is_claimed(mlat_jitter_dma_channel_[sm_index])) {
-            dma_channel_unclaim(mlat_jitter_dma_channel_[sm_index]);
+        if (mlat_jitter_dma_channel_[sm_index] >= 0) {
+            dma_channel_abort(mlat_jitter_dma_channel_[sm_index]);
         }
     }
 
@@ -923,8 +929,6 @@ void ADSBee::MLATCounterInit() {
     // Enable a DMA DREQ for each pulse sampler PIO TX FIFO. This is used to capture the IRQ jitter offset counter
     // when a decode interval begins (32 bits into a message).
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        mlat_jitter_dma_channel_[sm_index] =
-            dma_claim_unused_channel(true);  // Claim a DMA channel for each state machine.
         dma_channel_config config = dma_channel_get_default_config(mlat_jitter_dma_channel_[sm_index]);
         channel_config_set_read_increment(&config, false);            // Don't increment the read address.
         channel_config_set_write_increment(&config, false);           // Don't increment the write address.

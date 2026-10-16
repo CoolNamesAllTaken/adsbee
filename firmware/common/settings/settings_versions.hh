@@ -483,7 +483,7 @@ static_assert(offsetof(Settings, ip_mode) == 1141, "v16 ip_mode offset drift.");
 }  // namespace settings_v16
 
 /**
- * v17 layout: v16 plus `wifi_sta_extra_networks` (adsbee_1090 #280). v18 put `auto_update_enabled` in its tail padding.
+ * v17 layout: v16 plus `wifi_sta_extra_networks` (adsbee_1090 #280).
  */
 namespace settings_v17 {
 
@@ -672,7 +672,7 @@ struct alignas(4) Settings {
     RxPosition rx_position;
     uint8_t ip_mode;
     WiFiNetwork wifi_sta_extra_networks[kWiFiSTANumExtraNetworks];  // Added in v17.
-    bool auto_update_enabled;                                       // Added in v18.
+    bool auto_update_enabled;                                      // Added in v18, in v17's tail padding.
 };
 
 // Lock the v18 byte layout (the live layout lock in settings.hh at kSettingsVersion == 18).
@@ -697,3 +697,137 @@ static_assert(offsetof(Settings, wifi_sta_extra_networks) == 1142, "v18 wifi_sta
 static_assert(offsetof(Settings, auto_update_enabled) == 1338, "v18 auto_update_enabled offset drift.");
 
 }  // namespace settings_v18
+
+/**
+ * v19 layout: v18 plus per-feed transports and MQTT broker options.
+ */
+namespace settings_v19 {
+
+static constexpr uint16_t kMaxNumFeeds = 10;
+static constexpr uint16_t kFeedMQTTTopicPrefixMaxLen = 31;
+static constexpr uint16_t kFeedMQTTUsernameMaxLen = 31;
+static constexpr uint16_t kFeedMQTTPasswordMaxLen = 63;
+
+struct FeedMQTT {
+    char topic_prefix[kFeedMQTTTopicPrefixMaxLen + 1];
+    char username[kFeedMQTTUsernameMaxLen + 1];
+    char password[kFeedMQTTPasswordMaxLen + 1];
+    bool tls;
+    uint8_t qos;
+};
+
+// Byte-identical copy of the v19 Settings layout. Enum members are stored as their underlying integer types.
+struct alignas(4) Settings {
+    uint32_t settings_version;
+    settings_v18::CoreNetworkSettings core_network_settings;
+    bool r1090_rx_enabled;
+    int32_t tl_offset_mv;
+    bool r1090_bias_tee_enabled;
+    uint32_t watchdog_timeout_sec;
+    bool led_enabled;
+    bool feeds_enabled;
+    bool gnss_enabled;
+    uint8_t gnss_receiver_type;
+    bool gnss_notify;
+    uint16_t log_level;
+    uint16_t reporting_protocols[settings_v18::kNumSerialInterfaces];
+    uint32_t baud_rates[settings_v18::kNumSerialInterfaces];
+    int8_t subg_enabled;
+    bool subg_rx_enabled;
+    bool subg_bias_tee_enabled;
+    uint8_t subg_mode;
+    bool remote_id_rx_enabled;
+    uint8_t remote_id_transports;
+    bool remote_id_tx_enabled;
+    uint8_t remote_id_tx_transports;
+    uint8_t remote_id_tx_uas_id_type;
+    uint8_t remote_id_tx_ua_type;
+    char remote_id_tx_uas_id[settings_v18::kRemoteIDIDMaxLen + 1];
+    char remote_id_tx_operator_id[settings_v18::kRemoteIDIDMaxLen + 1];
+    char feed_uris[kMaxNumFeeds][settings_v18::kFeedURIMaxNumChars + 1];
+    uint16_t feed_ports[kMaxNumFeeds];
+    bool feed_is_active[kMaxNumFeeds];
+    uint16_t feed_protocols[kMaxNumFeeds];
+    uint8_t feed_receiver_ids[kMaxNumFeeds][settings_v18::kFeedReceiverIDNumBytes];
+    uint8_t mavlink_system_id;
+    uint8_t mavlink_component_id;
+    settings_v18::RxPosition rx_position;
+    uint8_t ip_mode;
+    settings_v18::WiFiNetwork wifi_sta_extra_networks[settings_v18::kWiFiSTANumExtraNetworks];
+    bool auto_update_enabled;
+    uint8_t feed_transports[kMaxNumFeeds];  // Added in v19.
+    FeedMQTT feed_mqtt[kMaxNumFeeds];       // Added in v19.
+};
+
+// Lock the v19 byte layout (the live layout lock in settings.hh at kSettingsVersion == 19).
+static_assert(sizeof(FeedMQTT) == 130, "v19 FeedMQTT must be 130 bytes.");
+static_assert(sizeof(Settings) == 2652, "v19 Settings must be 2652 bytes.");
+static_assert(offsetof(Settings, feed_uris) == 340, "v19 feed_uris offset drift.");
+static_assert(offsetof(Settings, rx_position) == 1112, "v19 rx_position offset drift.");
+static_assert(offsetof(Settings, auto_update_enabled) == 1338, "v19 auto_update_enabled offset drift.");
+static_assert(offsetof(Settings, feed_transports) == 1339, "v19 feed_transports offset drift.");
+static_assert(offsetof(Settings, feed_mqtt) == 1349, "v19 feed_mqtt offset drift.");
+
+}  // namespace settings_v19
+
+/**
+ * v20 layout: v19 plus the ASTERIX data source identifier and the NTP server.
+ */
+namespace settings_v20 {
+
+static constexpr uint16_t kNTPServerMaxLen = 63;
+
+// Byte-identical copy of the v20 Settings layout. Enum members are stored as their underlying integer types.
+struct alignas(4) Settings {
+    uint32_t settings_version;
+    settings_v18::CoreNetworkSettings core_network_settings;
+    bool r1090_rx_enabled;
+    int32_t tl_offset_mv;
+    bool r1090_bias_tee_enabled;
+    uint32_t watchdog_timeout_sec;
+    bool led_enabled;
+    bool feeds_enabled;
+    bool gnss_enabled;
+    uint8_t gnss_receiver_type;
+    bool gnss_notify;
+    uint16_t log_level;
+    uint16_t reporting_protocols[settings_v18::kNumSerialInterfaces];
+    uint32_t baud_rates[settings_v18::kNumSerialInterfaces];
+    int8_t subg_enabled;
+    bool subg_rx_enabled;
+    bool subg_bias_tee_enabled;
+    uint8_t subg_mode;
+    bool remote_id_rx_enabled;
+    uint8_t remote_id_transports;
+    bool remote_id_tx_enabled;
+    uint8_t remote_id_tx_transports;
+    uint8_t remote_id_tx_uas_id_type;
+    uint8_t remote_id_tx_ua_type;
+    char remote_id_tx_uas_id[settings_v18::kRemoteIDIDMaxLen + 1];
+    char remote_id_tx_operator_id[settings_v18::kRemoteIDIDMaxLen + 1];
+    char feed_uris[settings_v19::kMaxNumFeeds][settings_v18::kFeedURIMaxNumChars + 1];
+    uint16_t feed_ports[settings_v19::kMaxNumFeeds];
+    bool feed_is_active[settings_v19::kMaxNumFeeds];
+    uint16_t feed_protocols[settings_v19::kMaxNumFeeds];
+    uint8_t feed_receiver_ids[settings_v19::kMaxNumFeeds][settings_v18::kFeedReceiverIDNumBytes];
+    uint8_t mavlink_system_id;
+    uint8_t mavlink_component_id;
+    settings_v18::RxPosition rx_position;
+    uint8_t ip_mode;
+    settings_v18::WiFiNetwork wifi_sta_extra_networks[settings_v18::kWiFiSTANumExtraNetworks];
+    bool auto_update_enabled;
+    uint8_t feed_transports[settings_v19::kMaxNumFeeds];
+    settings_v19::FeedMQTT feed_mqtt[settings_v19::kMaxNumFeeds];
+    uint8_t asterix_sac;                    // Added in v20.
+    uint8_t asterix_sic;                    // Added in v20.
+    char ntp_server[kNTPServerMaxLen + 1];  // Added in v20.
+};
+
+// Lock the v20 byte layout (the live layout lock in settings.hh at kSettingsVersion == 20).
+static_assert(sizeof(Settings) == 2716, "v20 Settings must be 2716 bytes.");
+static_assert(offsetof(Settings, feed_mqtt) == 1349, "v20 feed_mqtt offset drift.");
+static_assert(offsetof(Settings, asterix_sac) == 2649, "v20 asterix_sac offset drift.");
+static_assert(offsetof(Settings, asterix_sic) == 2650, "v20 asterix_sic offset drift.");
+static_assert(offsetof(Settings, ntp_server) == 2651, "v20 ntp_server offset drift.");
+
+}  // namespace settings_v20
