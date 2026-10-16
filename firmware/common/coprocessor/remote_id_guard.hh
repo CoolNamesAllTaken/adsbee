@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string_view>
 
 /**
  * Keeps Remote ID from starving the ESP32 of the internal RAM that the web server, settings and OTA need. Shared by the
@@ -39,6 +42,111 @@ class RemoteIDGuard {
     static constexpr uint8_t kTransportsBLE = 0b011;
     static constexpr uint8_t kTransportWiFiBeacon = 0b100;
     static constexpr uint8_t kTransportsAll = kTransportsBLE | kTransportWiFiBeacon;
+
+    // Names for the AT commands, joined with '+' (e.g. BT4+BT5_LR).
+    struct BitName {
+        uint16_t bit;
+        const char* name;
+    };
+    static constexpr BitName kTransportNames[] = {{1 << 0, "BT4"}, {1 << 1, "BT5_LR"}, {1 << 2, "WIFI_BEACON"}};
+    static constexpr BitName kStatusNames[] = {
+        {kStatusBLEActive, "BT_SCANNING"},
+        {kStatusBLECodedPHYActive, "BT5_LR_SCANNING"},
+        {kStatusWiFiSnifferActive, "WIFI_BEACON_SCANNING"},
+        {kStatusBlockedByNetwork, "BLOCKED_NETWORK"},
+        {kStatusBlockedByRAM, "BLOCKED_RAM"},
+        {kStatusNotInBuild, "NOT_IN_BUILD"},
+        {kStatusPausedLowHeap, "PAUSED_LOW_HEAP"},
+        {kStatusTxBLELegacyActive, "TX_BT4"},
+        {kStatusTxBLECodedActive, "TX_BT5_LR"},
+        {kStatusTxWiFiBeaconActive, "TX_WIFI_BEACON"},
+        {kStatusTxNoPosition, "TX_NO_POSITION"},
+        {kStatusTxBlocked, "TX_BLOCKED"},
+        {kStatusTxPositionSourceNotAllowed, "TX_POSITION_SOURCE_NOT_ALLOWED"},
+    };
+    static constexpr size_t kTransportsStrMaxLen = 32;  // BT4+BT5_LR+WIFI_BEACON
+    static constexpr size_t kStatusStrMaxLen = 224;     // Every status name.
+
+    /**
+     * Writes the names of the set bits joined with '+', or "NONE". Bits without a name print as hex.
+     * @retval buf
+     */
+    template <size_t N>
+    static const char* BitsStr(uint16_t bits, const BitName (&names)[N], char* buf, size_t buf_len) {
+        size_t len = 0;
+        buf[0] = '\0';
+        auto append = [&](const char* text) {
+            int n = snprintf(buf + len, buf_len - len, "%s%s", len > 0 ? "+" : "", text);
+            if (n > 0) len = (len + n < buf_len) ? len + n : buf_len - 1;
+        };
+        for (const BitName& bit_name : names) {
+            if (!(bits & bit_name.bit)) continue;
+            append(bit_name.name);
+            bits &= ~bit_name.bit;
+        }
+        if (bits != 0) {
+            char hex[8];
+            snprintf(hex, sizeof(hex), "0x%X", bits);
+            append(hex);
+        }
+        if (len == 0) append("NONE");
+        return buf;
+    }
+    static const char* TransportsStr(uint8_t transports, char* buf, size_t buf_len) {
+        return BitsStr(transports, kTransportNames, buf, buf_len);
+    }
+    static const char* StatusStr(uint16_t status, char* buf, size_t buf_len) {
+        return BitsStr(status, kStatusNames, buf, buf_len);
+    }
+
+    /**
+     * Parses transports: names joined with '+' (BT4+BT5_LR), ALL, NONE, or the older numeric mask (decimal or 0x hex).
+     * @retval False if the text isn't one of those or has unknown bits.
+     */
+    static bool ParseTransports(std::string_view text, uint8_t& transports) {
+        if (text.empty()) return false;
+        uint32_t value = 0;
+        if (text == "ALL") {
+            value = kTransportsAll;
+        } else if (text == "NONE") {
+            value = 0;
+        } else if (text[0] >= '0' && text[0] <= '9') {
+            const bool hex = text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X');
+            for (size_t i = hex ? 2 : 0; i < text.size(); i++) {
+                const char c = text[i];
+                uint32_t digit;
+                if (c >= '0' && c <= '9') {
+                    digit = c - '0';
+                } else if (hex && c >= 'a' && c <= 'f') {
+                    digit = c - 'a' + 10;
+                } else if (hex && c >= 'A' && c <= 'F') {
+                    digit = c - 'A' + 10;
+                } else {
+                    return false;
+                }
+                value = value * (hex ? 16 : 10) + digit;
+                if (value > kTransportsAll) return false;
+            }
+        } else {
+            while (!text.empty()) {
+                const size_t plus = text.find('+');
+                const std::string_view name = text.substr(0, plus);
+                bool found = false;
+                for (const BitName& bit_name : kTransportNames) {
+                    if (name == bit_name.name) {
+                        value |= bit_name.bit;
+                        found = true;
+                    }
+                }
+                if (!found) return false;
+                if (plus == std::string_view::npos) break;
+                text.remove_prefix(plus + 1);
+                if (text.empty()) return false;  // Trailing '+'.
+            }
+        }
+        transports = static_cast<uint8_t>(value);
+        return true;
+    }
 
     /**
      * Transports this hardware can run with the enabled network interfaces. Without PSRAM, nothing fits next to WiFi AP

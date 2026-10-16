@@ -349,7 +349,7 @@ test('Remote ID from firmware without ALLOWED_TRANSPORTS is not locked', async (
     assert.strictEqual(notice('REMOTE_ID'), '');
 });
 
-test('Remote ID query lines carry the allowed transports', async () => {
+test('Remote ID query lines from older firmware (hex) carry the allowed transports', async () => {
     const t = makeTransport((cmd) => {
         if (cmd === 'AT+SETTINGS?JSON') throw new Error('ERROR');
         if (cmd === 'AT+REMOTE_ID?') return ['REMOTE_ID=1,0x04(TRANSPORTS),0x04(ESP32_STATUS),0x04(ALLOWED_TRANSPORTS)'];
@@ -364,4 +364,47 @@ test('Remote ID query lines carry the allowed transports', async () => {
     assert.deepStrictEqual(ridBits('REMOTE_ID')[2], { checked: false, disabled: true });
     assert.deepStrictEqual(ridBits('REMOTE_ID_TX')[1], { checked: true, disabled: false });
     assert.strictEqual(input('REMOTE_ID_TX', 'uas_id').value, '');
+});
+
+test('Remote ID query lines with names', async () => {
+    const sent = [];
+    const t = makeTransport((cmd) => {
+        sent.push(cmd);
+        if (cmd === 'AT+SETTINGS?JSON') throw new Error('ERROR');
+        if (cmd === 'AT+REMOTE_ID?') {
+            return ['REMOTE_ID=1,BT4+BT5_LR+WIFI_BEACON(TRANSPORTS),BT_SCANNING+BT5_LR_SCANNING+BLOCKED_NETWORK(ESP32_STATUS),BT4+BT5_LR(ALLOWED_TRANSPORTS)'];
+        }
+        if (cmd === 'AT+REMOTE_ID_TX?') {
+            return ['REMOTE_ID_TX=0,NONE(TRANSPORTS),(device serial)(UAS_ID),1(ID_TYPE),2(UA_TYPE),(none)(OPERATOR_ID),TX_BLOCKED+BLOCKED_RAM(ESP32_STATUS),BT4+BT5_LR(ALLOWED_TRANSPORTS)'];
+        }
+        return ['OK'];
+    });
+    const engine = makeEngine(t);
+    await engine.refresh();
+    assert.deepStrictEqual(ridBits('REMOTE_ID'), {
+        1: { checked: true, disabled: false }, 2: { checked: true, disabled: false }, 4: { checked: true, disabled: false },
+    });
+    assert.strictEqual(input('REMOTE_ID', 'status').textContent,
+        'Bluetooth scanning, Long Range, paused for WiFi/Ethernet (no PSRAM) (0x0B)');
+    assert.match(notice('REMOTE_ID'), /only the Bluetooth transports/);
+    assert.deepStrictEqual(ridBits('REMOTE_ID_TX'), {
+        1: { checked: false, disabled: false }, 2: { checked: false, disabled: false }, 4: { checked: false, disabled: true },
+    });
+    assert.strictEqual(input('REMOTE_ID_TX', 'status').textContent, 'not enough ESP32 memory (0x1010)');
+});
+
+test('Remote ID transport and status names match RemoteIDGuard', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const { SETTINGS_RID_TRANSPORTS, SETTINGS_RID_STATUS_NAMES, SETTINGS_RID } = require('../settings.js');
+    const hh = fs.readFileSync(path.join(__dirname, '../../../../../../common/coprocessor/remote_id_guard.hh'), 'utf8');
+    const bits = Object.fromEntries([...hh.matchAll(/(kStatus\w+) = 1 << (\d+)/g)].map(m => [m[1], 1 << Number(m[2])]));
+    const statusNames = Object.fromEntries(
+        [...hh.matchAll(/\{(kStatus\w+), "(\w+)"\}/g)].map(m => [m[2], bits[m[1]]]));
+    assert.deepStrictEqual(SETTINGS_RID_STATUS_NAMES, statusNames);
+    const transportNames = [...hh.matchAll(/\{1 << (\d), "(\w+)"\}/g)].map(m => ({ bit: 1 << Number(m[1]), name: m[2] }));
+    assert.deepStrictEqual(SETTINGS_RID_TRANSPORTS.map(t => ({ bit: t.bit, name: t.name })), transportNames);
+    assert.strictEqual(SETTINGS_RID.transportBits('ALL'), 7);
+    assert.strictEqual(SETTINGS_RID.transportBits('NONE'), 0);
+    assert.ok(Number.isNaN(SETTINGS_RID.transportBits('BT6')));
 });

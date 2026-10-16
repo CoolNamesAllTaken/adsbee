@@ -85,3 +85,63 @@ TEST(RemoteIDGuard, BlockedReason) {
                      "memory"),
               nullptr);
 }
+
+TEST(RemoteIDGuard, TransportsStr) {
+    char buf[RemoteIDGuard::kTransportsStrMaxLen];
+    EXPECT_STREQ(RemoteIDGuard::TransportsStr(0, buf, sizeof(buf)), "NONE");
+    EXPECT_STREQ(RemoteIDGuard::TransportsStr(RemoteIDGuard::kTransportsBLE, buf, sizeof(buf)), "BT4+BT5_LR");
+    EXPECT_STREQ(RemoteIDGuard::TransportsStr(RemoteIDGuard::kTransportsAll, buf, sizeof(buf)),
+                 "BT4+BT5_LR+WIFI_BEACON");
+    EXPECT_STREQ(RemoteIDGuard::TransportsStr(RemoteIDGuard::kTransportWiFiBeacon, buf, sizeof(buf)), "WIFI_BEACON");
+    // Bits without a name print as hex.
+    EXPECT_STREQ(RemoteIDGuard::TransportsStr(0x09, buf, sizeof(buf)), "BT4+0x8");
+}
+
+TEST(RemoteIDGuard, StatusStr) {
+    char buf[RemoteIDGuard::kStatusStrMaxLen];
+    EXPECT_STREQ(RemoteIDGuard::StatusStr(0, buf, sizeof(buf)), "NONE");
+    EXPECT_STREQ(RemoteIDGuard::StatusStr(RemoteIDGuard::kStatusBLEActive | RemoteIDGuard::kStatusBLECodedPHYActive,
+                                          buf, sizeof(buf)),
+                 "BT_SCANNING+BT5_LR_SCANNING");
+    EXPECT_STREQ(RemoteIDGuard::StatusStr(RemoteIDGuard::kStatusPausedLowHeap, buf, sizeof(buf)), "PAUSED_LOW_HEAP");
+    EXPECT_STREQ(RemoteIDGuard::StatusStr(RemoteIDGuard::kStatusBlockedByNetwork | RemoteIDGuard::kStatusTxBlocked, buf,
+                                          sizeof(buf)),
+                 "BLOCKED_NETWORK+TX_BLOCKED");
+    // Every bit set fits the buffer, and a short buffer truncates without overrunning.
+    EXPECT_LT(strlen(RemoteIDGuard::StatusStr(0xFFFF, buf, sizeof(buf))), sizeof(buf) - 1);
+    char tiny[8];
+    EXPECT_STREQ(RemoteIDGuard::StatusStr(RemoteIDGuard::kStatusBlockedByRAM, tiny, sizeof(tiny)), "BLOCKED");
+}
+
+TEST(RemoteIDGuard, ParseTransports) {
+    uint8_t t = 0xFF;
+    EXPECT_TRUE(RemoteIDGuard::ParseTransports("BT4+BT5_LR", t));
+    EXPECT_EQ(t, RemoteIDGuard::kTransportsBLE);
+    EXPECT_TRUE(RemoteIDGuard::ParseTransports("WIFI_BEACON", t));
+    EXPECT_EQ(t, RemoteIDGuard::kTransportWiFiBeacon);
+    EXPECT_TRUE(RemoteIDGuard::ParseTransports("BT5_LR+BT4+WIFI_BEACON", t));
+    EXPECT_EQ(t, RemoteIDGuard::kTransportsAll);
+    EXPECT_TRUE(RemoteIDGuard::ParseTransports("ALL", t));
+    EXPECT_EQ(t, RemoteIDGuard::kTransportsAll);
+    EXPECT_TRUE(RemoteIDGuard::ParseTransports("NONE", t));
+    EXPECT_EQ(t, 0);
+    // The older numeric mask still works.
+    EXPECT_TRUE(RemoteIDGuard::ParseTransports("3", t));
+    EXPECT_EQ(t, 3);
+    EXPECT_TRUE(RemoteIDGuard::ParseTransports("0x07", t));
+    EXPECT_EQ(t, 7);
+    EXPECT_TRUE(RemoteIDGuard::ParseTransports("0", t));
+    EXPECT_EQ(t, 0);
+
+    t = 5;
+    for (const char* bad : {"", "8", "0x10", "BT6", "bt4", "BT4+", "+BT4", "BT4++BT5_LR", "BT4,BT5_LR", "3a", "0x"}) {
+        EXPECT_FALSE(RemoteIDGuard::ParseTransports(bad, t)) << bad;
+        EXPECT_EQ(t, 5) << bad;
+    }
+    // Every printed form parses back.
+    char buf[RemoteIDGuard::kTransportsStrMaxLen];
+    for (uint8_t v = 0; v <= RemoteIDGuard::kTransportsAll; v++) {
+        EXPECT_TRUE(RemoteIDGuard::ParseTransports(RemoteIDGuard::TransportsStr(v, buf, sizeof(buf)), t));
+        EXPECT_EQ(t, v);
+    }
+}

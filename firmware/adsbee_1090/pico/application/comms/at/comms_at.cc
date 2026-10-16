@@ -707,6 +707,7 @@ static uint8_t RemoteIDAllowedTransports() {
 // Why this hardware can't run the given Remote ID transports with the enabled network interfaces, or nullptr if it can.
 static const char* RemoteIDTransportsError(const char* command, uint8_t transports) {
     static char error[300];
+    char names[RemoteIDGuard::kTransportsStrMaxLen];
     const uint8_t allowed = RemoteIDAllowedTransports();
     if ((transports & ~allowed) == 0) return nullptr;
     if (allowed == 0) {
@@ -717,8 +718,8 @@ static const char* RemoteIDTransportsError(const char* command, uint8_t transpor
     snprintf(error, sizeof(error),
              "Only the Bluetooth transports can run while Ethernet is enabled on this hardware: its ESP32 has no "
              "PSRAM, so there isn't enough RAM for the web server, Bluetooth and the WiFi beacon receiver at the same "
-             "time. Use AT+%s=1,%u, disable Ethernet, or use hardware with PSRAM.",
-             command, allowed);
+             "time. Use AT+%s=1,%s, disable Ethernet, or use hardware with PSRAM.",
+             command, RemoteIDGuard::TransportsStr(allowed, names, sizeof(names)));
     return error;
 }
 
@@ -766,26 +767,33 @@ CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
 
 CPP_AT_CALLBACK(CommsManager::ATRemoteIDCallback) {
     switch (op) {
-        case '?':
-            // Report the requested settings plus the ESP32's resolved live status bitfield (why RID may not be running).
+        case '?': {
+            // Report the requested settings plus the ESP32's resolved live status (why RID may not be running).
             // remote_id_status is cached on the low-level ESP32 slave interface (esp32_ll) by ESP32::Update(); the
             // high-level SPICoprocessor `esp32` only inherits the base interface, which does not carry it.
-            CPP_AT_CMD_PRINTF("=%d,0x%02X(TRANSPORTS),0x%02X(ESP32_STATUS),0x%02X(ALLOWED_TRANSPORTS)",
-                              settings_manager.settings.remote_id_rx_enabled,
-                              settings_manager.settings.remote_id_transports, esp32_ll.remote_id_status,
-                              RemoteIDAllowedTransports());
+            char transports[RemoteIDGuard::kTransportsStrMaxLen], status[RemoteIDGuard::kStatusStrMaxLen],
+                allowed[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(
+                "=%d,%s(TRANSPORTS),%s(ESP32_STATUS),%s(ALLOWED_TRANSPORTS)",
+                settings_manager.settings.remote_id_rx_enabled,
+                RemoteIDGuard::TransportsStr(settings_manager.settings.remote_id_transports, transports,
+                                             sizeof(transports)),
+                RemoteIDGuard::StatusStr(esp32_ll.remote_id_status & 0x00FF, status, sizeof(status)),
+                RemoteIDGuard::TransportsStr(RemoteIDAllowedTransports(), allowed, sizeof(allowed)));
             PrintRemoteIDBlockedReason(settings_manager.settings.remote_id_rx_enabled, 0x00FF);
             CPP_AT_SILENT_SUCCESS();
             break;
+        }
         case '=':
             if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID=<enabled>[,<transport_mask>]");
+                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID=<enabled>[,<transports>]");
             }
             bool rx_enabled;
             CPP_AT_TRY_ARG2NUM(0, rx_enabled);
             uint8_t transports = settings_manager.settings.remote_id_transports;
-            if (CPP_AT_HAS_ARG(1)) {
-                CPP_AT_TRY_ARG2NUM(1, transports);
+            if (CPP_AT_HAS_ARG(1) && !RemoteIDGuard::ParseTransports(args[1], transports)) {
+                CPP_AT_ERROR("Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE.",
+                             static_cast<int>(args[1].length()), args[1].data());
             }
             const char* transports_error = RemoteIDTransportsError("REMOTE_ID", transports);
             if (rx_enabled && transports_error != nullptr) {
@@ -793,9 +801,10 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDCallback) {
             }
             settings_manager.settings.remote_id_rx_enabled = rx_enabled;
             settings_manager.settings.remote_id_transports = transports;
-            CPP_AT_CMD_PRINTF(": remote_id_rx_enabled: %d, transports: 0x%02X\r\n",
+            char names[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(": remote_id_rx_enabled: %d, transports: %s\r\n",
                               settings_manager.settings.remote_id_rx_enabled,
-                              settings_manager.settings.remote_id_transports);
+                              RemoteIDGuard::TransportsStr(transports, names, sizeof(names)));
             CPP_AT_SUCCESS();
             break;
     }
@@ -822,10 +831,11 @@ void ATRemoteIDTxHelpCallback() {
     CPP_AT_PRINTF(
         "\t[EXPERIMENTAL] Remote ID is not yet a stable part of the system; its settings and behavior may change in "
         "future firmware.\r\n"
-        "\tAT+REMOTE_ID_TX=<enabled>[,<transport_mask>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
+        "\tAT+REMOTE_ID_TX=<enabled>[,<transports>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
         "\tTransmit Broadcast Remote ID (drone ID) from this device, for use as a Remote ID test transmitter or as a "
         "combined ADS-B receiver / Remote ID transmitter on a drone. No WiFi AP/STA is required.\r\n"
-        "\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7 = all methods).\r\n"
+        "\ttransports = BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE (default ALL), e.g. BT4+BT5_LR. The\r\n"
+        "\tolder numeric mask (1=BT4, 2=BT5_LR, 4=WIFI_BEACON, added up) is still accepted.\r\n"
         "\tuas_id = UAS serial / registration, up to %d chars ('-' to clear and use this device's serial).\r\n"
         "\tid_type = [1 SERIAL, 2 CAA_REGISTRATION, 3 UTM_UUID, 4 SESSION_ID].\r\n"
         "\tua_type = [1 AEROPLANE, 2 HELICOPTER_MULTIROTOR, ... 15 OTHER].\r\n"
@@ -834,18 +844,24 @@ void ATRemoteIDTxHelpCallback() {
         "\tdescribe this device. The aircraft-derived sources (LOWEST, ICAO) carry a received aircraft's position;\r\n"
         "\tbroadcasting those would place a fabricated drone on a real aircraft, so an unknown position is sent\r\n"
         "\tinstead.\r\n"
-        "\tAT+REMOTE_ID_TX?\r\n\tQuery transmit settings and the ESP32's live status bitfield.",
+        "\tAT+REMOTE_ID_TX?\r\n\tQuery transmit settings, the ESP32's live status and the allowed transports.\r\n"
+        "\tTransmit status words: TX_BT4, TX_BT5_LR, TX_WIFI_BEACON, TX_NO_POSITION, TX_BLOCKED,\r\n"
+        "\tTX_POSITION_SOURCE_NOT_ALLOWED, plus the receive words of AT+REMOTE_ID?.",
         SettingsManager::Settings::kRemoteIDIDMaxLen, SettingsManager::Settings::kRemoteIDIDMaxLen);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
     switch (op) {
-        case '?':
-            // Report the requested settings plus the ESP32's resolved live status bitfield (the high byte carries the
-            // transmit state; see RemoteIDManager::Status).
-            CPP_AT_CMD_PRINTF("=%d,0x%02X(TRANSPORTS),%s(UAS_ID),%d(ID_TYPE),%d(UA_TYPE),%s(OPERATOR_ID),0x%04X(ESP32_STATUS),0x%02X(ALLOWED_TRANSPORTS)",
+        case '?': {
+            // Report the requested settings plus the ESP32's resolved live status (the high byte carries the transmit
+            // state; see RemoteIDGuard::Status).
+            char transports[RemoteIDGuard::kTransportsStrMaxLen], status[RemoteIDGuard::kStatusStrMaxLen],
+                allowed[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF("=%d,%s(TRANSPORTS),%s(UAS_ID),%d(ID_TYPE),%d(UA_TYPE),%s(OPERATOR_ID),%s(ESP32_STATUS),"
+                              "%s(ALLOWED_TRANSPORTS)",
                               settings_manager.settings.remote_id_tx_enabled,
-                              settings_manager.settings.remote_id_tx_transports,
+                              RemoteIDGuard::TransportsStr(settings_manager.settings.remote_id_tx_transports,
+                                                           transports, sizeof(transports)),
                               settings_manager.settings.remote_id_tx_uas_id[0] == '\0'
                                   ? "(device serial)"
                                   : settings_manager.settings.remote_id_tx_uas_id,
@@ -854,19 +870,22 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
                               settings_manager.settings.remote_id_tx_operator_id[0] == '\0'
                                   ? "(none)"
                                   : settings_manager.settings.remote_id_tx_operator_id,
-                              esp32_ll.remote_id_status, RemoteIDAllowedTransports());
+                              RemoteIDGuard::StatusStr(esp32_ll.remote_id_status, status, sizeof(status)),
+                              RemoteIDGuard::TransportsStr(RemoteIDAllowedTransports(), allowed, sizeof(allowed)));
             PrintRemoteIDBlockedReason(settings_manager.settings.remote_id_tx_enabled, 0xFFFF);
             CPP_AT_SILENT_SUCCESS();
             break;
+        }
         case '=': {
             if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID_TX=<enabled>[,<transport_mask>]");
+                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID_TX=<enabled>[,<transports>]");
             }
             bool tx_enabled;
             CPP_AT_TRY_ARG2NUM(0, tx_enabled);
             uint8_t tx_transports = settings_manager.settings.remote_id_tx_transports;
-            if (CPP_AT_HAS_ARG(1)) {
-                CPP_AT_TRY_ARG2NUM(1, tx_transports);
+            if (CPP_AT_HAS_ARG(1) && !RemoteIDGuard::ParseTransports(args[1], tx_transports)) {
+                CPP_AT_ERROR("Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE.",
+                             static_cast<int>(args[1].length()), args[1].data());
             }
             const char* transports_error = RemoteIDTransportsError("REMOTE_ID_TX", tx_transports);
             if (tx_enabled && transports_error != nullptr) {
@@ -911,9 +930,10 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
             }
             // Push the new transmit configuration to the ESP32, which owns the radios.
             settings_manager.SyncToCoprocessors();
-            CPP_AT_CMD_PRINTF(": remote_id_tx_enabled: %d, transports: 0x%02X\r\n",
+            char names[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(": remote_id_tx_enabled: %d, transports: %s\r\n",
                               settings_manager.settings.remote_id_tx_enabled,
-                              settings_manager.settings.remote_id_tx_transports);
+                              RemoteIDGuard::TransportsStr(tx_transports, names, sizeof(names)));
             WarnIfRemoteIDTxPositionSourceNotTransmittable();
             CPP_AT_SUCCESS();
             break;
@@ -2246,13 +2266,18 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string =
          "[EXPERIMENTAL] Remote ID is not yet a stable part of the system; its settings and behavior may change in "
          "future firmware.\r\n\t"
-         "AT+REMOTE_ID=<enabled>[,<transport_mask>]\r\n\tEnable/disable Broadcast Remote ID (drone) reception on the "
-         "ESP32.\r\n\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7).\r\n\tOn "
+         "AT+REMOTE_ID=<enabled>[,<transports [BT4 BT5_LR WIFI_BEACON] joined with +, ALL or NONE>]\r\n\t"
+         "Enable/disable Broadcast Remote ID (drone) reception on the ESP32, e.g. AT+REMOTE_ID=1,BT4+BT5_LR.\r\n\t"
+         "BT4 = Bluetooth 4 legacy, BT5_LR = Bluetooth 5 Long Range, WIFI_BEACON = WiFi beacon (default ALL). The older "
+         "numeric mask (1, 2, 4 added up) is still accepted.\r\n\tOn "
          "hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID can't run with WiFi AP or WiFi Station "
          "enabled, and with Ethernet enabled only its Bluetooth transports run; with PSRAM it runs alongside them (the "
          "WiFi beacon receiver then listens on the WiFi channel only). Remote ID pauses while ESP32 free memory is below what the web server needs.\r\n\t"
-         "AT+REMOTE_ID?\r\n\tQuery Remote ID settings, the ESP32's live status bitfield and whether this hardware "
-         "can run Remote ID with the enabled network interfaces.",
+         "AT+REMOTE_ID?\r\n\tQuery Remote ID settings, the ESP32's live receive status and the transports this "
+         "hardware can run with the enabled network interfaces, e.g.\r\n\t"
+         "REMOTE_ID=1,BT4+BT5_LR(TRANSPORTS),BT_SCANNING+BT5_LR_SCANNING(ESP32_STATUS),BT4+BT5_LR(ALLOWED_TRANSPORTS)"
+         "\r\n\tStatus words: BT_SCANNING, BT5_LR_SCANNING, WIFI_BEACON_SCANNING, BLOCKED_NETWORK (no PSRAM and WiFi "
+         "or Ethernet on), BLOCKED_RAM, NOT_IN_BUILD, PAUSED_LOW_HEAP, or NONE.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRemoteIDCallback, comms_manager)},
     {.command = "REMOTE_ID_TX",
      .min_args = 0,

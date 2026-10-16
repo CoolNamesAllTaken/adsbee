@@ -838,18 +838,43 @@ function makeRxEnableEntry() {
 // pinned to those printf strings.
 
 const SETTINGS_RID_TRANSPORTS = [
-    { bit: 1, label: 'Bluetooth 4 (legacy)' },
-    { bit: 2, label: 'Bluetooth 5 Long Range' },
-    { bit: 4, label: 'WiFi Beacon' },
+    { bit: 1, label: 'Bluetooth 4 (legacy)', name: 'BT4' },
+    { bit: 2, label: 'Bluetooth 5 Long Range', name: 'BT5_LR' },
+    { bit: 4, label: 'WiFi Beacon', name: 'WIFI_BEACON' },
 ];
+
+// AT status words, as in RemoteIDGuard::kStatusNames.
+const SETTINGS_RID_STATUS_NAMES = {
+    BT_SCANNING: 0x1, BT5_LR_SCANNING: 0x2, WIFI_BEACON_SCANNING: 0x4, BLOCKED_NETWORK: 0x8, BLOCKED_RAM: 0x10,
+    NOT_IN_BUILD: 0x20, PAUSED_LOW_HEAP: 0x40, TX_BT4: 0x100, TX_BT5_LR: 0x200, TX_WIFI_BEACON: 0x400,
+    TX_NO_POSITION: 0x800, TX_BLOCKED: 0x1000, TX_POSITION_SOURCE_NOT_ALLOWED: 0x2000,
+};
 
 // Remote ID helpers for the schema below. Status bits: RemoteIDGuard::Status in
 // firmware/common/coprocessor/remote_id_guard.hh.
 const SETTINGS_RID = {
+    // Bits from names joined with '+' (BT4+BT5_LR, NONE), older firmware's 0xXX, or a JSON
+    // number. NaN if unreadable.
+    parseBits(raw, names) {
+        if (typeof raw === 'number') return raw;
+        const s = String(raw ?? '').trim();
+        if (/^(0x)?[0-9a-f]+$/i.test(s)) return parseInt(s, 16);
+        if (s === 'NONE') return 0;
+        if (s === 'ALL') return 7;
+        let bits = 0;
+        for (const name of s.split('+')) {
+            if (!(name in names)) return NaN;
+            bits |= names[name];
+        }
+        return bits;
+    },
+    transportBits(raw) {
+        return SETTINGS_RID.parseBits(raw, Object.fromEntries(SETTINGS_RID_TRANSPORTS.map(t => [t.name, t.bit])));
+    },
     // Transports the device can run with its network interfaces; firmware without the
     // ALLOWED_TRANSPORTS field allows all.
     allowed(v) {
-        const a = typeof v.allowed === 'number' ? v.allowed : parseInt(v.allowed, 16);
+        const a = SETTINGS_RID.transportBits(v.allowed);
         return Number.isNaN(a) ? 7 : a;
     },
     notice(v) {
@@ -860,8 +885,10 @@ const SETTINGS_RID = {
             : 'This ESP32 has no PSRAM: while Ethernet is enabled only the Bluetooth transports can run, so the web server keeps enough memory.';
     },
     statusText(raw, tx) {
-        let st = parseInt(raw, 16);
+        let st = SETTINGS_RID.parseBits(raw, SETTINGS_RID_STATUS_NAMES);
         if (Number.isNaN(st)) return raw;
+        // Words show as the hex value, like older firmware.
+        if (!/^0x/i.test(raw)) raw = '0x' + st.toString(16).toUpperCase().padStart(tx ? 4 : 2, '0');
         // The low byte is receive state; its blocked bits apply to transmit only with kStatusTxBlocked.
         if (tx) st &= (st & 0x1000) ? 0xFF78 : 0xFF00;
         const parts = [];
@@ -1038,11 +1065,12 @@ const SETTINGS_SCHEMA_1090 = [
             { id: 'status', label: 'ESP32 Status', type: 'display' },
             SETTINGS_RID.allowedField(),
         ],
-        // REMOTE_ID=<en>,0xXX(TRANSPORTS),0xXX(ESP32_STATUS),0xXX(ALLOWED_TRANSPORTS)
+        // REMOTE_ID=<en>,BT4+BT5_LR(TRANSPORTS),BT_SCANNING(ESP32_STATUS),BT4+BT5_LR(ALLOWED_TRANSPORTS);
+        // older firmware prints 0xXX for each.
         parse(lines) {
             if (!lines[0]) return null;
             const args = atSplitArgs(lines[0]).map(atStripAnnotation);
-            return this.parseJson([args[0], parseInt(args[1], 16), args[2], args[3]]);
+            return this.parseJson([args[0], SETTINGS_RID.transportBits(args[1]), args[2], args[3]]);
         },
         parseJson(raw) {
             return {
@@ -1052,6 +1080,7 @@ const SETTINGS_SCHEMA_1090 = [
                 allowed: raw[3],
             };
         },
+        // The numeric mask, which older firmware also takes (the console page talks to any version).
         build(v) { return [`AT+REMOTE_ID=${v.en ? 1 : 0},${v.transports}`]; },
     },
     {
@@ -1099,14 +1128,14 @@ const SETTINGS_SCHEMA_1090 = [
             SETTINGS_RID.allowedField(),
         ],
         parse(lines) {
-            // REMOTE_ID_TX=<en>,0xXX(TRANSPORTS),<uas>(UAS_ID),<n>(ID_TYPE),<n>(UA_TYPE),<op>(OPERATOR_ID),0xXXXX(ESP32_STATUS),0xXX(ALLOWED_TRANSPORTS)
+            // REMOTE_ID_TX=<en>,<transports>(TRANSPORTS),<uas>(UAS_ID),<n>(ID_TYPE),<n>(UA_TYPE),<op>(OPERATOR_ID),<status>(ESP32_STATUS),<transports>(ALLOWED_TRANSPORTS)
             if (!lines[0]) return null;
             const args = atSplitArgs(lines[0]).map(atStripAnnotation);
             if (args.length < 7) return null;
             const clearSentinel = (s, sentinel) => (s === sentinel ? '' : s);
             return {
                 en: args[0] === '1',
-                transports: parseInt(args[1], 16),
+                transports: SETTINGS_RID.transportBits(args[1]),
                 uas_id: clearSentinel(args[2], '(device serial)'),
                 id_type: args[3],
                 ua_type: args[4],
@@ -1128,7 +1157,7 @@ const SETTINGS_SCHEMA_1090 = [
                 allowed: raw[7],
             };
         },
-        // '-' clears a blank ID so the device falls back to its default.
+        // '-' clears a blank ID so the device falls back to its default. Numeric transports, as above.
         build(v) {
             return [`AT+REMOTE_ID_TX=${v.en ? 1 : 0},${v.transports},${v.uas_id || '-'},${v.id_type},${v.ua_type},${v.operator_id || '-'}`];
         },
@@ -1315,5 +1344,5 @@ const settingsTab = {
 
 // Host-side tests (test/settings.test.js) load this file under Node.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { SettingsEngine, Settings1090Transport, SETTINGS_SCHEMA_1090, SETTINGS_RID };
+    module.exports = { SettingsEngine, Settings1090Transport, SETTINGS_SCHEMA_1090, SETTINGS_RID, SETTINGS_RID_TRANSPORTS, SETTINGS_RID_STATUS_NAMES };
 }
