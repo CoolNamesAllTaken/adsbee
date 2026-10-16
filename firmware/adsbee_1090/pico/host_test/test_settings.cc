@@ -55,11 +55,12 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(offsetof(settings_v18::Settings, auto_update_enabled),
-              offsetof(SettingsManager::Settings, auto_update_enabled));
-    EXPECT_EQ(sizeof(settings_v19::Settings), 2652u);
-    EXPECT_EQ(offsetof(settings_v19::Settings, feed_mqtt), offsetof(SettingsManager::Settings, feed_mqtt));
-    EXPECT_EQ(sizeof(SettingsManager::Settings), 2716u);
+    EXPECT_EQ(sizeof(settings_v19::Settings), 1344u);
+    EXPECT_EQ(offsetof(settings_v19::Settings, filter_distance_deci_nm),
+              offsetof(SettingsManager::Settings, filter_distance_deci_nm));
+    EXPECT_EQ(sizeof(settings_v20::Settings), 2656u);
+    EXPECT_EQ(offsetof(settings_v20::Settings, feed_mqtt), offsetof(SettingsManager::Settings, feed_mqtt));
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 2720u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -507,12 +508,9 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
 }
 
-TEST(SettingsMigration, V18ToV20KeepsEverythingAndDefaultsASTERIXAndNTP) {
+TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesDistanceFilterOff) {
     settings_v15::Settings v15;
     PopulateV15(v15);
-    // 0xFF past the v18 struct, as Load() reads erased EEPROM there.
-    uint8_t blob[sizeof(SettingsManager::Settings)];
-    memset(blob, 0xFF, sizeof(blob));
     settings_v18::Settings v18;
     memset(&v18, 0, sizeof(v18));
     memcpy(&v18, &v15, sizeof(v15));
@@ -520,45 +518,75 @@ TEST(SettingsMigration, V18ToV20KeepsEverythingAndDefaultsASTERIXAndNTP) {
     v18.ip_mode = SettingsManager::kIPModeIPv6;
     strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
     v18.auto_update_enabled = true;
-    memcpy(blob, &v18, sizeof(v18));
 
     SettingsManager::Settings out;
-    out.asterix_sac = 0x55;
-    out.asterix_sic = 0x66;
-    strcpy(out.ntp_server, "stale.example.com");
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    out.filter_distance_enabled = true;
+    out.filter_distance_deci_nm = 12345;
+    ASSERT_TRUE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
-    EXPECT_EQ(out.asterix_sac, 0);
-    EXPECT_EQ(out.asterix_sic, 0);
-    EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
+    EXPECT_FALSE(out.filter_distance_enabled);
+    EXPECT_EQ(out.filter_distance_deci_nm, SettingsManager::Settings::kDefaultFilterDistanceDeciNm);
+    EXPECT_EQ(out.FilterDistanceMeters(), 0u);
     EXPECT_TRUE(out.auto_update_enabled);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
     EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
     EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
-    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
+
+    // A blob cut short of the v18 layout is rejected.
+    EXPECT_FALSE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18) - 1, 18, out));
 }
 
-TEST(SettingsMigration, V18ToV20KeepsFeedsOnTCPAndAutoUpdate) {
+TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
+    SettingsManager manager;
+    EXPECT_FALSE(manager.settings.filter_distance_enabled);
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);  // 100.0 nm.
+    EXPECT_EQ(manager.settings.FilterDistanceMeters(), 0u);      // Off.
+    manager.settings.filter_distance_enabled = true;
+    manager.settings.filter_distance_deci_nm = 355;  // 35.5 nm.
+    EXPECT_EQ(manager.settings.FilterDistanceMeters(), 65746u);
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    EXPECT_NE(dump.find("AT+FILTER_DISTANCE_NM=1,35.5\r\n"), std::string::npos);
+    EXPECT_FALSE(manager.Sanitize());
+
+    // Out-of-range distances and garbage booleans from flash are repaired.
+    manager.settings.filter_distance_deci_nm = 0;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);
+    manager.settings.filter_distance_deci_nm = 100001;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);
+    uint8_t raw = 0x5A;
+    memcpy(&manager.settings.filter_distance_enabled, &raw, 1);
+    EXPECT_TRUE(manager.Sanitize());
+}
+
+TEST(SettingsMigration, V19ToCurrentKeepsDistanceFilterAndFeedsOnTCP) {
     settings_v15::Settings v15;
     PopulateV15(v15);
-    settings_v18::Settings v18;
-    memset(&v18, 0, sizeof(v18));
-    memcpy(&v18, &v15, sizeof(v15));
-    v18.settings_version = 18;
-    v18.ip_mode = SettingsManager::kIPModeIPv4;
-    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Hangar");
-    v18.auto_update_enabled = true;
-    uint8_t blob[sizeof(settings_v18::Settings)];
-    memcpy(blob, &v18, sizeof(v18));
+    settings_v19::Settings v19;
+    memset(&v19, 0, sizeof(v19));
+    memcpy(&v19, &v15, sizeof(v15));
+    v19.settings_version = 19;
+    v19.ip_mode = SettingsManager::kIPModeIPv4;
+    strcpy(v19.wifi_sta_extra_networks[0].ssid, "Hangar");
+    v19.auto_update_enabled = true;
+    v19.filter_distance_enabled = true;
+    v19.filter_distance_deci_nm = 355;
+    uint8_t blob[sizeof(settings_v19::Settings)];
+    memcpy(blob, &v19, sizeof(v19));
 
     SettingsManager::Settings out;
     out.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
     strcpy(out.feed_mqtt[0].username, "stale");
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 19, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_TRUE(out.filter_distance_enabled);
+    EXPECT_EQ(out.filter_distance_deci_nm, 355u);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv4);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Hangar");
     EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
@@ -634,32 +662,69 @@ TEST(Settings, FeedTransportDumpReplaysOnOlderFirmware) {
     EXPECT_FALSE(manager.Sanitize());
 }
 
-TEST(SettingsMigration, V19ToV20KeepsFeedTransportsAndDefaultsASTERIXAndNTP) {
+TEST(SettingsMigration, V18ToCurrentKeepsEverythingAndDefaultsASTERIXAndNTP) {
     settings_v15::Settings v15;
     PopulateV15(v15);
-    static settings_v19::Settings v19;
-    memset(&v19, 0, sizeof(v19));
-    memcpy(&v19, &v15, sizeof(v15));
-    v19.settings_version = 19;
-    v19.auto_update_enabled = true;
-    v19.feed_transports[1] = SettingsManager::kFeedTransportUDP;
-    v19.feed_transports[2] = SettingsManager::kFeedTransportMQTT;
-    strcpy(v19.feed_mqtt[2].topic_prefix, "home/adsb");
-    strcpy(v19.feed_mqtt[2].username, "bee");
-    strcpy(v19.feed_mqtt[2].password, "pollen");
-    v19.feed_mqtt[2].tls = true;
-    v19.feed_mqtt[2].qos = 1;
-    // 0xFF past the v19 struct, as Load() reads erased EEPROM there.
+    // 0xFF past the v18 struct, as Load() reads erased EEPROM there.
+    uint8_t blob[sizeof(SettingsManager::Settings)];
+    memset(blob, 0xFF, sizeof(blob));
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv6;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
+    v18.auto_update_enabled = true;
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.asterix_sac = 0x55;
+    out.asterix_sic = 0x66;
+    strcpy(out.ntp_server, "stale.example.com");
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_EQ(out.asterix_sac, 0);
+    EXPECT_EQ(out.asterix_sic, 0);
+    EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
+}
+
+TEST(SettingsMigration, V20ToV21KeepsFeedTransportsAndDefaultsASTERIXAndNTP) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    static settings_v20::Settings v20;
+    memset(&v20, 0, sizeof(v20));
+    memcpy(&v20, &v15, sizeof(v15));
+    v20.settings_version = 20;
+    v20.filter_distance_enabled = true;
+    v20.filter_distance_deci_nm = 355;
+    v20.auto_update_enabled = true;
+    v20.feed_transports[1] = SettingsManager::kFeedTransportUDP;
+    v20.feed_transports[2] = SettingsManager::kFeedTransportMQTT;
+    strcpy(v20.feed_mqtt[2].topic_prefix, "home/adsb");
+    strcpy(v20.feed_mqtt[2].username, "bee");
+    strcpy(v20.feed_mqtt[2].password, "pollen");
+    v20.feed_mqtt[2].tls = true;
+    v20.feed_mqtt[2].qos = 1;
+    // 0xFF past the v20 struct, as Load() reads erased EEPROM there.
     static uint8_t blob[sizeof(SettingsManager::Settings)];
     memset(blob, 0xFF, sizeof(blob));
-    memcpy(blob, &v19, sizeof(v19));
+    memcpy(blob, &v20, sizeof(v20));
 
     SettingsManager::Settings out;
     out.asterix_sac = 0x55;
     strcpy(out.ntp_server, "stale.example.com");
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 19, out));
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 20, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_TRUE(out.filter_distance_enabled);
+    EXPECT_EQ(out.filter_distance_deci_nm, 355u);
     EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
     EXPECT_EQ(out.feed_transports[0], SettingsManager::kFeedTransportTCP);
     EXPECT_EQ(out.feed_transports[1], SettingsManager::kFeedTransportUDP);
@@ -672,7 +737,7 @@ TEST(SettingsMigration, V19ToV20KeepsFeedTransportsAndDefaultsASTERIXAndNTP) {
     EXPECT_EQ(out.asterix_sac, 0);
     EXPECT_EQ(out.asterix_sic, 0);
     EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
-    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v19::Settings) - 1, 19, out));
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v20::Settings) - 1, 20, out));
 }
 
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
@@ -690,14 +755,17 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t wifi = dump.find("AT+WIFI_STA=");
     size_t ip_mode = dump.find("AT+IP_MODE=");
     size_t auto_update = dump.find("AT+AUTO_UPDATE=1");
+    size_t filter_distance = dump.find("AT+FILTER_DISTANCE_NM=");
     ASSERT_NE(wifi, std::string::npos);
     ASSERT_NE(ip_mode, std::string::npos);
     ASSERT_NE(auto_update, std::string::npos);
+    ASSERT_NE(filter_distance, std::string::npos);
     EXPECT_LT(wifi, ip_mode);
     EXPECT_LT(ip_mode, auto_update);
+    EXPECT_LT(auto_update, filter_distance);
     size_t asterix = dump.find("AT+ASTERIX_SAC_SIC=0,0");
     ASSERT_NE(asterix, std::string::npos);
-    EXPECT_LT(auto_update, asterix);
+    EXPECT_LT(filter_distance, asterix);
     size_t ntp = dump.find("AT+NTP_SERVER=pool.ntp.org");
     ASSERT_NE(ntp, std::string::npos);
     EXPECT_LT(asterix, ntp);

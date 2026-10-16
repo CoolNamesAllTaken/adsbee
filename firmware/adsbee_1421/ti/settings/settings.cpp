@@ -127,6 +127,12 @@ bool SettingsManager::Load() {
     // was interrupted after the leading words leaves a blob that passes a version-only check on every
     // boot forever, and whose remaining fields are erased flash (0xFF).
     if (!settings.IsValid()) {
+        uint32_t stored_version = settings.settings_version;
+        if (MigrateFromOlderVersion((const uint8_t*)kFlashSettingsStartAddr, settings)) {
+            CONSOLE_INFO("SettingsManager::Load", "Migrated settings from version %lu to %lu.",
+                         (unsigned long)stored_version, (unsigned long)kSettingsVersion);
+            return WriteSettingsToFlash(settings);
+        }
         CONSOLE_ERROR("SettingsManager::Load",
                       "Settings integrity check failed (magic 0x%08lx/0x%08lx, version %lu/%lu, crc "
                       "0x%08lx/0x%08lx). Resetting to defaults.",
@@ -244,6 +250,9 @@ void SettingsManager::Print() {
     // MAVLINK settings
     CONSOLE_PRINTF("\tMAVLink System ID: %u\r\n", settings.mavlink_system_id);
     CONSOLE_PRINTF("\tMAVLink Component ID: %u\r\n", settings.mavlink_component_id);
+    CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
+                   (unsigned long)(settings.filter_distance_deci_nm / 10),
+                   (unsigned long)(settings.filter_distance_deci_nm % 10));
 
     // ASTERIX settings
     CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
@@ -270,6 +279,11 @@ void SettingsManager::PrintAT() {
     // wipe the device boots at the default rate.
 
     // AT+DEVICE_INFO: Don't store this.
+
+    // AT+FILTER_DISTANCE_NM
+    CONSOLE_PRINTF("AT+FILTER_DISTANCE_NM=%d,%lu.%lu\r\n", settings.filter_distance_enabled,
+                   (unsigned long)(settings.filter_distance_deci_nm / 10),
+                   (unsigned long)(settings.filter_distance_deci_nm % 10));
 
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);

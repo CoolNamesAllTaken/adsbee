@@ -3,6 +3,7 @@
 // Get access to raw application binary for flashing.
 #include "adsbee.hh"  // Get access to subg radio for calling higher level interaction functions.
 #include "bin/binaries.c"
+#include "cpu_utils.hh"
 #include "crc.hh"  // For IEEE 802.3 CRC32 calculation.
 #include "hal.hh"
 
@@ -710,6 +711,7 @@ void CC1312::SPIEndTransaction() {
 int CC1312::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes, bool end_transaction) {
     int bytes_written = 0;
 
+    CPUMonitor::WorkScope work;
     SPIBeginTransaction();
 
     if (tx_buf == nullptr) {

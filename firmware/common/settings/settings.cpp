@@ -88,6 +88,7 @@ bool SettingsManager::Sanitize() {
     changed |= SanitizeBool(settings.remote_id_rx_enabled, "remote_id_rx_enabled");
     changed |= SanitizeBool(settings.remote_id_tx_enabled, "remote_id_tx_enabled");
     changed |= SanitizeBool(settings.auto_update_enabled, "auto_update_enabled");
+    changed |= SanitizeBool(settings.filter_distance_enabled, "filter_distance_enabled");
     changed |= SanitizeString(settings.remote_id_tx_uas_id, sizeof(settings.remote_id_tx_uas_id), "remote_id_tx_uas_id");
     changed |= SanitizeString(settings.remote_id_tx_operator_id, sizeof(settings.remote_id_tx_operator_id),
                               "remote_id_tx_operator_id");
@@ -132,6 +133,15 @@ bool SettingsManager::Sanitize() {
         CONSOLE_ERROR("SettingsManager::Sanitize", "GNSS UART baud rate is 0, resetting to %lu.",
                       (unsigned long)Settings::kDefaultGNSSUARTBaudrate);
         settings.baud_rates[SerialInterface::kGNSSUART] = Settings::kDefaultGNSSUARTBaudrate;
+        changed = true;
+    }
+
+    if (settings.filter_distance_deci_nm < Settings::kMinFilterDistanceDeciNm ||
+        settings.filter_distance_deci_nm > Settings::kMaxFilterDistanceDeciNm) {
+        CONSOLE_ERROR("SettingsManager::Sanitize", "filter_distance_deci_nm %lu out of range, resetting to %lu.",
+                      (unsigned long)settings.filter_distance_deci_nm,
+                      (unsigned long)Settings::kDefaultFilterDistanceDeciNm);
+        settings.filter_distance_deci_nm = Settings::kDefaultFilterDistanceDeciNm;
         changed = true;
     }
 
@@ -246,6 +256,9 @@ void SettingsManager::Print() {
                               "\tAutomatic Updates: %s\r\n", settings.auto_update_enabled ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("%s", print_buf);
     print_buf_len = 0;
+    CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
+                   static_cast<unsigned long>(settings.filter_distance_deci_nm / 10),
+                   static_cast<unsigned long>(settings.filter_distance_deci_nm % 10));
 
 #ifdef ON_PICO
     // Only print serial reporting protocols on master, where we aren't constrained by log message size.
@@ -425,6 +438,10 @@ void SettingsManager::PrintAT() {
     // AT+AUTO_UPDATE
     CONSOLE_PRINTF("AT+AUTO_UPDATE=%d\r\n", settings.auto_update_enabled);
 
+    // AT+FILTER_DISTANCE_NM
+    CONSOLE_PRINTF("AT+FILTER_DISTANCE_NM=%d,%lu.%lu\r\n", settings.filter_distance_enabled,
+                   static_cast<unsigned long>(settings.filter_distance_deci_nm / 10),
+                   static_cast<unsigned long>(settings.filter_distance_deci_nm % 10));
     // AT+FEED transport and AT+FEED_MQTT, for feeds that don't use the default TCP transport. "-" is an empty string.
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
         if (settings.feed_transports[i] == kFeedTransportTCP) {

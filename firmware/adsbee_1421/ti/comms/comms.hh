@@ -140,6 +140,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATLREnableCallback);
     CPP_AT_CALLBACK(ATASTERIXSACSICCallback);
     CPP_AT_CALLBACK(ATMAVLINKIDCallback);
+    CPP_AT_CALLBACK(ATFilterDistanceNMCallback);
     CPP_AT_CALLBACK(ATR1090PreambleCallback);
     CPP_AT_CALLBACK(ATR1090RxBoostCallback);
     CPP_AT_CALLBACK(ATProtocolOutCallback);

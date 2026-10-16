@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
 #include "string.h"  // for memset
@@ -15,7 +16,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 20;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 21;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -151,6 +152,10 @@ class SettingsManager {
     struct alignas(4) Settings {
         static constexpr int kDefaultTLOffsetMV = 600;  // [mV]
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
+        // AT+FILTER_DISTANCE_NM, in tenths of a nautical mile.
+        static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
+        static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
+        static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
         // For settings struct backwards compatibility. ESP IDF can't handle the full length SSID and password, so length was reduced.
@@ -340,6 +345,21 @@ class SettingsManager {
         // Opt-in: the ESP32 checks adsbee.aero for firmware and installs what it recommends. Off by default.
         bool auto_update_enabled = false;
 
+        // Distance filter (AT+FILTER_DISTANCE_NM). When enabled, aircraft known to be farther than
+        // filter_distance_deci_nm tenths of a nautical mile from the receiver are left out of aircraft reports (aircraft
+        // JSON, the web UI's list and map, GDL90, MAVLink, CSBee). Raw packets (Raw, Beast, MLAT and every feed of them)
+        // are never filtered. Aircraft at an unknown distance are always kept. filter_distance_enabled sits in what was
+        // auto_update_enabled's tail padding.
+        bool filter_distance_enabled = false;
+        uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
+
+        /**
+         * The distance filter as Aircraft::IsBeyondDistance() takes it.
+         * @retval Filter distance in meters, or 0 when the filter is off.
+         */
+        inline uint32_t FilterDistanceMeters() const {
+            return filter_distance_enabled ? DeciNmToMeters(filter_distance_deci_nm) : 0;
+        }
         // Feed settings added after the first feed fields: transport, and broker options of MQTT feeds.
         FeedTransport feed_transports[kMaxNumFeeds];
         FeedMQTT feed_mqtt[kMaxNumFeeds];
@@ -789,9 +809,9 @@ extern SettingsManager settings_manager;
 //      settings_migration.cpp (see the recipe at the top of settings_versions.hh).
 //   3. Update the version and the numbers below to the new layout.
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
-static_assert(kSettingsVersion == 20,
+static_assert(kSettingsVersion == 21,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 2716,
+static_assert(sizeof(SettingsManager::Settings) == 2720,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -813,11 +833,13 @@ static_assert(offsetof(SettingsManager::Settings, rx_position) == 1112, "Setting
 static_assert(offsetof(SettingsManager::Settings, ip_mode) == 1141, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, wifi_sta_extra_networks) == 1142, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, auto_update_enabled) == 1338, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_distance_enabled) == 1339, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_distance_deci_nm) == 1340, "Settings layout changed. See above.");
 static_assert(sizeof(SettingsManager::Settings::FeedMQTT) == 130, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, feed_transports) == 1339, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, feed_mqtt) == 1349, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, asterix_sac) == 2649, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, asterix_sic) == 2650, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, ntp_server) == 2651, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, feed_transports) == 1344, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, feed_mqtt) == 1354, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, asterix_sac) == 2654, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, asterix_sic) == 2655, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, ntp_server) == 2656, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */
