@@ -353,23 +353,39 @@ test('malformed input never throws', (t) => {
 });
 
 // Minimal Leaflet and DOM stand-ins that record what the layer draws.
+let fakeMap = null;
 function fakeBrowser() {
     const made = [];
-    const element = (tag) => ({
+    const popups = [];
+    // Handlers by event type, for addEventListener and Leaflet's on().
+    const listen = (target) => Object.assign(target, {
+        handlers: {},
+        addEventListener(type, f) { (this.handlers[type] = this.handlers[type] || []).push(f); },
+        removeEventListener(type, f) { this.handlers[type] = (this.handlers[type] || []).filter((g) => g !== f); },
+        on(types, f) {
+            if (typeof types === 'string') this.addEventListener(types, f); else for (const type in types) this.addEventListener(type, types[type]);
+            return this;
+        },
+        off(type, f) { this.removeEventListener(type, f); return this; },
+        fire(type, e) { for (const f of this.handlers[type] || []) f(Object.assign({ type, target: this }, e)); return this; },
+    });
+    const element = (tag) => listen({
         tag, children: [], style: {}, textContent: '',
-        classList: { names: new Set(), toggle(name, on) { if (on) this.names.add(name); else this.names.delete(name); } },
+        classList: {
+            names: new Set(), toggle(name, on) { if (on) this.names.add(name); else this.names.delete(name); },
+            add(name) { this.names.add(name); }, contains(name) { return this.names.has(name); },
+        },
         setAttribute(name, value) { this[name] = value; },
         appendChild(child) { this.children.push(child); return child; },
         remove() {},
         getContext: () => ({ clearRect() {}, fillRect(x, y, w, h) { made.push({ type: 'rect', color: this.fillStyle, x, y, w, h }); } }),
     });
     const shape = (type) => (where, options) => {
-        const object = {
+        const object = listen({
             type, where, options,
             bindTooltip(c) { this.tooltip = c; return this; },
-            bindPopup(c) { this.popup = c; return this; },
             bringToBack() {},
-        };
+        });
         made.push(object);
         return object;
     };
@@ -388,22 +404,52 @@ function fakeBrowser() {
         control: () => ({ addTo(map) { this.box = this.onAdd(map); return this; }, remove() {} }),
         Layer: { extend: (methods) => function () { Object.assign(this, methods); } },
         DomUtil: { create: (tag) => element(tag), setPosition() {} },
-        DomEvent: { disableClickPropagation() {} },
+        DomEvent: { disableClickPropagation() {}, stopPropagation(e) { e.originalEvent._stopped = true; } },
+        // A popup is open from openOn until remove.
+        popup: (options) => {
+            const popup = listen({
+                options, open: false, container: element('div'),
+                setLatLng(latlng) { this.latlng = latlng; return this; },
+                setContent(content) { this.content = content; return this; },
+                openOn(map) {
+                    if (map.popup && map.popup !== this) map.popup.remove();
+                    map.popup = this; this.map = map; this.open = true;
+                    return this;
+                },
+                getElement() { return this.container; },
+                update() { this.updated = (this.updated || 0) + 1; },
+                remove() {
+                    if (!this.open) return this;
+                    this.open = false;
+                    if (this.map.popup === this) this.map.popup = null;
+                    return this.fire('remove');
+                },
+            });
+            popups.push(popup);
+            return popup;
+        },
     };
     // 100 pixels per degree, north up, top left corner at 40 N 125 W.
-    const map = {
-        getPane: () => ({ style: {} }), on() {}, off() {},
+    const map = listen({
+        getPane: () => ({ style: {} }),
         getSize: () => ({ x: 900, y: 700 }),
         getBounds: () => ({ getNorth: () => 40, getSouth: () => 33, getWest: () => -125, getEast: () => -116 }),
         containerPointToLayerPoint: (p) => p,
         latLngToContainerPoint: ([lat, lon]) => ({ x: (lon + 125) * 100, y: (40 - lat) * 100 }),
-    };
-    const document = { createElement: element, createTextNode: (t) => ({ textContent: t }), getElementById: () => null, head: element('head') };
-    return { L, map, document, made };
+    });
+    const document = listen({ createElement: element, createTextNode: (t) => ({ textContent: t }), getElementById: () => null, head: element('head') });
+    fakeMap = map;
+    return { L, map, document, made, popups };
 }
 
 const flatten = (node) => (node.textContent || '') + (node.children || []).map(flatten).join('');
-const tooltip = (object) => (object.tooltip ? flatten(object.tooltip()) : '');
+// The text a feature shows on hover: its details window, or a ground station's tooltip.
+const tooltip = (object) => {
+    if (object.tooltip) return flatten(object.tooltip());
+    if (!object.handlers || !object.handlers.mouseover) return '';
+    object.fire('mouseover', { latlng: [0, 0] });
+    return fakeMap && fakeMap.popup ? flatten(fakeMap.popup.content) : '';
+};
 
 test('map layer draws airports, areas, ground stations and radar', (t) => {
     const { L, map, document, made } = fakeBrowser();
@@ -418,9 +464,9 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
     const ksjc = made.find((o) => o.type === 'circleMarker' && /METAR KSJC/.test(tooltip(o)));
     assert.ok(distanceNm(ksjc.where, [37.363, -121.929]) < 1);
     assert.strictEqual(ksjc.options.fillColor, Fisb.CATEGORY_COLORS.VFR);
-    assert.match(flatten(ksjc.popup()), /TAF KSJC 110520Z/);
+    assert.match(tooltip(ksjc), /TAF KSJC 110520Z/);
     const ksfo = made.find((o) => o.type === 'circleMarker' && /METAR KSFO/.test(tooltip(o)));
-    assert.match(flatten(ksfo.popup()), /WINDS SFO \d{6}Z\n3000    6000    9000    12000 .*\n\d{4}    \d{4}[+-]\d\d \d{4}[+-]\d\d /);
+    assert.match(tooltip(ksfo), /WINDS SFO \d{6}Z\n3000    6000    9000    12000 .*\n\d{4}    \d{4}[+-]\d\d \d{4}[+-]\d\d /);
     const kmry = made.find((o) => o.type === 'circleMarker' && /METAR KMRY/.test(tooltip(o)));
     assert.strictEqual(kmry.options.fillColor, Fisb.CATEGORY_COLORS.MVFR);
 
@@ -429,21 +475,21 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
     assert.strictEqual(circles.length, 1);
     assert.strictEqual(circles[0].options.radius, 5 * 1852);
     assert.ok(distanceNm(circles[0].where, [37.8167, -122.4267]) < 0.05);
-    assert.match(flatten(circles[0].popup()), /FLEET WEEK AIR SHOW/);
+    assert.match(tooltip(circles[0]), /FLEET WEEK AIR SHOW/);
     assert.match(tooltip(circles[0]), /SFC–15000 ft/);
     // Received text reaches the page as text nodes, never as HTML strings.
     for (const o of made) {
         if (o.tooltip) assert.strictEqual(typeof o.tooltip, 'function');
-        if (o.popup) assert.strictEqual(typeof o.popup, 'function');
+        if (o.handlers && o.handlers.mouseover) { tooltip(o); assert.strictEqual(typeof map.popup.content, 'object'); }
     }
 
-    // An area is a pointer-transparent shape plus an unseen wide outline carrying the tooltip.
+    // An area is a pointer-transparent shape plus an unseen wide outline carrying the window.
     const sigmet = made.find((o) => o.type === 'polyline' && /^WST KMKC 110954 CONVECTIVE SIGMET 37W · 30000 ft/.test(tooltip(o)));
     assert.strictEqual(sigmet.where.length, 7);
     assert.deepStrictEqual(sigmet.where[6], sigmet.where[0]);
     assert.ok(sigmet.options.weight >= 12 && sigmet.options.opacity === 0 && sigmet.options.fill === false);
     const fill = made.find((o) => o.type === 'polygon' && o.where.length === 6 && o.where[0] === sigmet.where[0]);
-    assert.ok(fill.options.interactive === false && fill.options.weight === 2 && !fill.tooltip);
+    assert.ok(fill.options.interactive === false && fill.options.weight === 2 && !fill.handlers.mouseover);
     const wideCircle = made.find((o) => o.type === 'circle' && o.where === circles[0].where && o !== circles[0]);
     assert.ok(circles[0].options.opacity === 0 && wideCircle.options.interactive === false);
     assert.strictEqual(made.filter((o) => o.type === 'marker').length, 2);
@@ -465,6 +511,108 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
     const count = made.filter((o) => o.type !== 'rect').length;
     layer.refresh();
     assert.strictEqual(made.filter((o) => o.type !== 'rect').length, count);
+});
+
+test('one details window: hover shows, click pins', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const { L, map, document, made, popups } = fakeBrowser();
+    globalThis.document = document;
+    t.after(() => { delete globalThis.document; });
+    const layer = Fisb.createLayer(L, decoder, { stationsUrl: null }).addTo(map);
+    const station = (id) => made.find((o) => o.type === 'circleMarker' && new RegExp('METAR ' + id).test(tooltip(o)));
+    const [ksjc, ksfo] = [station('KSJC'), station('KSFO')];
+    const tfr = made.find((o) => o.type === 'circle' && /6\/6741/.test(tooltip(o)));
+    const open = () => popups.filter((p) => p.open);
+    const click = (o) => { const e = { originalEvent: {} }; o.fire('click', e); return e; };
+    const shows = (pattern) => { assert.strictEqual(open().length, 1); assert.match(flatten(open()[0].content), pattern); };
+    document.fire('keydown', { key: 'Escape' });
+    assert.strictEqual(open().length, 0);
+
+    // Hover: the full details, METAR and TAF, at the station.
+    ksjc.fire('mouseover');
+    shows(/METAR KSJC[^]*TAF KSJC/);
+    assert.deepStrictEqual(open()[0].latlng, ksjc.where);
+    assert.ok(!open()[0].options.autoPan);
+    // Over the window: it stays, without a time limit.
+    ksjc.fire('mouseout');
+    t.mock.timers.tick(200);
+    open()[0].container.fire('mouseenter');
+    t.mock.timers.tick(60000);
+    shows(/METAR KSJC/);
+    // Back over the station, then out again: closes after the grace time.
+    open()[0].container.fire('mouseleave');
+    ksjc.fire('mouseover');
+    t.mock.timers.tick(1000);
+    shows(/METAR KSJC/);
+    ksjc.fire('mouseout');
+    t.mock.timers.tick(250);
+    assert.strictEqual(open().length, 1);
+    t.mock.timers.tick(100);
+    assert.strictEqual(open().length, 0);
+
+    // Hovering another feature replaces the window.
+    ksjc.fire('mouseover');
+    ksfo.fire('mouseover');
+    shows(/METAR KSFO/);
+    ksfo.fire('mouseout');
+    t.mock.timers.tick(1000);
+    assert.strictEqual(open().length, 0);
+
+    // Click pins the same window: it stays after the pointer leaves, and hovering others leaves it alone.
+    ksjc.fire('mouseover');
+    const hovered = open()[0];
+    assert.ok(click(ksjc).originalEvent._stopped);
+    assert.strictEqual(open()[0], hovered);
+    assert.ok(hovered.container.classList.contains('fisb-pinned') && hovered.options.autoPan && hovered.updated === 1);
+    ksjc.fire('mouseout');
+    ksfo.fire('mouseover');
+    ksfo.fire('mouseout');
+    t.mock.timers.tick(60000);
+    shows(/METAR KSJC/);
+    // Clicking the pinned station again closes it.
+    click(ksjc);
+    assert.strictEqual(open().length, 0);
+
+    // A click inside a hovered window pins it.
+    ksfo.fire('mouseover');
+    ksfo.fire('mouseout');
+    open()[0].container.fire('mouseenter');
+    open()[0].container.fire('click');
+    open()[0].container.fire('mouseleave');
+    t.mock.timers.tick(60000);
+    shows(/METAR KSFO/);
+    // Pinning another feature (a tap, with no hover first) moves the window there.
+    click(ksjc);
+    shows(/METAR KSJC/);
+    assert.ok(open()[0].container.classList.contains('fisb-pinned'));
+    // Closed by a click on the map, by Escape, and by ×.
+    map.fire('click');
+    assert.strictEqual(open().length, 0);
+    click(tfr);
+    shows(/FLEET WEEK/);
+    document.fire('keydown', { key: 'Escape' });
+    assert.strictEqual(open().length, 0);
+    click(ksfo);
+    open()[0].remove();
+    assert.strictEqual(open().length, 0);
+    ksfo.fire('mouseover');
+    shows(/METAR KSFO/);
+    ksfo.fire('mouseout');
+    t.mock.timers.tick(1000);
+    assert.strictEqual(open().length, 0);
+
+    // An area's window opens where the pointer meets its outline.
+    tfr.fire('mouseover', { latlng: [37.9, -122.4] });
+    assert.deepStrictEqual(open()[0].latlng, [37.9, -122.4]);
+    // Hiding a part or removing the layer closes its window; the map no longer listens.
+    layer.setVisible('areas', false);
+    assert.strictEqual(open().length, 0);
+    click(ksjc);
+    layer.onRemove(map);
+    assert.strictEqual(open().length, 0);
+    assert.ok(!map.handlers.click.length && !document.handlers.keydown.length);
+    // Never more than one window at a time.
+    assert.ok(popups.every((p, i) => popups.slice(i + 1).every((q) => !(p.open && q.open))));
 });
 
 // ─── Synthetic uplinks ────────────────────────────────────────────────────────
@@ -623,7 +771,7 @@ test('map layer draws pilot reports, lightning, cloud tops, icing and turbulence
     assert.ok(distanceNm(marker.where, [36.59, -121.20]) < 2, String(marker.where));
     assert.match(marker.options.icon.className, /fisb-urgent/);
     assert.ok(marker.options.icon.html.includes('#e00'));
-    assert.match(flatten(marker.popup()), /Urgent pilot report · SNS\nLocation: SNS090020\nTime: 10:00Z\nAltitude: 8500 ft\nAircraft: C172\nTemperature: -02 °C\nTurbulence: SEV\nIcing: LGT RIME/);
+    assert.match(tooltip(marker), /Urgent pilot report · SNS\nLocation: SNS090020\nTime: 10:00Z\nAltitude: 8500 ft\nAircraft: C172\nTemperature: -02 °C\nTurbulence: SEV\nIcing: LGT RIME/);
     assert.match(tip('pireps'), /^Pilot reports 1/);
 
     // Lightning: one mark of at least 6 pixels with a dark rim, centered on the bin at 36.058 N 119.988 W.
