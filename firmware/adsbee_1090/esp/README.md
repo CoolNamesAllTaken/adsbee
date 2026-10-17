@@ -49,8 +49,8 @@ The ESP32 firmware in `combined.uf2` runs on both modules used on ADSBee 1090 ha
   31 KB in the controller and 13 KB in the host while running and frees it all when stopped. Measure before raising
   any of these.
 * **Web server RAM:** each viewer pins the data queued on its sockets until the browser acknowledges it. lwIP's send
-  buffer is 4 KB per socket with quarter-MSS oversize, Live Map frames are 1 KB, and a Live Map report starts between
-  two metrics messages so both bursts don't queue at once. Measure the heap with 3 viewers before raising any of
+  buffer is 4 KB per socket with quarter-MSS oversize, Live Map frames are 1 KB, a Live Map report starts between
+  two metrics messages so both bursts don't queue at once, and 3 HTTP sessions serve a page load in turn. Measure the heap with 3 viewers before raising any of
   these.
 * **Code:** gate RAM-hungry features on `HardwareCapabilities` (`main/hardware_capabilities.*`). Heap guards measure
   internal RAM only.

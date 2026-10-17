@@ -62,10 +62,11 @@ class ADSBeeServer {
     static constexpr uint32_t kUplinkDropWarningIntervalMs = 5000;
 
     // Web server sessions. Every WebSocket client holds one for as long as it is connected. The rest are for HTTP
-    // requests: enough for the connections a browser opens in parallel while it loads a page.
+    // requests. A browser opens up to 6 connections to load a page; 3 sessions serve them in turn (the others wait in
+    // the backlog), which loads the page as fast and keeps the send buffers they pin at once small.
     static constexpr uint16_t kNumWebSocketEndpoints = 4;  // /console, /metrics, /aircraft, /uplink.
     static constexpr uint16_t kMaxNumClientsPerWebSocket = 4;
-    static constexpr uint16_t kMaxNumHTTPSessions = 6;
+    static constexpr uint16_t kMaxNumHTTPSessions = 3;
     static constexpr uint16_t kMaxNumWebServerSessions =
         kNumWebSocketEndpoints * kMaxNumClientsPerWebSocket + kMaxNumHTTPSessions;
     static constexpr uint16_t kWebServerBacklog = 5;  // Connections waiting for a session.
