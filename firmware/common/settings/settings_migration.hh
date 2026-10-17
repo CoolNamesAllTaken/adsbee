@@ -10,9 +10,9 @@
  *
  * The RP2040 (settings master) stores Settings as a single raw byte blob. When it boots on new firmware and the stored
  * `settings_version` is older than kSettingsVersion, SettingsManager::Load() calls Migrate() to field-copy the old blob
- * forward into the current live struct, preserving user settings instead of wiping to defaults. Migration supports any
- * stored version >= 12. Older/unknown/short blobs are rejected (Load() then falls back to reset + CoreNetworkSettings
- * preservation).
+ * forward into the current live struct, preserving user settings instead of wiping to defaults. Migration supports each
+ * version a tagged release or RC shipped, from 12 on (12, 14, 15, 17, 18). Older/unshipped/unknown/short blobs are
+ * rejected (Load() then falls back to reset + CoreNetworkSettings preservation).
  *
  * The migration is a pure function of bytes (no flash/EEPROM/globals) so it is fully host-testable.
  */
@@ -33,21 +33,22 @@ class SettingsMigrator {
      * @param[in] from_version The stored settings_version (blob[0..3]).
      * @param[out] out Receives the migrated, current-version Settings on success. Left unspecified on failure.
      * @retval True if the blob was migrated to the current version; false if `from_version` is unmigratable
-     *         (older than kOldestMigratableVersion, unknown, equal to the current version, or `blob` too short).
+     *         (older than kOldestMigratableVersion, never shipped, unknown, equal to the current version, or `blob`
+     *         too short).
      */
     static bool Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t from_version, SettingsManager::Settings& out);
 
    private:
-    // Per-version upgrade steps, chained: each takes the frozen layout of version N and produces version N+1. Steps that
-    // land on an intermediate frozen version write that frozen struct; only the final step (the one that reaches the
-    // current version) writes the live SettingsManager::Settings. To add v20: freeze v19 in settings_versions.hh, change
-    // MigrateV18ToV19 to emit settings_v19::Settings, add MigrateV19ToV20 emitting the live struct, and extend
-    // Migrate()'s dispatch with a `case 19:`.
-    static void MigrateV12ToV13(const settings_v12::Settings& in, settings_v13::Settings& out);
-    static void MigrateV13ToV14(const settings_v13::Settings& in, settings_v14::Settings& out);
+    // Upgrade steps between shipped versions, chained: each takes the frozen layout of one shipped version and produces
+    // the next shipped one, spanning versions no tag shipped (v13, v16). Steps that land on a frozen version write that
+    // frozen struct; only the final step (the one that reaches the current version) writes the live
+    // SettingsManager::Settings. Bump kSettingsVersion only when the current version shipped in a tag (see
+    // firmware/AGENTS.md). To add v20: freeze v19 in settings_versions.hh, change MigrateV18ToV19 to emit
+    // settings_v19::Settings, add MigrateV19ToV20 emitting the live struct, and extend Migrate()'s dispatch with a
+    // `case 19:`. While the current version is unreleased, change MigrateV18ToV19 in place instead.
+    static void MigrateV12ToV14(const settings_v12::Settings& in, settings_v14::Settings& out);
     static void MigrateV14ToV15(const settings_v14::Settings& in, settings_v15::Settings& out);
-    static void MigrateV15ToV16(const settings_v15::Settings& in, settings_v16::Settings& out);
-    static void MigrateV16ToV17(const settings_v16::Settings& in, settings_v17::Settings& out);
+    static void MigrateV15ToV17(const settings_v15::Settings& in, settings_v17::Settings& out);
     static void MigrateV17ToV18(const settings_v17::Settings& in, settings_v18::Settings& out);
     static void MigrateV18ToV19(const settings_v18::Settings& in, SettingsManager::Settings& out);
 };
