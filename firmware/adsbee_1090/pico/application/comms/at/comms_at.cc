@@ -18,6 +18,7 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"  // for getchar etc
 #include "pico/unique_id.h"
+#include "feed_ram_budget.hh"
 #include "settings.hh"
 #include "settings_hash.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
@@ -888,11 +889,34 @@ void ATFeedHelpCallback() {
         "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>[,<transport>]\r\n\tSet details for a "
         "network feed. Empty arguments keep their value.\r\n\tindex = [0-%d], uri = IP address or hostname (\"-\" "
         "clears it), port = [0-65535], active = [0 1], protocol = [BEAST RAW AIRCRAFT_JSON ...], transport = [TCP UDP "
-        "MQTT] (default TCP).\r\n\tUDP sends whole frames per datagram to a host, broadcast or multicast address. "
-        "MQTT publishes to a broker, see AT+FEED_MQTT.\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
-        "feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]\r\n",
+        "MQTT].\r\n\tWithout a transport, a feed whose protocol changes takes the protocol's default: UDP for GDL90 "
+        "and MAVLink, MQTT for AIRCRAFT_JSON, TCP for the others.\r\n\tUDP sends whole frames per datagram to a host, "
+        "broadcast or multicast address. MQTT feeds publish to the broker set with AT+MQTT and ignore uri and port."
+        "\r\n\tA feed is refused if the active feeds would need more ESP32 RAM than the unit has for them."
+        "\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a "
+        "specific feed.\r\n\tfeed_index = [0-%d]\r\n",
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
 }
+
+// Feed RAM budget of this unit, or 0 while the ESP32 hasn't reported whether it has PSRAM (no check then).
+static uint32_t FeedRAMBudgetBytes() {
+    if (!(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapReported)) {
+        return 0;
+    }
+    return FeedRAMBudget::BudgetBytes(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapPSRAM);
+}
+
+// True if feed settings that went from old_used_bytes to the current use fit the RAM budget. Changes that don't add to
+// the use always fit.
+static bool FeedRAMFits(uint32_t old_used_bytes, uint32_t& used_bytes, uint32_t& budget_bytes) {
+    used_bytes = FeedRAMBudget::UsedBytes(settings_manager.settings);
+    budget_bytes = FeedRAMBudgetBytes();
+    return budget_bytes == 0 || used_bytes <= budget_bytes || used_bytes <= old_used_bytes;
+}
+
+#define FEED_RAM_ERROR_FORMAT                                                                                           \
+    "Not enough ESP32 RAM: the active feeds would need %lu kB of the %lu kB this unit has for feeds. Turn off a feed, " \
+    "or use UDP, or MQTT without TLS."
 
 static void PrintFeed(const CppAT::ATCommandDef_t& def, uint16_t index) {
     const SettingsManager::Settings& s = settings_manager.settings;
@@ -936,7 +960,8 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                              SettingsManager::Settings::kMaxNumFeeds - 1, index);
             }
             // Check the names before changing anything.
-            SettingsManager::ReportingProtocol feed_protocol = settings_manager.settings.feed_protocols[index];
+            SettingsManager::Settings& s = settings_manager.settings;
+            SettingsManager::ReportingProtocol feed_protocol = s.feed_protocols[index];
             if (CPP_AT_HAS_ARG(4)) {
                 uint16_t i = 0;
                 while (i < SettingsManager::ReportingProtocol::kNumProtocols &&
@@ -948,7 +973,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 }
                 feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
             }
-            SettingsManager::FeedTransport feed_transport = settings_manager.settings.feed_transports[index];
+            SettingsManager::FeedTransport feed_transport = s.feed_transports[index];
             if (CPP_AT_HAS_ARG(5)) {
                 char transport_str[SettingsManager::kFeedTransportStrMaxLen] = {0};
                 if (args[5].length() >= sizeof(transport_str)) {
@@ -959,27 +984,41 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 if (!SettingsManager::FeedTransportFromStr(transport_str, feed_transport)) {
                     CPP_AT_ERROR("Unknown transport '%s'. Use TCP, UDP or MQTT.", transport_str);
                 }
+            } else if (feed_protocol != s.feed_protocols[index]) {
+                feed_transport = SettingsManager::DefaultFeedTransport(feed_protocol);
+            }
+            uint16_t feed_port = s.feed_ports[index];
+            if (CPP_AT_HAS_ARG(2)) {
+                CPP_AT_TRY_ARG2NUM(2, feed_port);
+            }
+            bool feed_is_active = s.feed_is_active[index];
+            if (CPP_AT_HAS_ARG(3)) {
+                CPP_AT_TRY_ARG2NUM(3, feed_is_active);
+            }
+
+            // Check the RAM budget with the new active flag and transport, then set everything.
+            uint32_t old_used_bytes = FeedRAMBudget::UsedBytes(s);
+            bool old_is_active = s.feed_is_active[index];
+            SettingsManager::FeedTransport old_transport = s.feed_transports[index];
+            s.feed_is_active[index] = feed_is_active;
+            s.feed_transports[index] = feed_transport;
+            uint32_t used_bytes, budget_bytes;
+            if (!FeedRAMFits(old_used_bytes, used_bytes, budget_bytes)) {
+                s.feed_is_active[index] = old_is_active;
+                s.feed_transports[index] = old_transport;
+                CPP_AT_ERROR(FEED_RAM_ERROR_FORMAT, (unsigned long)(used_bytes / 1024), (unsigned long)(budget_bytes / 1024));
             }
             // Set FEED_URI. A single "-" is a sentinel meaning "clear the URI to empty".
             if (CPP_AT_HAS_ARG(1)) {
                 if (args[1] == "-") {
-                    settings_manager.settings.feed_uris[index][0] = '\0';
+                    s.feed_uris[index][0] = '\0';
                 } else {
-                    strncpy(settings_manager.settings.feed_uris[index], args[1].data(),
-                            SettingsManager::Settings::kFeedURIMaxNumChars);
-                    settings_manager.settings.feed_uris[index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
+                    strncpy(s.feed_uris[index], args[1].data(), SettingsManager::Settings::kFeedURIMaxNumChars);
+                    s.feed_uris[index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
                 }
             }
-            // Set FEED_PORT
-            if (CPP_AT_HAS_ARG(2)) {
-                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.feed_ports[index]);
-            }
-            // Set ACTIVE
-            if (CPP_AT_HAS_ARG(3)) {
-                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[index]);
-            }
-            settings_manager.settings.feed_protocols[index] = feed_protocol;
-            settings_manager.settings.feed_transports[index] = feed_transport;
+            s.feed_ports[index] = feed_port;
+            s.feed_protocols[index] = feed_protocol;
             settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
@@ -989,7 +1028,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
 }
 
 // Copies an AT argument into a settings string: "-" clears it, an empty argument keeps it.
-static bool SetFeedMQTTString(std::string_view arg, char* dest, uint16_t max_len) {
+static bool SetATString(std::string_view arg, char* dest, uint16_t max_len) {
     if (arg.empty()) {
         return true;
     }
@@ -1005,66 +1044,78 @@ static bool SetFeedMQTTString(std::string_view arg, char* dest, uint16_t max_len
     return true;
 }
 
-CPP_AT_CALLBACK(CommsManager::ATFeedMQTTCallback) {
+CPP_AT_CALLBACK(CommsManager::ATMQTTCallback) {
+    typedef SettingsManager::Settings Settings;
     switch (op) {
         case '?': {
-            uint16_t first = 0, last = SettingsManager::Settings::kMaxNumFeeds - 1;
-            if (CPP_AT_HAS_ARG(0)) {
-                CPP_AT_TRY_ARG2NUM(0, first);
-                if (first >= SettingsManager::Settings::kMaxNumFeeds) {
-                    CPP_AT_ERROR("Feed index must be between 0-%d.", SettingsManager::Settings::kMaxNumFeeds - 1);
-                }
-                last = first;
-            }
-            for (uint16_t i = first; i <= last; i++) {
-                SettingsManager::Settings::FeedMQTT& mqtt = settings_manager.settings.feed_mqtt[i];
-                char redacted_password[SettingsManager::Settings::kFeedMQTTPasswordMaxLen + 1];
-                SettingsManager::RedactPassword(mqtt.password, redacted_password,
-                                                SettingsManager::Settings::kFeedMQTTPasswordMaxLen);
-                CPP_AT_CMD_PRINTF("=%d(INDEX),%s(TOPIC_PREFIX),%s(USERNAME),%s(PASSWORD),%d(TLS),%u(QOS)", i,
-                                  mqtt.topic_prefix, mqtt.username, redacted_password, mqtt.tls, mqtt.qos);
-            }
+            const Settings::MQTTBroker& mqtt = settings_manager.settings.mqtt_broker;
+            char redacted_password[Settings::kMQTTPasswordMaxLen + 1];
+            SettingsManager::RedactPassword(const_cast<char*>(mqtt.password), redacted_password,
+                                            Settings::kMQTTPasswordMaxLen);
+            CPP_AT_CMD_PRINTF("=%s(HOST),%u(PORT),%s(USERNAME),%s(PASSWORD),%d(TLS),%u(QOS),%s(TOPIC_PREFIX),"
+                              "%s(TRANSPORT),%s(PATH)",
+                              mqtt.host, mqtt.port, mqtt.username, redacted_password, mqtt.tls, mqtt.qos,
+                              mqtt.topic_prefix, SettingsManager::kMQTTTransportStrs[mqtt.transport],
+                              mqtt.websocket_path);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
         case '=': {
-            uint16_t index = UINT16_MAX;
-            if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Feed index is required.");
+            Settings::MQTTBroker mqtt = settings_manager.settings.mqtt_broker;
+            if (num_args > 0 && !SetATString(args[0], mqtt.host, Settings::kFeedURIMaxNumChars)) {
+                CPP_AT_ERROR("Host must be %d characters or fewer.", Settings::kFeedURIMaxNumChars);
             }
-            CPP_AT_TRY_ARG2NUM(0, index);
-            if (index >= SettingsManager::Settings::kMaxNumFeeds) {
-                CPP_AT_ERROR("Feed index must be between 0-%d.", SettingsManager::Settings::kMaxNumFeeds - 1);
+            if (CPP_AT_HAS_ARG(1)) {
+                CPP_AT_TRY_ARG2NUM(1, mqtt.port);
             }
-            SettingsManager::Settings::FeedMQTT mqtt = settings_manager.settings.feed_mqtt[index];
-            if (num_args > 1 && !SetFeedMQTTString(args[1], mqtt.topic_prefix,
-                                                   SettingsManager::Settings::kFeedMQTTTopicPrefixMaxLen)) {
-                CPP_AT_ERROR("Topic prefix must be %d characters or fewer.",
-                             SettingsManager::Settings::kFeedMQTTTopicPrefixMaxLen);
+            if (num_args > 2 && !SetATString(args[2], mqtt.username, Settings::kMQTTUsernameMaxLen)) {
+                CPP_AT_ERROR("Username must be %d characters or fewer.", Settings::kMQTTUsernameMaxLen);
             }
-            if (num_args > 2 &&
-                !SetFeedMQTTString(args[2], mqtt.username, SettingsManager::Settings::kFeedMQTTUsernameMaxLen)) {
-                CPP_AT_ERROR("Username must be %d characters or fewer.",
-                             SettingsManager::Settings::kFeedMQTTUsernameMaxLen);
-            }
-            if (num_args > 3 &&
-                !SetFeedMQTTString(args[3], mqtt.password, SettingsManager::Settings::kFeedMQTTPasswordMaxLen)) {
-                CPP_AT_ERROR("Password must be %d characters or fewer.",
-                             SettingsManager::Settings::kFeedMQTTPasswordMaxLen);
+            if (num_args > 3 && !SetATString(args[3], mqtt.password, Settings::kMQTTPasswordMaxLen)) {
+                CPP_AT_ERROR("Password must be %d characters or fewer.", Settings::kMQTTPasswordMaxLen);
             }
             if (CPP_AT_HAS_ARG(4)) {
                 CPP_AT_TRY_ARG2NUM(4, mqtt.tls);
             }
             if (CPP_AT_HAS_ARG(5)) {
                 CPP_AT_TRY_ARG2NUM(5, mqtt.qos);
-                if (mqtt.qos > SettingsManager::Settings::kFeedMQTTMaxQoS) {
+                if (mqtt.qos > Settings::kMQTTMaxQoS) {
                     CPP_AT_ERROR("QoS must be 0, 1 or 2.");
                 }
+            }
+            if (num_args > 6 && !SetATString(args[6], mqtt.topic_prefix, Settings::kMQTTTopicPrefixMaxLen)) {
+                CPP_AT_ERROR("Topic prefix must be %d characters or fewer.", Settings::kMQTTTopicPrefixMaxLen);
             }
             if (strpbrk(mqtt.topic_prefix, "+#") != nullptr) {
                 CPP_AT_ERROR("Topic prefix can't contain the MQTT wildcards + or #.");
             }
-            settings_manager.settings.feed_mqtt[index] = mqtt;
+            if (CPP_AT_HAS_ARG(7)) {
+                uint8_t i = 0;
+                while (i < SettingsManager::kNumMQTTTransports &&
+                       !(args[7].length() == strlen(SettingsManager::kMQTTTransportStrs[i]) &&
+                         strncasecmp(args[7].data(), SettingsManager::kMQTTTransportStrs[i], args[7].length()) == 0)) {
+                    i++;
+                }
+                if (i == SettingsManager::kNumMQTTTransports) {
+                    CPP_AT_ERROR("Unknown transport '%.*s'. Use TCP or WS.", (int)args[7].length(), args[7].data());
+                }
+                mqtt.transport = static_cast<SettingsManager::MQTTTransport>(i);
+            }
+            if (num_args > 8 && !SetATString(args[8], mqtt.websocket_path, Settings::kMQTTWebSocketPathMaxLen)) {
+                CPP_AT_ERROR("Path must be %d characters or fewer.", Settings::kMQTTWebSocketPathMaxLen);
+            }
+            if (mqtt.websocket_path[0] != '\0' && mqtt.websocket_path[0] != '/') {
+                CPP_AT_ERROR("Path must start with /.");
+            }
+            // TLS adds to the RAM that active MQTT feeds take.
+            uint32_t old_used_bytes = FeedRAMBudget::UsedBytes(settings_manager.settings);
+            Settings::MQTTBroker old_mqtt = settings_manager.settings.mqtt_broker;
+            settings_manager.settings.mqtt_broker = mqtt;
+            uint32_t used_bytes, budget_bytes;
+            if (!FeedRAMFits(old_used_bytes, used_bytes, budget_bytes)) {
+                settings_manager.settings.mqtt_broker = old_mqtt;
+                CPP_AT_ERROR(FEED_RAM_ERROR_FORMAT, (unsigned long)(used_bytes / 1024), (unsigned long)(budget_bytes / 1024));
+            }
             settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
@@ -2213,15 +2264,6 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "all feeds, or 1 to allow feeds marked active. Does not change per-feed active flags set with "
                     "AT+FEED.\r\n\tAT+FEED_ENABLE?\r\n\tQuery whether outbound feeds are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedEnableCallback, comms_manager)},
-    {.command = "FEED_MQTT",
-     .min_args = 0,
-     .max_args = 6,
-     .help_string = "AT+FEED_MQTT=<index>,<topic_prefix>,<username>,<password>,<tls>,<qos>\r\n\tSet the broker "
-                    "options of a feed with the MQTT transport. Empty arguments keep their value, \"-\" clears a "
-                    "string.\r\n\ttopic_prefix = up to 31 characters (empty: adsbee), username and password = "
-                    "optional, tls = [0 1], qos = [0 1 2].\r\n\tTopics are <topic_prefix>/<receiver ID>/<protocol> "
-                    "plus status.\r\n\tAT+FEED_MQTT?[index]\r\n\tPrint the broker options (password redacted).",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedMQTTCallback, comms_manager)},
     {.command = "FILTER_DISTANCE_NM",
      .min_args = 0,
      .max_args = 2,
@@ -2289,6 +2331,18 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
                     "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
+    {.command = "MQTT",
+     .min_args = 0,
+     .max_args = 9,
+     .help_string = "AT+MQTT=<host>,<port>,<username>,<password>,<tls>,<qos>,<topic_prefix>,<transport>,<path>\r\n\t"
+                    "Set the MQTT broker that all feeds with the MQTT transport publish to, over one connection. "
+                    "Empty arguments keep their value, \"-\" clears a string.\r\n\thost = hostname or IP address, "
+                    "port = [1-65535] (1883, 8883 with TLS), username and password = optional, tls = [0 1], qos = [0 1 "
+                    "2], topic_prefix = up to 31 characters (empty: adsbee), transport = [TCP WS] (WS: MQTT over "
+                    "WebSocket, for brokers behind web proxies), path = WebSocket path (empty: /mqtt).\r\n\tTopics are "
+                    "<topic_prefix>/<receiver ID>/<protocol>, plus status and metrics.\r\n\tAT+MQTT?\r\n\tPrint the "
+                    "broker settings (password redacted).",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMQTTCallback, comms_manager)},
     {.command = "NETWORK_INFO",
      .min_args = 0,
      .max_args = 0,

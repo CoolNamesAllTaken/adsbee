@@ -288,9 +288,9 @@ class CommsManager {
     bool SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, uint16_t num_msgs = 1);
 
     /**
-     * Handles events of the MQTT client of a feed. Public so that the pass-through function can access it.
+     * Handles events of the MQTT client. Public so that the pass-through function can access it.
      */
-    void FeedMQTTEventHandler(uint16_t feed_index, int32_t event_id, esp_mqtt_event_handle_t event);
+    void MQTTEventHandler(int32_t event_id, esp_mqtt_event_handle_t event);
 
    private:
     /**
@@ -309,14 +309,18 @@ class CommsManager {
     bool ConnectFeedUDP(uint16_t feed_index);
     bool SendFeedDatagrams(uint16_t feed_index, const char* buf, uint16_t buf_len, uint16_t num_msgs);
 
-    // Starts the feed's MQTT client, which then reconnects by itself. True once it is connected to the broker.
+    // All MQTT feeds share one client. It runs while an MQTT feed is active and a broker is set, restarts when the
+    // broker settings change, and reconnects by itself.
+    void UpdateMQTTClient();
+    void StopMQTTClient();
+    uint32_t MQTTConfigCRC();
+    // True while the shared client is connected to the broker.
     bool ConnectFeedMQTT(uint16_t feed_index);
-    void CloseFeedMQTT(uint16_t feed_index);
     bool PublishFeedMQTT(uint16_t feed_index, const char* buf, uint16_t buf_len, uint16_t num_msgs);
     // Writes <topic prefix>/<receiver ID>/<suffix>.
-    void FeedMQTTTopic(uint16_t feed_index, const char* suffix, char* topic, size_t topic_size);
-    // Publishes each connected MQTT feed's metrics topic, at most once per interval.
-    void PublishFeedMQTTMetrics();
+    void MQTTTopic(const char* suffix, char* topic, size_t topic_size);
+    // Publishes the metrics topic, at most once per interval.
+    void PublishMQTTMetrics();
 
     /**
      * Whether free memory is below the back-pressure thresholds, in which case feed sockets are given no data.
@@ -432,8 +436,11 @@ class CommsManager {
     // Transport and settings CRC each feed connected with.
     SettingsManager::FeedTransport feed_transports_in_use_[SettingsManager::Settings::kMaxNumFeeds] = {};
     uint32_t feed_config_crcs_[SettingsManager::Settings::kMaxNumFeeds] = {0};
-    esp_mqtt_client_handle_t feed_mqtt_clients_[SettingsManager::Settings::kMaxNumFeeds] = {nullptr};
-    uint32_t feed_mqtt_metrics_last_publish_timestamp_ms_ = 0;
+    esp_mqtt_client_handle_t mqtt_client_ = nullptr;
+    volatile bool mqtt_is_connected_ = false;  // Written by the MQTT client's task.
+    uint32_t mqtt_config_crc_ = 0;
+    uint32_t mqtt_last_start_timestamp_ms_ = 0;
+    uint32_t mqtt_metrics_last_publish_timestamp_ms_ = 0;
     // Each feed sends through its own buffer so that a slow or stalled feed only loses its own messages.
     FeedSendBuffer feed_send_buffers_[SettingsManager::Settings::kMaxNumFeeds];
     uint32_t feed_num_dropped_msgs_[SettingsManager::Settings::kMaxNumFeeds] = {0};

@@ -18,6 +18,9 @@ const char
 const char SettingsManager::kFeedTransportStrs[SettingsManager::kNumFeedTransports]
                                               [SettingsManager::kFeedTransportStrMaxLen] = {"TCP", "UDP", "MQTT"};
 
+const char SettingsManager::kMQTTTransportStrs[SettingsManager::kNumMQTTTransports]
+                                              [SettingsManager::kMQTTTransportStrMaxLen] = {"TCP", "WS"};
+
 const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioModes]
                                            [SettingsManager::kSubGHzModeStrMaxLen] = {
                                                "UAT_RX",  // UAT mode (978MHz receiver).

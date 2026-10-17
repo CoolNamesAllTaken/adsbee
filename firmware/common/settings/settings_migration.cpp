@@ -201,8 +201,8 @@ void SettingsMigrator::MigrateV17ToV18(const settings_v17::Settings& in, setting
 }
 
 void SettingsMigrator::MigrateV18ToV19(const settings_v18::Settings& in, SettingsManager::Settings& out) {
-    // Start from a fresh, fully-defaulted current struct: the distance filter (new in v19) stays off and
-    // feeds keep the TCP transport.
+    // Start from a fresh, fully-defaulted current struct: the distance filter (new in v19) stays off, feeds keep the
+    // TCP transport and no MQTT broker is set.
     out = SettingsManager::Settings();
 
     out.settings_version = kSettingsVersion;

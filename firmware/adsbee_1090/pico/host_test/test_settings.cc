@@ -1,6 +1,7 @@
 #include <cstring>
 
 #include "gtest/gtest.h"
+#include "feed_ram_budget.hh"
 #include "settings.hh"
 #include "settings_migration.hh"
 #include "settings_versions.hh"
@@ -50,7 +51,7 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(SettingsManager::Settings), 2656u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1584u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -414,7 +415,7 @@ TEST(SettingsMigration, V18ToCurrentKeepsFeedsOnTCP) {
 
     SettingsManager::Settings out;
     out.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
-    strcpy(out.feed_mqtt[0].username, "stale");
+    strcpy(out.mqtt_broker.username, "stale");
     ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_TRUE(out.auto_update_enabled);
@@ -426,12 +427,16 @@ TEST(SettingsMigration, V18ToCurrentKeepsFeedsOnTCP) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
     for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
         EXPECT_EQ(out.feed_transports[i], SettingsManager::kFeedTransportTCP);
-        EXPECT_STREQ(out.feed_mqtt[i].topic_prefix, "");
-        EXPECT_STREQ(out.feed_mqtt[i].username, "");
-        EXPECT_STREQ(out.feed_mqtt[i].password, "");
-        EXPECT_FALSE(out.feed_mqtt[i].tls);
-        EXPECT_EQ(out.feed_mqtt[i].qos, 0);
     }
+    EXPECT_STREQ(out.mqtt_broker.host, "");
+    EXPECT_EQ(out.mqtt_broker.port, SettingsManager::kDefaultMQTTPort);
+    EXPECT_STREQ(out.mqtt_broker.username, "");
+    EXPECT_STREQ(out.mqtt_broker.password, "");
+    EXPECT_STREQ(out.mqtt_broker.topic_prefix, "");
+    EXPECT_STREQ(out.mqtt_broker.websocket_path, "");
+    EXPECT_FALSE(out.mqtt_broker.tls);
+    EXPECT_EQ(out.mqtt_broker.qos, 0);
+    EXPECT_EQ(out.mqtt_broker.transport, SettingsManager::kMQTTTransportTCP);
 }
 
 TEST(Settings, FeedTransportStrings) {
@@ -450,47 +455,96 @@ TEST(Settings, FeedTransportStrings) {
     }
 }
 
-TEST(Settings, FeedTransportDumpReplaysOnOlderFirmware) {
+TEST(Settings, DefaultFeedTransports) {
+    typedef SettingsManager S;
+    for (S::ReportingProtocol p : {S::kNoReports, S::kRaw, S::kBeast, S::kBeastNoUAT, S::kBeastNoUATUplink, S::kCSBee}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportTCP) << S::kReportingProtocolStrs[p];
+    }
+    for (S::ReportingProtocol p : {S::kGDL90, S::kGDL90NoUATUplink, S::kMAVLINK1, S::kMAVLINK2}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportUDP) << S::kReportingProtocolStrs[p];
+    }
+    for (S::ReportingProtocol p : {S::kAircraftJSON, S::kAircraftJSONUATUplink}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportMQTT) << S::kReportingProtocolStrs[p];
+    }
+}
+
+TEST(Settings, FeedTransportAndMQTTDumpReplaysOnOlderFirmware) {
     SettingsManager manager;
     for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
         EXPECT_EQ(manager.settings.feed_transports[i], SettingsManager::kFeedTransportTCP);
     }
     manager.settings.feed_transports[2] = SettingsManager::kFeedTransportUDP;
     manager.settings.feed_transports[3] = SettingsManager::kFeedTransportMQTT;
-    SettingsManager::Settings::FeedMQTT& mqtt = manager.settings.feed_mqtt[3];
+    SettingsManager::Settings::MQTTBroker& mqtt = manager.settings.mqtt_broker;
+    strcpy(mqtt.host, "broker.lan");
+    mqtt.port = 443;
     strcpy(mqtt.topic_prefix, "home/adsb");
     strcpy(mqtt.username, "bee");
     strcpy(mqtt.password, "pollen");
     mqtt.tls = true;
     mqtt.qos = 1;
+    mqtt.transport = SettingsManager::kMQTTTransportWebSocket;
 
     testing::internal::CaptureStdout();
     manager.PrintAT();
     std::string dump = testing::internal::GetCapturedStdout();
-    // The five-argument AT+FEED lines stay where older firmware expects them; the new arguments come last.
+    // The five-argument AT+FEED lines stay where older firmware expects them; the new commands come last, and every
+    // feed's transport is replayed because a five-argument AT+FEED keeps it.
     EXPECT_NE(dump.find("AT+FEED=2,,0,0,NONE\r\n"), std::string::npos);
-    size_t auto_update = dump.find("AT+AUTO_UPDATE=");
+    size_t filter = dump.find("AT+FILTER_DISTANCE_NM=");
+    size_t broker = dump.find("AT+MQTT=broker.lan,443,bee,pollen,1,1,home/adsb,WS,-\r\n");
+    size_t tcp = dump.find("AT+FEED=0,,,,,TCP\r\n");
     size_t udp = dump.find("AT+FEED=2,,,,,UDP\r\n");
     size_t mqtt_transport = dump.find("AT+FEED=3,,,,,MQTT\r\n");
-    size_t mqtt_options = dump.find("AT+FEED_MQTT=3,home/adsb,bee,pollen,1,1\r\n");
-    ASSERT_NE(auto_update, std::string::npos);
+    ASSERT_NE(filter, std::string::npos);
+    ASSERT_NE(broker, std::string::npos);
+    ASSERT_NE(tcp, std::string::npos);
     ASSERT_NE(udp, std::string::npos);
     ASSERT_NE(mqtt_transport, std::string::npos);
-    ASSERT_NE(mqtt_options, std::string::npos);
-    EXPECT_LT(auto_update, udp);
-    EXPECT_LT(mqtt_transport, mqtt_options);
-    EXPECT_EQ(dump.find("AT+FEED=0,,,,,"), std::string::npos);  // TCP is the default: nothing to replay.
-    EXPECT_EQ(dump.find("AT+FEED_MQTT=2"), std::string::npos);
+    EXPECT_LT(filter, broker);
+    EXPECT_LT(broker, tcp);
 
     // Out-of-range values from a corrupted blob.
     manager.settings.feed_transports[4] = static_cast<SettingsManager::FeedTransport>(7);
-    manager.settings.feed_mqtt[4].qos = 9;
-    memset(manager.settings.feed_mqtt[5].password, 'x', sizeof(manager.settings.feed_mqtt[5].password));
+    mqtt.qos = 9;
+    mqtt.transport = static_cast<SettingsManager::MQTTTransport>(5);
+    memset(mqtt.password, 'x', sizeof(mqtt.password));
     EXPECT_TRUE(manager.Sanitize());
     EXPECT_EQ(manager.settings.feed_transports[4], SettingsManager::kFeedTransportTCP);
-    EXPECT_EQ(manager.settings.feed_mqtt[4].qos, SettingsManager::Settings::kFeedMQTTMaxQoS);
-    EXPECT_EQ(strlen(manager.settings.feed_mqtt[5].password), SettingsManager::Settings::kFeedMQTTPasswordMaxLen);
+    EXPECT_EQ(mqtt.qos, SettingsManager::Settings::kMQTTMaxQoS);
+    EXPECT_EQ(mqtt.transport, SettingsManager::kMQTTTransportTCP);
+    EXPECT_EQ(strlen(mqtt.password), SettingsManager::Settings::kMQTTPasswordMaxLen);
     EXPECT_FALSE(manager.Sanitize());
+}
+
+TEST(FeedRAMBudget, CountsActiveFeedsAndTheSharedMQTTClientOnce) {
+    SettingsManager::Settings s;
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        s.feed_is_active[i] = false;
+    }
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), 0u);
+    s.feed_is_active[0] = true;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::kTCPFeedBytes);
+    s.feed_is_active[1] = true;
+    s.feed_transports[1] = SettingsManager::kFeedTransportUDP;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes);
+    for (uint16_t i = 2; i < 4; i++) {
+        s.feed_is_active[i] = true;
+        s.feed_transports[i] = SettingsManager::kFeedTransportMQTT;
+    }
+    const uint32_t mqtt = FeedRAMBudget::kMQTTClientBytes + 2 * FeedRAMBudget::kMQTTFeedBytes;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes + mqtt);
+    s.mqtt_broker.tls = true;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s),
+              FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes + mqtt + FeedRAMBudget::kMQTTTLSBytes);
+    s.feeds_enabled = false;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), 0u);
+    EXPECT_GT(FeedRAMBudget::BudgetBytes(true), FeedRAMBudget::BudgetBytes(false));
+}
+
+TEST(FeedRAMBudget, DefaultFeedsFitWithoutPSRAM) {
+    SettingsManager::Settings s;  // Four aggregator feeds over TCP.
+    EXPECT_LE(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::BudgetBytes(false));
 }
 
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
@@ -516,7 +570,8 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     EXPECT_LT(wifi, ip_mode);
     EXPECT_LT(ip_mode, auto_update);
     EXPECT_LT(auto_update, filter_distance);
-    EXPECT_EQ(dump.find("AT+", filter_distance + 1), std::string::npos);
+    // Then only the MQTT broker and the feed transports (see FeedTransportAndMQTTDumpReplaysOnOlderFirmware).
+    EXPECT_EQ(dump.find("AT+", filter_distance + 1), dump.find("AT+MQTT="));
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);
