@@ -21,8 +21,12 @@ navigation service providers:
 
 Once per second:
 
-1. One CAT023 data block: a ground station status report, then a service status report for the 1090 MHz
-   receiver (service ID 1, 1090 ES) and one for the UAT receiver (service ID 2), each normal or disabled.
+1. One CAT023 data block: a ground station status report, then a service status report for each service, normal
+   or disabled with its receiver:
+   - Service 1: 1090 MHz ADS-B (type 2, 1090 ES).
+   - Service 2: UAT ADS-B (type 3, UAT).
+   - Service 3: 1090 MHz TIS-B and ADS-R rebroadcasts, DF18 CF=2, 5 and 6 (type 5, TIS-B 1090 ES).
+   - Service 4: UAT TIS-B and ADS-R rebroadcasts, address qualifiers 2, 3 and 6 (type 6, TIS-B UAT).
 2. CAT021 data blocks with one record per aircraft. Blocks are at most 1024 bytes, so each fits in one UDP
    datagram.
 
@@ -35,11 +39,20 @@ technology, 070 Mode 3/A, 145 flight level, 152 magnetic heading, 200 emergency 
 vertical rates, 160 ground speed and track, 150 and 151 airspeed, 077 report time, 170 callsign, 020 emitter
 category, 008 TCAS RA and single antenna, 132 signal strength.
 
+How each target is heard:
+
+- I021/015 service identification is the service of the target's position: 1 or 2 for ADS-B, 3 or 4 for TIS-B and
+  ADS-R. CAT021 has no TIS-B or ADS-R flag, so use I021/015 to tell rebroadcasts apart.
+- I021/040 ATP (address type) is 0 (ICAO address) for DF17, DF18 CF=0 and ICAO-addressed TIS-B and ADS-R, and 3
+  (anonymous) for DF18 CF=1, TIS-B track files and other non-ICAO addresses. UAT surface vehicles are 2, and fixed
+  beacons set RAB (report from a field monitor).
+- I021/210 (ADS-B version) is left out for 1090 MHz TIS-B targets, whose messages carry none.
+- An aircraft heard both directly and through a rebroadcast is reported once, from the direct source while its data
+  is fresh.
+
 Not reported:
 
 - Aircraft without a position.
-- 1090 MHz DF18 targets and UAT TIS-B or ADS-R targets: CAT021 has no way to mark a rebroadcast, and on 1090 MHz
-  the firmware doesn't keep the field that separates rebroadcasts from other DF18 transmitters.
 - Mode S aircraft that don't send ADS-B, and Remote ID drones. CAT021 is ADS-B only. Monoradar categories
   (CAT048, CAT010) need a measured range and bearing and multilateration (CAT020) needs several receivers.
 - Ground speed and heading of aircraft on the ground (CAT021 puts these in its Reserved Expansion Field).

@@ -19,12 +19,17 @@ class ASTERIXReporter {
     static constexpr uint32_t kTimeOfDayTicksPerSecond = 128;
     static constexpr uint32_t kMsPerDay = 86400000;
 
-    // CAT021 service identification (I021/015) and CAT023 service ID (I023/015, 4 bits) of each receiver.
+    // CAT021 service identification (I021/015) and CAT023 service ID (I023/015, 4 bits) of each receiver. TIS-B and
+    // ADS-R targets, which CAT021 has no flag for, get their own services.
     static constexpr uint8_t kServiceID1090ES = 1;
     static constexpr uint8_t kServiceIDUAT = 2;
-    // CAT023 service types (I023/015 STYP).
+    static constexpr uint8_t kServiceID1090ESRebroadcast = 3;  // DF18 TIS-B and ADS-R.
+    static constexpr uint8_t kServiceIDUATRebroadcast = 4;     // UAT TIS-B and ADS-R.
+    // CAT023 service types (I023/015 STYP). CAT023 has no ADS-R type: rebroadcasts are reported as TIS-B.
     static constexpr uint8_t kServiceType1090ES = 2;
     static constexpr uint8_t kServiceTypeUAT = 3;
+    static constexpr uint8_t kServiceTypeTISB1090ES = 5;
+    static constexpr uint8_t kServiceTypeTISBUAT = 6;
 
     // I021/040 address type (ATP).
     enum AddressType : uint8_t {
@@ -212,14 +217,13 @@ class ASTERIXReporter {
 
     /**
      * Fills a CAT021 report from a Mode S aircraft.
-     * @retval False if the aircraft isn't reported in CAT021: no position, or a DF18 target, which may be a TIS-B or
-     * ADS-R rebroadcast.
+     * @retval False if the aircraft isn't reported in CAT021: no position, or no extended squitter.
      */
     static bool BuildCAT021Report(CAT021TargetReport& report, const ModeSAircraft& aircraft, const ReportContext& ctx);
 
     /**
      * Fills a CAT021 report from a UAT aircraft.
-     * @retval False if the aircraft isn't reported in CAT021: no position, or a TIS-B or ADS-R target.
+     * @retval False if the aircraft isn't reported in CAT021: no position.
      */
     static bool BuildCAT021Report(CAT021TargetReport& report, const UATAircraft& aircraft, const ReportContext& ctx);
 
