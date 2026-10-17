@@ -1,6 +1,7 @@
 #pragma once
 
 #include "aircraft_dictionary.hh"
+#include "aircraftjson_utils.hh"
 #include "auto_update_manager.hh"
 #include "broadcast_ring.hh"
 #include "composite_array.hh"
@@ -43,6 +44,13 @@ class ADSBeeServer {
     static const uint32_t kAircraftJSONReportingIntervalMs = 1000;
     // Update() pass time spent on /aircraft frames, so a large report doesn't hold off draining the packet in-queues.
     static const uint32_t kAircraftJSONPassBudgetUs = 20000;
+    // Live Map frames stay small: a socket takes a frame only while little is queued, so the frame size bounds the
+    // lwIP buffers each viewer pins.
+    static constexpr uint16_t kAircraftJSONBatchMaxLen = 1024;
+    static_assert(kAircraftJSONBatchMaxLen >= kAircraftJSONMessageStrMaxLen + 2);
+    static_assert(kAircraftJSONBatchMaxLen <= WebSocketServer::kNonBlockingMessageMaxLen);
+    // Reports start at least this long after and before a metrics message, so both bursts don't pin buffers together.
+    static constexpr uint32_t kAircraftJSONMetricsGapMs = 300;
     // RP2040 metrics older than this are stale and are dropped from the metrics message.
     static const uint32_t kRP2040MetricsStaleTimeoutMs = 3000;
 
@@ -218,6 +226,7 @@ class ADSBeeServer {
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
     uint32_t last_aircraft_json_report_timestamp_ms_ = 0;
+    uint32_t last_network_metrics_timestamp_ms_ = 0;
     // Aircraft JSON report in progress: the aircraft to send and the next one.
     uint32_t aircraft_json_uids_[kAircraftDictionaryMaxNumAircraft];
     uint16_t aircraft_json_num_uids_ = 0;

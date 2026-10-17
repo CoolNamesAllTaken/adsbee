@@ -277,6 +277,7 @@ bool ADSBeeServer::Update() {
         // RP2040 and SubG status are updated by the RP2040 writing to the object dictionary periodically. Nothing to do
         // here.
         SendNetworkMetricsMessage();
+        last_network_metrics_timestamp_ms_ = timestamp_ms;
     }
 
     if (timestamp_ms - last_http_session_sweep_timestamp_ms_ > kHTTPSessionSweepIntervalMs) {
@@ -399,8 +400,14 @@ bool ADSBeeServer::Update() {
     }
 
     // Broadcast aircraft JSON to connected /aircraft WebSocket clients. A report starts once the last one is done.
-    if (aircraft_json_next_uid_ >= aircraft_json_num_uids_ &&
-        timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
+    // Reports start between metrics messages (or on their own while none are sent).
+    const uint32_t ms_since_metrics = timestamp_ms - last_network_metrics_timestamp_ms_;
+    const bool between_metrics = (ms_since_metrics >= kAircraftJSONMetricsGapMs &&
+                                  ms_since_metrics < kAircraftJSONReportingIntervalMs - kAircraftJSONMetricsGapMs) ||
+                                 ms_since_metrics >= 2 * kAircraftJSONReportingIntervalMs;
+    if (aircraft_json_next_uid_ >= aircraft_json_num_uids_ && between_metrics &&
+        timestamp_ms - last_aircraft_json_report_timestamp_ms_ >=
+            kAircraftJSONReportingIntervalMs - kAircraftJSONMetricsGapMs) {
         last_aircraft_json_report_timestamp_ms_ = timestamp_ms;
         aircraft_json_num_uids_ =
             network_aircraft.GetNumClients() > 0
@@ -1162,7 +1169,7 @@ void ADSBeeServer::SendAircraftJSONMessages() {
     // Batch aircraft into JSON arrays of up to one websocket message each. One frame per aircraft (two socket writes
     // each) cost ~100 TCP segments per second per client at a busy site; on the W5500 Ethernet board the network tasks
     // doing that outrank the SPI receive task, which then missed RP2040 handshakes until the RP2040 reset the board.
-    // Frames of up to kNonBlockingMessageMaxLen always fit a writable socket whole.
+    // Frames of up to kAircraftJSONBatchMaxLen always fit a writable socket whole.
     if (aircraft_json_next_uid_ >= aircraft_json_num_uids_) {
         return;
     }
@@ -1170,7 +1177,7 @@ void ADSBeeServer::SendAircraftJSONMessages() {
         aircraft_json_next_uid_ = aircraft_json_num_uids_;  // Nobody left to send the rest to.
         return;
     }
-    char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
+    char batch_buf[kAircraftJSONBatchMaxLen];
     uint64_t start_us = get_time_since_boot_us();
     while (get_time_since_boot_us() - start_us < kAircraftJSONPassBudgetUs) {
         uint16_t len =
