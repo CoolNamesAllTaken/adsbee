@@ -542,7 +542,7 @@ class FeedEditor {
     static TRANSPORTS = ['TCP', 'UDP', 'MQTT'];
     // Transport a protocol's feeds usually take (the firmware's DefaultFeedTransport()).
     static DEFAULT_TRANSPORTS = {
-        GDL90: 'UDP', GDL90_NO_UAT_UPLINK: 'UDP', MAVLINK1: 'UDP', MAVLINK2: 'UDP',
+        GDL90: 'UDP', GDL90_NO_UAT_UPLINK: 'UDP', MAVLINK1: 'UDP', MAVLINK2: 'UDP', ASTERIX: 'UDP',
         AIRCRAFT_JSON: 'MQTT', AIRCRAFT_JSON_UAT_UPLINK: 'MQTT',
     };
     // 192.168.4.255 reaches every device on the ADSBee's WiFi access point.
