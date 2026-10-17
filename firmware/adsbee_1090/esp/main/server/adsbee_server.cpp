@@ -945,7 +945,7 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              "], \"feed_ram_bytes\": %lu, \"feed_ram_budget_bytes\": %lu",
              (unsigned long)FeedRAMBudget::UsedBytes(settings_manager.settings),
-             (unsigned long)FeedRAMBudget::BudgetBytes(HardwareCapabilities::HasPSRAM()));
+             (unsigned long)FeedRAMBudget::BudgetBytes(settings_manager.settings, HardwareCapabilities::HasPSRAM()));
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              "}, \"device_status\": { ");

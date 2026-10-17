@@ -527,24 +527,42 @@ TEST(FeedRAMBudget, CountsActiveFeedsAndTheSharedMQTTClientOnce) {
     EXPECT_EQ(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::kTCPFeedBytes);
     s.feed_is_active[1] = true;
     s.feed_transports[1] = SettingsManager::kFeedTransportUDP;
-    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes);
+    const uint32_t tcp_udp = FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp);
     for (uint16_t i = 2; i < 4; i++) {
         s.feed_is_active[i] = true;
         s.feed_transports[i] = SettingsManager::kFeedTransportMQTT;
     }
-    const uint32_t mqtt = FeedRAMBudget::kMQTTClientBytes + 2 * FeedRAMBudget::kMQTTFeedBytes;
-    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes + mqtt);
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp + FeedRAMBudget::kMQTTClientBytes);
     s.mqtt_broker.tls = true;
-    EXPECT_EQ(FeedRAMBudget::UsedBytes(s),
-              FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes + mqtt + FeedRAMBudget::kMQTTTLSBytes);
+    s.mqtt_broker.transport = SettingsManager::kMQTTTransportWebSocket;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp + FeedRAMBudget::kMQTTClientBytes + FeedRAMBudget::kMQTTTLSBytes +
+                                              FeedRAMBudget::kMQTTWebSocketBytes);
     s.feeds_enabled = false;
     EXPECT_EQ(FeedRAMBudget::UsedBytes(s), 0u);
-    EXPECT_GT(FeedRAMBudget::BudgetBytes(true), FeedRAMBudget::BudgetBytes(false));
 }
 
-TEST(FeedRAMBudget, DefaultFeedsFitWithoutPSRAM) {
+TEST(FeedRAMBudget, BudgetDependsOnWiFiAndPSRAM) {
+    SettingsManager::Settings s;
+    s.core_network_settings.wifi_ap_enabled = false;
+    s.core_network_settings.wifi_sta_enabled = false;
+    const uint32_t ethernet = FeedRAMBudget::BudgetBytes(s, false);
+    s.core_network_settings.wifi_sta_enabled = true;
+    const uint32_t wifi = FeedRAMBudget::BudgetBytes(s, false);
+    EXPECT_LT(wifi, ethernet);
+    EXPECT_GT(FeedRAMBudget::BudgetBytes(s, true), wifi);
+}
+
+TEST(FeedRAMBudget, DefaultFeedsFitOnWiFiWithoutPSRAM) {
     SettingsManager::Settings s;  // Four aggregator feeds over TCP.
-    EXPECT_LE(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::BudgetBytes(false));
+    s.core_network_settings.wifi_ap_enabled = true;
+    s.core_network_settings.wifi_sta_enabled = true;
+    EXPECT_LE(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::BudgetBytes(s, false));
+    // Three of them and a Home Assistant MQTT feed fit too.
+    s.feed_is_active[SettingsManager::Settings::kMaxNumFeeds - 1] = false;
+    s.feed_is_active[0] = true;
+    s.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
+    EXPECT_LE(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::BudgetBytes(s, false));
 }
 
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {

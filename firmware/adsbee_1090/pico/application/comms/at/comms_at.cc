@@ -903,7 +903,8 @@ static uint32_t FeedRAMBudgetBytes() {
     if (!(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapReported)) {
         return 0;
     }
-    return FeedRAMBudget::BudgetBytes(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapPSRAM);
+    return FeedRAMBudget::BudgetBytes(settings_manager.settings,
+                                      esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapPSRAM);
 }
 
 // True if feed settings that went from old_used_bytes to the current use fit the RAM budget. Changes that don't add to
