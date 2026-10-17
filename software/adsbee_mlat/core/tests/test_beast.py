@@ -66,3 +66,17 @@ def test_bad_info_ignored():
     p = beast.BeastParser()
     out, infos, _ = p.feed(b"\x1a\xe9no_equals_sign\n" + beast.build_mode_s(3, MSG_SHORT))
     assert infos == [] and out[0][0] == 3 and p.bad_frames == 1
+
+
+def test_short_info_frame_starts_each_udp_datagram():
+    # What ADSBee firmware sends between full info frames on UDP: v, id, clk and ep, then whole frames.
+    short = b"\x1a\xe9v=1;id=bee00038172d18c1;clk=48000000;ep=5a3c91e2\n"
+    datagram = short + b"".join(beast.build_mode_s(1000 + k, MSG_LONG) for k in range(50))
+    frames, infos, _ = beast.BeastParser().feed(datagram)
+    assert len(frames) == 50
+    assert infos == [{"v": 1, "id": "bee00038172d18c1", "clk": 48_000_000, "ep": "5a3c91e2"}]
+
+    # A server that hears of the receiver from a short frame first gets its clock rate right.
+    from adsbee_mlat.engine import Engine
+    rx = Engine().apply_info(infos[0])
+    assert rx.clock_hz == 48_000_000
