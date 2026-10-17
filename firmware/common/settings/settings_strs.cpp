@@ -13,7 +13,13 @@ const char
                                            [SettingsManager::kReportingProtocolStrMaxLen] = {
                                                "NONE",  "RAW",      "BEAST",    "BEAST_NO_UAT", "BEAST_NO_UAT_UPLINK",
                                                "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90", "AIRCRAFT_JSON",
-                                               "GDL90_NO_UAT_UPLINK", "AIRCRAFT_JSON_UAT_UPLINK"};
+                                               "GDL90_NO_UAT_UPLINK", "AIRCRAFT_JSON_UAT_UPLINK", "ASTERIX"};
+
+const char SettingsManager::kFeedTransportStrs[SettingsManager::kNumFeedTransports]
+                                              [SettingsManager::kFeedTransportStrMaxLen] = {"TCP", "UDP", "MQTT"};
+
+const char SettingsManager::kMQTTTransportStrs[SettingsManager::kNumMQTTTransports]
+                                              [SettingsManager::kMQTTTransportStrMaxLen] = {"TCP", "WS"};
 
 const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioModes]
                                            [SettingsManager::kSubGHzModeStrMaxLen] = {

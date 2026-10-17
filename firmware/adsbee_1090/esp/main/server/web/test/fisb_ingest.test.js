@@ -292,7 +292,8 @@ test('adsbee_1421_console warns below 230400 baud', async () => {
 test('protocol lists include AIRCRAFT_JSON_UAT_UPLINK', () => {
     const pages = ['settings.js', 'adsbee.js'].map((file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8'));
     for (const text of [...pages, ...CONSOLES.map(consoleHtml)]) {
-        const lists = text.match(/\[[^\]]*'AIRCRAFT_JSON'[^\]]*\]/g) || [];
+        // Lists of protocol names only (the feed presets are objects that name one protocol each).
+        const lists = text.match(/\[[^\]{}]*'AIRCRAFT_JSON'[^\]{}]*\]/g) || [];
         assert.ok(lists.length > 0);
         for (const list of lists) assert.match(list, /'AIRCRAFT_JSON_UAT_UPLINK'/);
     }

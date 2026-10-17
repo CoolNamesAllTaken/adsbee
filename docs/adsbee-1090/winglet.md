@@ -96,7 +96,7 @@ Winglet and the [ADSBee 1090U](index.md#1090u) share the same receiver architect
 Winglet runs ADSBee 1090 firmware, so it decodes and reports the same things as the rest of the ADSBee 1090 family:
 
 - **Receive:** 1090MHz Mode S and ADS-B; 978MHz UAT ADS-B and ground uplink (FIS-B / TIS-B); 2.4GHz Remote ID over Bluetooth and WiFi (experimental).
-- **Reporting protocols:** Raw packets, CSBee, MAVLINK1, MAVLINK2, GDL90 (with or without UAT uplink), Mode S Beast, and Aircraft JSON.
+- **Reporting protocols:** Raw packets, CSBee, MAVLINK1, MAVLINK2, GDL90 (with or without UAT uplink), Mode S Beast, Aircraft JSON, and ASTERIX.
 - **Network feeds:** stream decoded data to feeders and other endpoints over WiFi, with no external computer required.
 
 GDL90 is the open data format used by EFB apps, so a tablet connected to Winglet’s WiFi network can display traffic and weather.

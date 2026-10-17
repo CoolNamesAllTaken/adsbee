@@ -1,8 +1,10 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "data_structures.hh"  // PFBQueue
+#include "remote_id_guard.hh"
 #include "remote_id_packet.hh"
 #include "remote_id_tx.hh"
 #include "settings.hh"
@@ -10,11 +12,11 @@
 /**
  * RemoteIDManager orchestrates Broadcast Remote ID (ASTM F3411) reception on the ESP32-S3.
  *
- * It decides which transports can run given (a) the user's settings, (b) the hardware (without PSRAM, Remote ID needs
- * WiFi AP/STA off), and
- * (c) live heap headroom. It brings up the BLE (NimBLE) observer and, on capable configurations, the WiFi promiscuous
- * sniffer; both feed a single de-duplication / rate-limiting stage before packets are ingested locally and forwarded to
- * the RP2040.
+ * It decides which transports can run given (a) the user's settings, (b) the hardware (without PSRAM, BLE needs every
+ * network interface off and the WiFi sniffer needs WiFi AP/STA off), and (c) live heap headroom, re-checked while it
+ * runs (RemoteIDGuard::HeapWatch). It brings up the BLE (NimBLE) observer and, on capable configurations, the WiFi
+ * promiscuous sniffer; both feed a single de-duplication / rate-limiting stage before packets are ingested locally
+ * and forwarded to the RP2040.
  *
  * Wiring:
  *   - Received advertisements are parsed to raw ODID bytes and handed to OnRawRemoteIDPacket() (from the NimBLE host
@@ -28,7 +30,7 @@
  * freeing them on disable would race those consumers; the RAM stays claimed only after Remote ID is enabled at least
  * once (rare), which is an acceptable trade for avoiding a use-after-free.
  *   - Apply() is called from SettingsManager::Apply() (esp/main/settings.cpp) after the WiFi/Ethernet interfaces are
- *     (re)configured, so it sees the resolved network state.
+ *     (re)configured; the transports are reconciled on the main task in the next Update().
  *   - GetStatus() feeds ObjectDictionary::ESP32DeviceStatus::remote_id_status so the RP2040 can explain the live state.
  */
 class RemoteIDManager {
@@ -39,6 +41,9 @@ class RemoteIDManager {
     // 1 Hz heap_free_bytes telemetry. Guards measure internal SRAM only (HardwareCapabilities::kInternalHeapCaps).
     static constexpr uint32_t kMinHeapFreeBytesForBLE = 70 * 1024;
     static constexpr uint32_t kMinHeapFreeBytesForWiFiSniffer = 55 * 1024;
+    // Without PSRAM, Bluetooth (controller + host + packet queues, measured ~47 KB on a 1090U) starts only if the heap
+    // stays above RemoteIDGuard::kReserveFreeBytes once it is up, so the heap watch doesn't pause it right away.
+    static constexpr uint32_t kBLEHeapCostBytes = 48 * 1024;
 
     // Packet queue depths (lazily heap-allocated; see class comment). Kept small: after per-source rate limiting the
     // sustained rate is ~1 Hz/drone, and both queues are drained every main-loop / SPI iteration.
@@ -63,38 +68,23 @@ class RemoteIDManager {
     // RX buffers), but the BLE/WiFi stacks it brings up are the same, so it still must not starve the network stack.
     static constexpr uint32_t kMinHeapFreeBytesForTx = 60 * 1024;
 
-    // Live status bitfield, mirrored into ObjectDictionary::ESP32DeviceStatus::remote_id_status. Low byte is receive
-    // state, high byte is transmit state.
-    enum Status : uint16_t {
-        kStatusBLEActive = 1 << 0,          // NimBLE observer is scanning.
-        kStatusBLECodedPHYActive = 1 << 1,  // Coded PHY (BT5 Long Range) extended scan is active.
-        kStatusWiFiSnifferActive = 1 << 2,  // WiFi promiscuous sniffer is running.
-        kStatusBlockedByWiFi = 1 << 3,      // Requested but blocked: WiFi AP/STA up on hardware without PSRAM.
-        kStatusBlockedByRAM = 1 << 4,       // Requested but blocked: insufficient free heap.
-        kStatusNotInBuild = 1 << 5,         // Requested but Bluetooth is not compiled into this firmware.
+    // How often a transport refused for lack of RAM is retried.
+    static constexpr uint32_t kBlockedRetryIntervalMs = 10 * 1000;
 
-        kStatusTxBLELegacyActive = 1 << 8,   // Advertising Remote ID on BT4 legacy (1M PHY).
-        kStatusTxBLECodedActive = 1 << 9,    // Advertising Remote ID on BT5 Long Range (Coded PHY).
-        kStatusTxWiFiBeaconActive = 1 << 10, // Injecting Remote ID WiFi beacon frames.
-        kStatusTxNoPosition = 1 << 11,       // Transmitting, but rx_position is unavailable (Location sent as unknown).
-        kStatusTxBlocked = 1 << 12,          // Transmit requested but could not start (RAM, radio conflict, or build).
-        // Transmitting, but the configured rx_position source is one we may never broadcast as our own (an
-        // aircraft-derived position, or none at all) -- see SettingsManager::RxPosition::MayBeTransmittedAsOwnPosition.
-        // Always accompanied by kStatusTxNoPosition; this bit says the fix is a setting to change, not a wait.
-        kStatusTxPositionSourceNotAllowed = 1 << 13,
-    };
+    // Live status bits (RemoteIDGuard::Status), mirrored into ObjectDictionary::ESP32DeviceStatus::remote_id_status.
+    using enum RemoteIDGuard::Status;
 
     RemoteIDManager() = default;
 
     /**
-     * (Re)configures Remote ID reception from the current settings and network state. Idempotent: brings transports up
-     * or down to match. Called from SettingsManager::Apply() and safe to call repeatedly.
+     * Requests a reconcile of the transports with the current settings and network state, done in the next Update().
+     * Called from SettingsManager::Apply() (any task) and safe to call repeatedly.
      */
-    void Apply();
+    void Apply() { apply_pending_ = true; }
 
     /**
-     * Per-iteration work: services the WiFi channel hopper (when the sniffer is active) and any deferred bookkeeping.
-     * Called from ADSBeeServer::Update().
+     * Per-iteration work on the main task: reconciles transports, runs the heap watch, services the WiFi channel hopper
+     * and the transmit tick. Called from ADSBeeServer::Update().
      */
     void Update();
 
@@ -128,6 +118,9 @@ class RemoteIDManager {
     RemoteIDTransmitter& GetTransmitter() { return tx_; }
 
    private:
+    // Brings all transports up or down to match settings, network, heap watch and free heap.
+    void ReconcileAll();
+
     // Decides the target transport set from settings + build + network + heap, then reconciles the running transports.
     void Reconcile();
 
@@ -139,6 +132,20 @@ class RemoteIDManager {
 
     // True if Remote ID can run alongside WiFi AP/STA (PSRAM detected).
     static bool CanCoexistWithWiFi();
+
+    // Transports the enabled network interfaces leave room for on this hardware (RemoteIDGuard::AllowedTransports).
+    static uint8_t AllowedTransports();
+
+    // Samples the heap once a second and pauses or allows Remote ID (heap_watch_).
+    void ServiceHeapWatch();
+
+    // True while the Bluetooth stack is up for receive or transmit, so adding the other costs little RAM.
+    bool BLEStackUp() const { return ble_running_ || ble_tx_legacy_running_ || ble_tx_coded_running_; }
+
+    bool AnyTransportRunning() const {
+        return ble_running_ || wifi_sniffer_running_ || ble_tx_legacy_running_ || ble_tx_coded_running_ ||
+               wifi_tx_running_;
+    }
 
     // Rate-limit decision for forwarding a packet to the RP2040. Updates the dedup table. Returns true to forward.
     bool ShouldForwardToRP2040(const RawRemoteIDPacket& packet);
@@ -156,6 +163,7 @@ class RemoteIDManager {
     bool BLETxStart(bool enable_legacy, bool enable_coded_phy);
     void BLETxStop();
     void BLETxServiceTick();  // Refreshes the advertised ODID content; call at the transmit cadence.
+    void BLEReleaseIfIdle();  // Frees the NimBLE host and controller once neither scanning nor advertising.
     static bool BluetoothIsSupported();  // False when Bluetooth isn't compiled into this firmware.
 
     // WiFi sniffer, in remote_id_wifi_sniffer.cpp. With attach_to_network_wifi it listens on the running AP/STA
@@ -176,6 +184,13 @@ class RemoteIDManager {
         uint32_t last_static_forward_ms = 0;
     };
     DedupEntry* FindOrAllocDedupEntry(const uint8_t mac[6]);
+
+    std::atomic<bool> apply_pending_ = false;
+    RemoteIDGuard::HeapWatch heap_watch_;
+    uint32_t last_heap_watch_ms_ = 0;
+    uint32_t last_blocked_retry_ms_ = 0;
+    // Remote ID settings at the last reconcile; a change clears the heap watch back-off.
+    uint32_t applied_rid_settings_ = 0;
 
     uint16_t status_ = 0;
     bool ble_running_ = false;

@@ -261,6 +261,10 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tAltitude Filter: %s, %ld, %ld ft\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
                    (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
+    // ASTERIX settings
+    CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
+    CONSOLE_PRINTF("\tASTERIX SIC: %u\r\n", settings.asterix_sic);
+
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
     CONSOLE_PRINTF("\t\tSource: %s [%s]\r\n", RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
@@ -346,4 +350,7 @@ void SettingsManager::PrintAT() {
 
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", adsbee.GetWatchdogTimeoutSec());
+
+    // AT+ASTERIX_SAC_SIC
+    CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
 }

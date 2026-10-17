@@ -57,6 +57,7 @@ class SettingsManager {
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
+        kASTERIX,                // EUROCONTROL ASTERIX CAT021 target reports and CAT023 status.
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -199,6 +200,11 @@ class SettingsManager {
         bool filter_distance_enabled = false;
         uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
 
+        // ASTERIX data source identifier (I021/010, I023/010), added in version 6: System Area Code and System
+        // Identification Code.
+        uint8_t asterix_sac = 0;
+        uint8_t asterix_sic = 0;
+
         // Altitude filter (AT+FILTER_ALTITUDE_FT=<mode>,<a>,<b>), added in version 6: an AltitudeFilterMode with its
         // arguments in feet. Leaves aircraft outside the selected altitudes out of the same aircraft reports as the
         // distance filter. Aircraft with no known altitude are always kept.
@@ -256,12 +262,12 @@ class SettingsManager {
     static_assert(offsetof(Settings, crc) == sizeof(Settings) - sizeof(uint32_t),
                   "Settings::crc must be the last member, with no trailing padding.");
 
-    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended the distance filter
-    // (filter_distance_enabled, filter_distance_deci_nm) and the altitude filter (filter_altitude_*).
+    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled,
+    // filter_distance_deci_nm, asterix_sac, asterix_sic and the altitude filter (filter_altitude_*).
     static constexpr uint16_t kVersion5SettingsSize = 62;
     static_assert(kSettingsVersion == 6 &&
                       offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
-                      sizeof(Settings) == kVersion5SettingsSize + 14,
+                      sizeof(Settings) == kVersion5SettingsSize + 16,
                   "Settings changed: update MigrateFromVersion5 or add a migration from version 6.");
 
     /**
@@ -279,13 +285,8 @@ class SettingsManager {
         if (magic != kSettingsMagic || version != 5 || crc != crc32_ieee_802_3(blob, kFieldBytes)) {
             return false;
         }
-        out = Settings();
+        out = Settings();  // The fields added in version 6 take their defaults.
         memcpy(static_cast<void *>(&out), blob, kFieldBytes);
-        out.filter_distance_enabled = false;
-        out.filter_distance_deci_nm = Settings::kDefaultFilterDistanceDeciNm;
-        out.filter_altitude_mode = kAltitudeFilterOff;
-        out.filter_altitude_a_ft = Settings::kDefaultFilterAltitudeAFt;
-        out.filter_altitude_b_ft = Settings::kDefaultFilterAltitudeBFt;
         out.Stamp();
         return true;
     }

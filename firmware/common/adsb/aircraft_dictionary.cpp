@@ -26,8 +26,84 @@ const uint32_t kCPRPositionFilterVelocityMps =
  * ModeSAircraft
  */
 
-ModeSAircraft::ModeSAircraft(uint32_t icao_address_in) : icao_address(icao_address_in) {
-    // memset(callsign, '\0', kCallSignMaxNumChars + 1);  // clear out callsign string, including extra EOS character
+ModeSAircraft::ModeSAircraft(uint32_t icao_address_in) : icao_address(icao_address_in & 0xFFFFFF) {
+    uint8_t qualifier = (icao_address_in & kAddressQualifierMask) >> kAddressQualifierBitShift;
+    if (qualifier != 0) {
+        // Every message to a non-ICAO entry has its address type.
+        position_address_type = velocity_address_type = static_cast<AddressType>(qualifier);
+        cpr_address_type = last_address_type = qualifier;
+    }
+}
+
+ModeSAircraft::AddressType ModeSAircraft::GetAddressType(const ModeSADSBPacket& packet) {
+    if (packet.downlink_format == ModeSADSBPacket::kDownlinkFormatExtendedSquitter) {
+        return kAddressTypeADSBICAO;
+    }
+    if (packet.downlink_format != ModeSADSBPacket::kDownlinkFormatExtendedSquitterNonTransponder) {
+        return kAddressTypeModeS;
+    }
+    AddressType icao_type, other_type;
+    switch (packet.ca_cf.code_format) {
+        case 0:
+            return kAddressTypeADSBICAONonTransponder;
+        case 1:
+            return kAddressTypeADSBOther;
+        case 2:  // Fine TIS-B.
+            icao_type = kAddressTypeTISBICAO;
+            other_type = kAddressTypeTISBTrackFile;
+            break;
+        case 5:  // Fine TIS-B with a non-ICAO address.
+            return kAddressTypeTISBOther;
+        case 6:  // ADS-R.
+            icao_type = kAddressTypeADSRICAO;
+            other_type = kAddressTypeADSROther;
+            break;
+        default:  // 3 coarse TIS-B, 4 management messages, 7 reserved.
+            return kAddressTypeInvalid;
+    }
+    // ME bit (0-indexed) of the ICAO/Mode A flag. Identification messages have none and use ICAO addresses.
+    int16_t imf_bit = -1;
+    uint16_t type_code = packet.type_code;
+    if (type_code == 0 || (type_code >= 9 && type_code <= 18) || (type_code >= 20 && type_code <= 22)) {
+        imf_bit = 7;  // Airborne position.
+    } else if (type_code >= 5 && type_code <= 8) {
+        imf_bit = 20;  // Surface position.
+    } else if (type_code == 19) {
+        uint8_t subtype = packet.GetNBitWordFromMessage(3, 5);
+        imf_bit = subtype >= 1 && subtype <= 4 ? 8 : -1;  // Airborne velocity.
+    } else if (type_code == 28) {
+        imf_bit = packet.GetNBitWordFromMessage(3, 5) == 1 ? 55 : -1;  // Emergency status.
+    } else if (type_code == 29) {
+        imf_bit = 50;  // Target state and status.
+    } else if (type_code == 31) {
+        imf_bit = 55;  // Operational status.
+    }
+    return imf_bit >= 0 && packet.GetNBitWordFromMessage(1, imf_bit) ? other_type : icao_type;
+}
+
+bool ModeSAircraft::AcceptAddressType(AddressType type, uint16_t type_code, uint32_t timestamp_ms) {
+    bool position_held = HasBitFlag(kBitFlagPositionValid) && type > position_address_type &&
+                         timestamp_ms - last_position_update_ms < kAddressTypeHoldMs;
+    bool is_position = type_code == 0 || (type_code >= 5 && type_code <= 18) || (type_code >= 20 && type_code <= 22);
+    if (is_position) {
+        if (position_held) {
+            return false;
+        }
+        if (type != cpr_address_type) {
+            ClearCPRPackets();  // Don't pair CPR packets from different sources.
+            cpr_address_type = type;
+        }
+    } else if (type_code == ModeSADSBPacket::kTypeCodeAirborneVelocities) {
+        if (last_velocity_update_ms != 0 && type > velocity_address_type &&
+            timestamp_ms - last_velocity_update_ms < kAddressTypeHoldMs) {
+            return false;
+        }
+        velocity_address_type = type;
+    } else if (position_held) {
+        return false;
+    }
+    last_address_type = type;
+    return true;
 }
 
 ModeSAircraft::ModeSAircraft() {
@@ -172,6 +248,7 @@ bool ModeSAircraft::DecodePosition(bool is_airborne, uint32_t ref_lat_awb32, uin
 #endif
 
     WriteBitFlag(BitFlag::kBitFlagPositionValid, true);
+    position_address_type = static_cast<AddressType>(cpr_address_type);
     latitude_deg = wrapped_latitude_deg;
     longitude_deg = WrapCPRDecodeLongitude(result.lon_deg);
     last_track_update_timestamp_ms = most_recent_received_timestamp_ms;  // Update last track update timestamp.
@@ -495,8 +572,10 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
             break;
     }
 
-    // ME[7] - NIC B Supplement (Formerly Single Antenna Flag)
-    WriteNICBit(ADSBTypes::kNICBitB, packet.GetNBitWordFromMessage(1, 7));
+    // ME[7] - NIC B Supplement (Formerly Single Antenna Flag). TIS-B and ADS-R carry the ICAO/Mode A flag here.
+    if (!IsRebroadcast(GetAddressType(packet))) {
+        WriteNICBit(ADSBTypes::kNICBitB, packet.GetNBitWordFromMessage(1, 7));
+    }
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitB)) {
         // Assign NIC based on NIC supplement bits A (bit 0) and B (bit 1) and received TypeCode. DO-260C Table 2-11.
@@ -792,6 +871,7 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
     // Non-latching bit flags.
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection, true);
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalSpeed, true);
+    last_velocity_update_ms = get_time_since_boot_ms();
 
     // Decode vertical rate.
     int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
@@ -1216,6 +1296,7 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
         state_vector.horizontal_velocity, state_vector.air_ground_state, direction_deg, speed_kts);
     WriteBitFlag(BitFlag::kBitFlagUpdatedDirection, true);
     WriteBitFlag(BitFlag::kBitFlagUpdatedHorizontalSpeed, true);
+    last_velocity_update_ms = last_message_timestamp_ms;  // Local time for UAT.
 
     // Parse direction type and use it to set flags.
     bool direction_valid = false;
@@ -1573,8 +1654,18 @@ AircraftDictionary::AddressSourceRank AircraftDictionary::GetAddressSourceRank(c
                                                                                uint32_t& icao_address) {
     if (const ModeSAircraft* ac = std::get_if<ModeSAircraft>(&entry)) {
         icao_address = ac->icao_address & 0xFFFFFF;
-        return ac->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsNonTransponder) ? kAddressSourceRankRebroadcast
-                                                                                 : kAddressSourceRankDirect;
+        switch (ac->GetAddressType()) {
+            case ModeSAircraft::kAddressTypeADSBICAO:
+            case ModeSAircraft::kAddressTypeADSBICAONonTransponder:
+            case ModeSAircraft::kAddressTypeModeS:
+                return kAddressSourceRankDirect;
+            case ModeSAircraft::kAddressTypeADSRICAO:
+                return kAddressSourceRankRebroadcast;
+            case ModeSAircraft::kAddressTypeTISBICAO:
+                return kAddressSourceRankTISB;
+            default:
+                return kAddressSourceRankUnique;
+        }
     }
     if (const UATAircraft* ac = std::get_if<UATAircraft>(&entry)) {
         icao_address = ac->icao_address & 0xFFFFFF;
@@ -1954,7 +2045,27 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
     }
 
     uint32_t icao_address = packet.icao_address;
-    uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
+    ModeSAircraft::AddressType address_type = ModeSAircraft::GetAddressType(packet);
+    if (address_type == ModeSAircraft::kAddressTypeInvalid) {
+        return true;  // DF18 message that doesn't describe a target.
+    }
+    uint32_t uid = ModeSAircraft::AddressToUID(icao_address, address_type);
+    // Identification messages have no ICAO/Mode A flag. A TIS-B or ADS-R one goes to the non-ICAO entry with its
+    // address if there is no ICAO entry, so that it doesn't start a target of its own.
+    bool is_identification = packet.type_code >= ModeSADSBPacket::kTypeCodeAircraftID &&
+                             packet.type_code < ModeSADSBPacket::kTypeCodeSurfacePosition;
+    if (is_identification &&
+        (address_type == ModeSAircraft::kAddressTypeTISBICAO || address_type == ModeSAircraft::kAddressTypeADSRICAO) &&
+        !ContainsAircraft(uid)) {
+        ModeSAircraft::AddressType other_type = address_type == ModeSAircraft::kAddressTypeTISBICAO
+                                                    ? ModeSAircraft::kAddressTypeTISBTrackFile
+                                                    : ModeSAircraft::kAddressTypeADSROther;
+        uint32_t other_uid = ModeSAircraft::AddressToUID(icao_address, other_type);
+        if (ContainsAircraft(other_uid)) {
+            address_type = other_type;
+            uid = other_uid;
+        }
+    }
     ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         // This should never happen, since the aircraft dictionary will automatically remove the oldest aircraft to make
@@ -1963,18 +2074,24 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
                       "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n", icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
-    aircraft_ptr->last_message_signal_strength_dbm = packet.raw.sigs_dbm;
-    aircraft_ptr->last_message_signal_quality_db = packet.raw.sigq_db;
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_timestamp_ms = timestamp_ms;
 
     if (packet.downlink_format == ModeSADSBPacket::kDownlinkFormatMilitaryExtendedSquitter) {
         // Don't attempt to decode military extended squitter packets, since we don't have the specs for them. Just mark
         // the aircraft as military and record the ICAO and signal strength / quality.
+        aircraft_ptr->last_message_signal_strength_dbm = packet.raw.sigs_dbm;
+        aircraft_ptr->last_message_signal_quality_db = packet.raw.sigq_db;
         aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsMilitary, true);
         return true;  // Early bail out.
-    } else if (packet.downlink_format == ModeSADSBPacket::kDownlinkFormatExtendedSquitterNonTransponder) {
-        aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsNonTransponder, true);
     }
+    if (!aircraft_ptr->AcceptAddressType(address_type, packet.type_code, timestamp_ms)) {
+        aircraft_ptr->IncrementNumFramesReceived(true);
+        return true;  // A more direct source holds this data.
+    }
+    // Signal strength of the transmitter that is reported.
+    aircraft_ptr->last_message_signal_strength_dbm = packet.raw.sigs_dbm;
+    aircraft_ptr->last_message_signal_quality_db = packet.raw.sigq_db;
 
     bool ret = false;
     uint16_t type_code = packet.type_code;
@@ -2042,6 +2159,10 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
 #endif                   // ADSB_VERBOSE_PACKET_WARNINGS
             ret = true;  // TC = 30 (Reserved): silently ignore.
     }
+    ModeSAircraft::AddressType reported_type = aircraft_ptr->GetAddressType();
+    aircraft_ptr->WriteBitFlag(
+        ModeSAircraft::BitFlag::kBitFlagIsNonTransponder,
+        reported_type != ModeSAircraft::kAddressTypeADSBICAO && reported_type != ModeSAircraft::kAddressTypeModeS);
     if (ret) {
         aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.
     } else {

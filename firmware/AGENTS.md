@@ -161,7 +161,13 @@ static constexpr uint32_t kSettingsVersion = N;
 
 ### Rules
 1. **Any change to ESP32 or CC1312 code, or to shared `common/` code** → the firmware version must be **not yet released** (an RC for dev builds). Keep the branch's version if it is already the next unreleased RC; if it matches a release tag, move to the next unreleased RC. A `common/` change applies to adsbee_1421 too, except `common/coprocessor/object_dictionary.cpp`.
-2. **Any change to the `Settings` struct** → increment `kSettingsVersion` and follow rule 1; commit both together.
+2. **Any change to the `Settings` struct** → at most one new `kSettingsVersion` per RC, and follow rule 1. Devices only
+   hold settings versions that shipped in a tag (release or RC).
+   - If the branch's `kSettingsVersion` is above the one in the product's latest tag, it is the unreleased version:
+     change its struct in place and update its migration from the last shipped version. Don't increment.
+   - Increment only when the current version matches a tagged one: freeze that layout and add a migration from it.
+   - Frozen snapshots and migrations exist only for shipped versions (adsbee_1090: `common/settings/settings_versions.hh`
+     and `settings_migration.cpp`; adsbee_1421: `MigrateFromVersion*` in `adsbee_1421/ti/settings/settings.hh`).
 3. If the firmware version is unchanged, RP2040 skips reflashing the coprocessors, so old behavior persists after flashing a new `combined.uf2`. To test under an unchanged version, force a reflash or bump the RC locally.
 4. Never go below the latest release. Every RC sorts below its release: `0.9.1-rc9` < `0.9.1` < `0.9.2-rc1`.
 
