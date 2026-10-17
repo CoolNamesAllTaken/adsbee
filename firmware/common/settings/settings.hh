@@ -64,7 +64,7 @@ class SettingsManager {
 
     /**
      * Transport a new feed of a protocol uses when none is given: TCP for aggregator protocols, UDP for protocols that
-     * local devices listen for, MQTT for aircraft JSON.
+     * local devices listen for and for ASTERIX, MQTT for aircraft JSON.
      */
     static constexpr FeedTransport DefaultFeedTransport(ReportingProtocol protocol) {
         switch (protocol) {
@@ -72,6 +72,7 @@ class SettingsManager {
             case kMAVLINK2:
             case kGDL90:
             case kGDL90NoUATUplink:
+            case kASTERIX:
                 return kFeedTransportUDP;
             case kAircraftJSON:
             case kAircraftJSONUATUplink:
