@@ -23,7 +23,11 @@ tells the server who the receiver is, what its timestamps count and where its an
 | Server port | 31090 | 31090 |
 | Direction | Receiver connects to the server and only sends | Receiver sends datagrams |
 | Framing | Continuous Beast byte stream | Each datagram holds whole Beast frames only |
-| Receiver info | First frame after connecting, then periodically | First frame of **every** datagram (at least `id` and `ep`) |
+| Receiver info | First frame after connecting, then periodically | First frame of **every** datagram (at least `id`, `clk` and `ep`) |
+
+A receiver may also send the stream as MQTT messages (ADSBee feeds with the MQTT transport): each message holds whole
+Beast frames, and the receiver info follows the TCP rules, since the broker connection is a TCP connection. Send `clk`
+in every info frame: a server that first hears of a receiver from a frame without it can only assume a clock rate.
 
 TCP is preferred: frames arrive in order and a lost connection is visible to both sides. UDP suits links where a TCP
 connection cannot be kept up; a lost datagram costs only the frames in it. Keep datagrams under 1400 bytes.
@@ -84,7 +88,8 @@ Fields not present keep their previous value, so a periodic frame may carry only
 
 ### When to send it
 
-- First frame of every TCP connection and of every UDP datagram.
+- First frame of every TCP connection and of every UDP datagram. In a UDP datagram that comes between full frames,
+  `v`, `id`, `clk` and `ep` are enough (ADSBee sends that short frame).
 - Every 10 seconds, with `lat`, `lon`, `alt`, `src` and `pps` if available.
 - At least once per second (with position) while `mov=1`.
 - Immediately when `ep` changes, before any frame stamped with the new epoch.
