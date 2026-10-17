@@ -59,7 +59,9 @@ const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
 **CRITICAL RULES:**
 
 1. **When changing shared structures (like Settings)**:
-   - MUST increment `kSettingsVersion` in `firmware/common/settings/settings.hh`
+   - Use one new `kSettingsVersion` per RC (`firmware/common/settings/settings.hh`): increment it only if it matches
+     the version in the latest tag, otherwise change the unreleased version in place (see
+     [`../AGENTS.md`](../AGENTS.md#rules))
    - MUST increment firmware version (patch or RC) to force ESP32 reflash
    - Both changes must be committed together
 
@@ -71,8 +73,8 @@ const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
 
 3. **Settings version (`kSettingsVersion`)**:
    - Located in: `firmware/common/settings/settings.hh`
-   - Increment when ANY field is added/removed/changed in Settings struct
-   - Causes settings reset on both processors
+   - Changes when a field is added/removed/changed in the Settings struct, at most once per RC
+   - The RP2040 migrates settings from each shipped version (`settings_migration.cpp`); other versions reset
    - Prevents settings corruption from mismatched structures
 
 ### Common Development Pitfalls
@@ -148,9 +150,11 @@ bool my_new_feature_enabled = false;
 uint32_t my_new_parameter = 42;
 ```
 
-2. **Increment kSettingsVersion**:
+2. **Set kSettingsVersion**: if it matches the version in the product's latest tag, increment it, freeze that layout
+   in `settings_versions.hh` and add a migration. If it is already above that tag, keep it and update its migration
+   from the last shipped version.
 ```cpp
-static constexpr uint32_t kSettingsVersion = 12;  // Was 11
+static constexpr uint32_t kSettingsVersion = 20;  // Was 19, which shipped in a tag
 ```
 
 3. **Increment firmware version** in `firmware/common/coprocessor/object_dictionary.cpp`:
@@ -182,12 +186,11 @@ git commit -m "Add new feature settings, bump versions for ESP32 reflash"
    - Or hold BOOT button on ESP32 during RP2040 reset
 
 4. **Settings reset**:
-   - Increment kSettingsVersion forces reset
-   - Or use AT command: `AT+RSTS`
+   - Use AT command: `AT+RSTS`
 
 ### Testing Checklist
 
-- [ ] Settings struct changes? → Increment kSettingsVersion
+- [ ] Settings struct changes? → One new kSettingsVersion per RC, with a migration from the last shipped version
 - [ ] ESP32 code changed? → Increment firmware version
 - [ ] CC1312 code changed? → Increment firmware version
 - [ ] Build passes on all three processors?

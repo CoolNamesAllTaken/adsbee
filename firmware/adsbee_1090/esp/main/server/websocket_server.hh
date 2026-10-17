@@ -1,6 +1,7 @@
 #ifndef WEBSOCKET_MANAGER_HH_
 #define WEBSOCKET_MANAGER_HH_
 
+#include <algorithm>
 #include <functional>
 
 #include "esp_http_server.h"
@@ -38,9 +39,13 @@ class WebSocketServer {
     static constexpr uint32_t kClientSendTimeoutMs = 1000;
     // A client that stays stalled for this long is dropped.
     static constexpr uint32_t kClientStallTimeoutMs = 10000;
-    // ClientIsWritable() guarantees room for this much: lwIP reports a socket writable while more than half of
-    // CONFIG_LWIP_TCP_SND_BUF_DEFAULT is free. Broadcasts keep to this length so a frame never fits only in part.
+    // ClientIsWritable() guarantees room for this much: lwIP reports a socket writable while more than TCP_SNDLOWAT
+    // (here 2 * MSS + 1) bytes of its send buffer are free. Broadcasts keep to this length so a frame never fits only in
+    // part. The send buffer itself is kept small (4 KB), since every client pins up to that much heap.
     static constexpr uint16_t kNonBlockingMessageMaxLen = 2048;
+    static_assert(kNonBlockingMessageMaxLen + 4 <=
+                  std::min(std::max(CONFIG_LWIP_TCP_SND_BUF_DEFAULT / 2, 2 * CONFIG_LWIP_TCP_MSS + 1),
+                           CONFIG_LWIP_TCP_SND_BUF_DEFAULT - 1));
 
     struct WebSocketServerConfig {
         char label[kWebSocketLabelMaxLen] = "Untitled";

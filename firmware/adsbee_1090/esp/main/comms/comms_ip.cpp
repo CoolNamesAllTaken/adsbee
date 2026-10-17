@@ -310,7 +310,8 @@ void CommsManager::IPWANTask(void* pvParameters) {
 
         UpdateFeedMetrics();
         UpdateFeedSendBuffers();
-        PublishFeedMQTTMetrics();
+        UpdateMQTTClient();
+        PublishMQTTMetrics();
         LogWANQueueOverflows();
 
         uint16_t num_active_report_sinks = 0;
@@ -344,7 +345,9 @@ void CommsManager::IPWANTask(void* pvParameters) {
                     feed_config_crcs_[i] = config_crc;
                     feed_transports_in_use_[i] = settings_manager.settings.feed_transports[i];
                 }
-                if (!feed_sock_is_connected_[i] && !ConnectFeedSocket(i)) {
+                // An MQTT feed follows the state of the shared client.
+                bool is_mqtt = feed_transports_in_use_[i] == SettingsManager::kFeedTransportMQTT;
+                if ((!feed_sock_is_connected_[i] || is_mqtt) && !ConnectFeedSocket(i)) {
                     // Need to open the socket connection, but failed to do so.
                     continue;  // Failed to connect, try again later.
                 }
@@ -406,17 +409,12 @@ uint32_t CommsManager::FeedConfigCRC(uint16_t feed_index) {
                            crc);
     crc = crc32_ieee_802_3(reinterpret_cast<const uint8_t*>(&s.feed_transports[feed_index]),
                            sizeof(s.feed_transports[0]), crc);
-    crc = crc32_ieee_802_3(s.feed_receiver_ids[feed_index], sizeof(s.feed_receiver_ids[0]), crc);
-    if (s.feed_transports[feed_index] == SettingsManager::kFeedTransportMQTT) {
-        crc = crc32_ieee_802_3(reinterpret_cast<const uint8_t*>(&s.feed_mqtt[feed_index]), sizeof(s.feed_mqtt[0]), crc);
-    }
-    return crc;
+    return crc32_ieee_802_3(s.feed_receiver_ids[feed_index], sizeof(s.feed_receiver_ids[0]), crc);
 }
 
 void CommsManager::CloseFeedSocket(uint16_t feed_index) {
-    if (feed_transports_in_use_[feed_index] == SettingsManager::kFeedTransportMQTT) {
-        CloseFeedMQTT(feed_index);
-    } else {
+    // MQTT feeds share the client, which UpdateMQTTClient() stops when no MQTT feed is left.
+    if (feed_transports_in_use_[feed_index] != SettingsManager::kFeedTransportMQTT) {
         close(feed_sock_[feed_index]);
     }
     feed_send_buffers_[feed_index].Close();
