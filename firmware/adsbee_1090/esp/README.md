@@ -51,7 +51,7 @@ The ESP32 firmware in `combined.uf2` runs on both modules used on ADSBee 1090 ha
   any of these.
 * **Bluetooth controller in flash:** `CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY` links the controller from flash instead of
   IRAM. That pays for advertising (`CONFIG_BT_CTRL_BLE_ADV`, needed for Remote ID transmit, ~4.5 KB in IRAM) and
-  still leaves ~10 KB more heap on every unit, at ~120 KB of flash. Bluetooth pauses while the flash cache is off
+  still leaves ~8.5 KB more heap on every unit, at ~120 KB of flash. Bluetooth pauses while the flash cache is off
   (flash writes), which Remote ID tolerates.
 * **Web server RAM:** each viewer pins the data queued on its sockets until the browser acknowledges it. lwIP's send
   buffer is 4 KB per socket with quarter-MSS oversize, Live Map frames are 1 KB, a Live Map report starts between
