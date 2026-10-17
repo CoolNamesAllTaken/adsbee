@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "crc.hh"
+#include "receiver_position.hh"
 
 /**
  * Running CRC32 (IEEE 802.3, same as zlib) for AT+CONFIG_HASH. Values are added in one fixed form on every target:
@@ -31,6 +32,12 @@ class ConfigHasher {
         uint32_t bits;
         memcpy(&bits, &value, sizeof(bits));
         AddU32(bits);
+    }
+    void AddDouble(double value) {
+        uint64_t bits;
+        memcpy(&bits, &value, sizeof(bits));
+        AddU32(static_cast<uint32_t>(bits));
+        AddU32(static_cast<uint32_t>(bits >> 32));
     }
 
     /**
@@ -78,6 +85,17 @@ class ConfigHasher {
         } else if (position.source == RxPosition::kPositionSourceAircraftMatchingICAO) {
             AddU32(position.icao_address);
         }
+    }
+
+    void AddRxPositionDetails(const RxPositionDetails& details, bool include_values) {
+        AddBool(details.moving);
+        if (!include_values) {
+            return;
+        }
+        AddBool(details.ellipsoid_height_set);
+        AddFloat(details.ellipsoid_height_m);
+        AddFloat(details.horizontal_accuracy_m);
+        AddFloat(details.vertical_accuracy_m);
     }
 
    private:

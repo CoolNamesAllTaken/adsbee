@@ -145,6 +145,10 @@ class ADSBee {
     SettingsManager::RxPosition rx_position;
     bool rx_position_available = false;
 
+    // MLAT feed clock epoch: random at boot from the LR2021's random number generator, and new whenever the MLAT time
+    // base restarts.
+    uint32_t mlat_epoch = 0;
+
    private:
 #ifdef HARDWARE_UNIT_TESTS
     friend class ADSBeeTestAccessor;  // target_test/test_rx_cpu.cpp: feeds synthetic captures to the parser.

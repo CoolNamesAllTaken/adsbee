@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "receiver_position.hh"
 #include "altitude_filter.hh"
 #include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
@@ -58,6 +59,7 @@ class SettingsManager {
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
         kASTERIX,                // EUROCONTROL ASTERIX CAT021 target reports and CAT023 status.
+        kMLAT,  // Beast Mode S with 48 MHz timestamps and receiver info frames (software/adsbee_mlat/PROTOCOL.md).
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -211,6 +213,9 @@ class SettingsManager {
         uint8_t filter_altitude_mode = kAltitudeFilterOff;
         int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
         int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
+        // Optional AT+RX_POSITION arguments for MLAT, added in version 6: ellipsoid height and accuracy of a FIXED
+        // position, and whether the receiver may move.
+        RxPositionDetails rx_position_details;
 
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
         uint32_t crc = 0;
@@ -263,11 +268,12 @@ class SettingsManager {
                   "Settings::crc must be the last member, with no trailing padding.");
 
     // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled,
-    // filter_distance_deci_nm, asterix_sac, asterix_sic and the altitude filter (filter_altitude_*).
+    // filter_distance_deci_nm, asterix_sac, asterix_sic, the altitude filter (filter_altitude_*) and
+    // rx_position_details.
     static constexpr uint16_t kVersion5SettingsSize = 62;
     static_assert(kSettingsVersion == 6 &&
                       offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
-                      sizeof(Settings) == kVersion5SettingsSize + 16,
+                      sizeof(Settings) == kVersion5SettingsSize + 16 + sizeof(RxPositionDetails),
                   "Settings changed: update MigrateFromVersion5 or add a migration from version 6.");
 
     /**

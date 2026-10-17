@@ -81,6 +81,7 @@ TEST(Settings, Version5BlobMigratesWithReportFiltersOff) {
     out.filter_altitude_a_ft = 300;
     out.filter_altitude_b_ft = 400;
     out.asterix_sac = 9;
+    out.rx_position_details.moving = true;
     ASSERT_TRUE(SM::MigrateFromVersion5(blob, out));
     EXPECT_TRUE(out.IsValid());
     EXPECT_EQ(out.settings_version, kSettingsVersion);
@@ -94,6 +95,7 @@ TEST(Settings, Version5BlobMigratesWithReportFiltersOff) {
     EXPECT_EQ(out.filter_altitude_a_ft, 0);
     EXPECT_EQ(out.filter_altitude_b_ft, 10000);
     EXPECT_EQ(out.asterix_sac, 0);
+    EXPECT_TRUE(out.rx_position_details == RxPositionDetails());
 
     // A torn version 5 blob, or a blob of another version, is left to the reset path.
     blob[10] ^= 1;
@@ -121,5 +123,5 @@ TEST(Settings, ASTERIXDataSourceDefaultsToZero) {
     SM::Settings settings;
     EXPECT_EQ(settings.asterix_sac, 0);
     EXPECT_EQ(settings.asterix_sic, 0);
-    EXPECT_EQ(sizeof(SM::Settings), 78u);
+    EXPECT_EQ(sizeof(SM::Settings), 92u);
 }

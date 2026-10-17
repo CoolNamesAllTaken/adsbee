@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "receiver_position.hh"
 #include "altitude_filter.hh"
 #include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
@@ -48,6 +49,7 @@ class SettingsManager {
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
         kASTERIX,                // EUROCONTROL ASTERIX CAT021 target reports and CAT023 status.
+        kMLAT,  // Beast Mode S with 48 MHz timestamps and receiver info frames (software/adsbee_mlat/PROTOCOL.md).
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -414,6 +416,7 @@ class SettingsManager {
         // Feed settings added after the first feed fields.
         FeedTransport feed_transports[kMaxNumFeeds];
         MQTTBroker mqtt_broker;
+
         // ASTERIX data source identifier (I021/010, I023/010): System Area Code and System Identification Code.
         uint8_t asterix_sac = 0;
         uint8_t asterix_sic = 0;
@@ -428,6 +431,10 @@ class SettingsManager {
         uint8_t filter_altitude_mode = kAltitudeFilterOff;
         int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
         int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
+
+        // Optional AT+RX_POSITION arguments for MLAT: ellipsoid height and accuracy of a FIXED position, and whether
+        // the receiver may move.
+        RxPositionDetails rx_position_details;
 
         /**
          * Default constructor.
@@ -871,7 +878,7 @@ extern SettingsManager settings_manager;
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
 static_assert(kSettingsVersion == 19,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 1660,
+static_assert(sizeof(SettingsManager::Settings) == 1676,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -904,5 +911,6 @@ static_assert(offsetof(SettingsManager::Settings, ntp_server) == 1586, "Settings
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_mode) == 1650, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_a_ft) == 1652, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_b_ft) == 1656, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, rx_position_details) == 1660, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

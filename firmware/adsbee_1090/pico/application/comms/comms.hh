@@ -2,6 +2,7 @@
 
 #include "aircraft_dictionary_config.hh"
 #include "at_console_guard.hh"
+#include "beast_utils.hh"  // For BeastReporter::ReceiverInfo.
 #include "composite_array.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.

@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 // #include "gdl90/gdl90_utils.hh"
 #include "aircraft_dictionary_config.hh"
+#include "beast_utils.hh"  // For BeastReporter::ReceiverInfo.
 #include "composite_array.hh"
 #include "feed_send_buffer.hh"
 #include "lwip/sockets.h"  // For port definition.

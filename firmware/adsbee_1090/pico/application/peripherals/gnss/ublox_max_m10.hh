@@ -81,6 +81,7 @@ class UbloxMAXM10 : public GNSSReceiver {
     static constexpr uint32_t kCfgMsgoutNmeaGsvUart1 = 0x209100c5;     // U1
     static constexpr uint32_t kCfgMsgoutNmeaGllUart1 = 0x209100ca;     // U1
     static constexpr uint32_t kCfgMsgoutNmeaVtgUart1 = 0x209100b1;     // U1
+    static constexpr uint32_t kCfgMsgoutNmeaGstUart1 = 0x209100d4;     // U1
     static constexpr uint32_t kCfgNmeaProtver = 0x20930001;            // E1
     static constexpr uint32_t kCfgAnaUseAna = 0x10230001;             // L: AssistNow Autonomous enable
     // TEMPORARY diagnostic: periodic UBX status output on UART1 (remove with the rest of the GNSS

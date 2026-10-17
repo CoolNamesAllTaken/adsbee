@@ -159,6 +159,9 @@ void ADSBee::RestartMlatTimebase() {
     const uint64_t ticks = system_ticks > mlat_timebase_.ticks() ? system_ticks : mlat_timebase_.ticks() + 1;
     mlat_timebase_.Start(mlat_capture::Counter(), static_cast<uint32_t>(now_us), ticks);
     mlat_pairer_.Break(ticks);
+    if (mlat_epoch != 0) {
+        mlat_epoch = NextMlatEpoch(mlat_epoch, now_us);  // Tells the MLAT server to drop the old clock fit.
+    }
     mlat_clock_was_crystal_ = false;
 }
 
@@ -284,6 +287,12 @@ bool ADSBee::ApplyReceiverConfigInner() {
         lr2021.DeInit();  // Safe even if never inited (SPI_close is guarded).
         if (!lr2021.Init()) {
             return false;
+        }
+        if (mlat_epoch == 0) {
+            LR2021::RandomNumberRsp random;
+            if (lr2021.GetRandomNumber(&random)) {
+                mlat_epoch = random.value;
+            }
         }
         if (lr2021.SetOokADSB(r1090_preamble_mode_, r1090_gain_, r1090_rx_boost_)) {
             break;

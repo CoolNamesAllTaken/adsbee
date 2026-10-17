@@ -15,6 +15,7 @@
 #include "mode_s_packet.hh"
 #include "mode_s_soft_demod.hh"
 #include "r1090_rssi.hh"
+#include "receiver_position.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "stdint.h"
@@ -483,6 +484,37 @@ class ADSBee {
     SettingsManager::RxPosition rx_position;
     bool rx_position_available = false;
 
+    // Antenna position for feeds, from rx_position (the live GNSS fix for GNSS, the fixed position for FIXED, else
+    // none), and the GNSS PPS reference for the MLAT counter. Updated in Update().
+    ReceiverPosition receiver_position;
+    ReceiverPPS receiver_pps;
+    // MLAT feed clock epoch: random at boot, since the MLAT counter starts over on every boot.
+    uint32_t mlat_epoch = 0;
+
+    /**
+     * Captures the MLAT counter on rising edges of the GNSS PPS input. GPIO interrupt enables are per core, so with
+     * ISRS_ON_CORE1 the core 1 loop applies the change (see SyncPPSCaptureIRQEnable()).
+     * @param[in] pin PPS GPIO, or UINT16_MAX for none.
+     * @param[in] enabled True to capture.
+     */
+    void SetPPSCapture(uint16_t pin, bool enabled);
+
+    /**
+     * Applies the PPS capture setting on the calling core, which must be the one that runs the receiver ISRs.
+     */
+    void SyncPPSCaptureIRQEnable();
+
+    /** @retval True if the PPS interrupt enable on the ISR core matches the setting. Call from the ISR core. */
+    inline bool PPSCaptureIRQIsSynced() const {
+        return pps_irq_pin_ == (pps_capture_enabled_ ? pps_capture_pin_ : UINT16_MAX);
+    }
+
+    /** Called from the GPIO interrupt on a rising PPS edge. */
+    void OnPPSEdge();
+    inline uint16_t pps_irq_pin() const { return pps_irq_pin_; }
+
+    static constexpr uint32_t kPPSStaleTimeoutMs = 2000;
+
    private:
     void IngestAndForwardPackets();
     void MLATCounterInit();
@@ -492,6 +524,7 @@ class ADSBee {
     void Update1090LED();
     void UpdateNoiseFloor();
     void UpdateRxPosition();
+    void UpdateReceiverPosition();
     void UpdateTLLearning();
 
     ADSBeeConfig config_;
@@ -577,6 +610,15 @@ class ADSBee {
     uint16_t tl_learning_prev_tl_offset_mv_ = tl_offset_mv_;
 
     volatile uint64_t mlat_counter_wraps_ = 0;  // Written by the SysTick wrap handler.
+
+    // PPS capture. The setting is written on core 0; pps_irq_pin_ and the edge values on the ISR core.
+    volatile uint16_t pps_capture_pin_ = UINT16_MAX;
+    volatile bool pps_capture_enabled_ = false;
+    uint16_t pps_irq_pin_ = UINT16_MAX;  // PPS GPIO with the interrupt enabled on the ISR core.
+    volatile uint32_t pps_edge_count_ = 0;
+    volatile uint64_t pps_edge_mlat_48mhz_counts_ = 0;
+    volatile uint32_t pps_edge_timestamp_ms_ = 0;
+    uint32_t pps_labeled_edge_count_ = 0;  // Edge count of receiver_pps.
 
     // Buffer used to hold packets currently being received.
     RawModeSPacket rx_packet_[BSP::kMaxNumDemodStateMachines];

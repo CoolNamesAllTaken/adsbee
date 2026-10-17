@@ -151,6 +151,9 @@ class ObjectDictionary {
         // level sits at noise_floor_mv + TL offset.
         uint16_t noise_floor_mv = 0;
         int16_t noise_floor_dbm = 0;
+        ReceiverPosition receiver_position;  // Antenna position for feeds (GNSS fix, else the fixed setting).
+        ReceiverPPS receiver_pps;            // GNSS PPS reference for the MLAT counter.
+        uint32_t mlat_epoch = 0;             // MLAT feed clock epoch, see ADSBee::mlat_epoch.
     };
 
     struct __attribute__((__packed__)) ESP32DeviceStatus {

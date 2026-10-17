@@ -34,8 +34,11 @@ static ASTERIXReporter::TrackNumbers asterix_track_numbers;
 // Failure tallies, one per reporting function. File scope rather than CommsManager members because
 // there is a single CommsManager per device and this keeps the three per-platform comms.hh headers
 // (which already triplicate the round state) untouched.
-static CommsManager::ReportFailureTally raw_tally, beast_tally, csbee_tally, gdl90_tally, gdl90_uplink_tally,
-    aircraftjson_tally, uat_uplink_json_tally, asterix_tally;
+static CommsManager::ReportFailureTally raw_tally, beast_tally, mlat_tally, csbee_tally, gdl90_tally,
+    gdl90_uplink_tally, aircraftjson_tally, uat_uplink_json_tally, asterix_tally;
+
+// Receiver info frame timing of each MLAT feed sink, indexed by ReportSink.
+static BeastReporter::ReceiverInfoSchedule mlat_receiver_info_schedules[SettingsManager::kMaxNumReportSinks];
 
 /**
  * These have to be macros rather than helper functions: the RP2040 and 1421 CONSOLE_* macros
@@ -143,12 +146,13 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     ReportSink gdl90_no_uat_uplink_sinks[SettingsManager::kMaxNumReportSinks];
     ReportSink aircraftjson_sinks[SettingsManager::kMaxNumReportSinks];
     ReportSink uat_uplink_json_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink mlat_sinks[SettingsManager::kMaxNumReportSinks];
     ReportSink asterix_sinks[SettingsManager::kMaxNumReportSinks];
 
     uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_beast_no_uat_uplink_sinks = 0,
              num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0,
              num_gdl90_no_uat_uplink_sinks = 0, num_aircraftjson_sinks = 0, num_uat_uplink_json_sinks = 0,
-             num_asterix_sinks = 0;
+             num_mlat_sinks = 0, num_asterix_sinks = 0;
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
@@ -189,6 +193,9 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
                 aircraftjson_sinks[num_aircraftjson_sinks++] = sinks[i];
                 uat_uplink_json_sinks[num_uat_uplink_json_sinks++] = sinks[i];
                 break;
+            case SettingsManager::kMLAT:
+                mlat_sinks[num_mlat_sinks++] = sinks[i];
+                break;
             case SettingsManager::kASTERIX:
                 asterix_sinks[num_asterix_sinks++] = sinks[i];
                 break;
@@ -215,7 +222,14 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     }
 
     /**  Report Raw Packets **/
-    if (packets_to_report->len_bytes > sizeof(CompositeArray::RawPackets::Header)) {
+    bool have_raw_packets = packets_to_report != nullptr &&
+                            packets_to_report->len_bytes > sizeof(CompositeArray::RawPackets::Header);
+    // Runs without packets too, so receiver info frames keep their schedule on a quiet feed.
+    if (!ReportMLAT(mlat_sinks, num_mlat_sinks, have_raw_packets ? packets_to_report : nullptr)) {
+        CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportMLAT.");
+        ret = false;
+    }
+    if (have_raw_packets) {
         // Only report raw packets if they are provided (still send locally decoded reports even if no raw packets).
         if (!ReportRaw(raw_sinks, num_raw_sinks, *packets_to_report)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportRaw.");
@@ -562,6 +576,74 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
 #undef SEND_BEAST_FRAME
     FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportBeast", beast_tally);
 #endif
+    return ret;
+}
+
+void CommsManager::RestartMLATReceiverInfo(ReportSink sink) {
+    if (sink < SettingsManager::kMaxNumReportSinks) {
+        mlat_receiver_info_schedules[sink].Restart();
+    }
+}
+
+bool CommsManager::ReportMLAT(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets* packets) {
+    if (num_sinks == 0) {
+        return true;
+    }
+    uint16_t num_mode_s_packets = 0;
+    if (packets != nullptr) {
+        char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
+        if (!packets->IsValid(error_msg)) {
+            CONSOLE_ERROR("CommsManager::ReportMLAT", "Invalid CompositeArray::RawPackets: %s", error_msg);
+            return false;
+        }
+        num_mode_s_packets = packets->header->num_mode_s_packets;
+    }
+
+    // Mode S frames are the same for every sink.
+    static uint8_t mlat_batch_buf[kBeastBatchBufMaxBytes];
+    uint16_t batch_len = 0;
+    for (uint16_t i = 0; i < num_mode_s_packets; i++) {
+        if (static_cast<size_t>(batch_len) + BeastReporter::kModeSBeastFrameMaxLenBytes > sizeof(mlat_batch_buf)) {
+            mlat_tally.num_build_failures++;
+            break;
+        }
+        uint16_t frame_len =
+            BeastReporter::BuildModeSBeastFrame(mlat_batch_buf + batch_len, packets->mode_s_packets[i], true);
+        if (frame_len == 0) {
+            mlat_tally.num_build_failures++;
+            continue;
+        }
+        batch_len += frame_len;
+    }
+
+    bool ret = true;
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    static BeastReporter::ReceiverInfo info;
+    static uint8_t info_frame_buf[BeastReporter::kReceiverInfoFrameMaxLenBytes];
+    for (uint16_t i = 0; i < num_sinks; i++) {
+        if (sinks[i] >= SettingsManager::kMaxNumReportSinks) {
+            continue;
+        }
+        BeastReporter::ReceiverInfoSchedule& schedule = mlat_receiver_info_schedules[sinks[i]];
+        info = BeastReporter::ReceiverInfo();
+        bool have_info = GetMLATReceiverInfo(sinks[i], info);
+        // The epoch must be announced before any frame stamped in it, so frames wait while an info frame is due.
+        if (have_info && schedule.Due(timestamp_ms, info)) {
+            uint16_t info_len = BeastReporter::BuildReceiverInfoFrame(info_frame_buf, sizeof(info_frame_buf), info);
+            if (info_len == 0) {
+                mlat_tally.num_build_failures++;
+            } else if (SendBufToSinks(&sinks[i], 1, reinterpret_cast<char*>(info_frame_buf), info_len, mlat_tally)) {
+                schedule.MarkSent(timestamp_ms, info);
+            } else {
+                ret = false;
+            }
+        }
+        if (batch_len > 0 && have_info && !schedule.Due(timestamp_ms, info)) {
+            ret &= SendBufToSinks(&sinks[i], 1, reinterpret_cast<char*>(mlat_batch_buf), batch_len, mlat_tally,
+                                  num_mode_s_packets);
+        }
+    }
+    FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportMLAT", mlat_tally);
     return ret;
 }
 

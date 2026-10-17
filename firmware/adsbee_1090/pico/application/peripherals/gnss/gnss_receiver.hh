@@ -100,6 +100,17 @@ class GNSSReceiver {
     bool HasValidFix() const;
 
     /**
+     * Antenna position from a valid, fresh fix with a geoid separation (see NMEAParser::FixToReceiverPosition()).
+     * @retval True if position was filled in.
+     */
+    bool GetReceiverPosition(ReceiverPosition& position) const {
+        return HasValidFix() && NMEAParser::FixToReceiverPosition(parser_.fix(), position);
+    }
+
+    /** @retval GPIO of the PPS input, or UINT16_MAX if not connected. */
+    uint16_t pps_pin() const { return config_.pps_pin; }
+
+    /**
      * @retval True if the module responded during Init() (i.e. it is present and configured).
      */
     bool IsHealthy() const { return healthy_; }

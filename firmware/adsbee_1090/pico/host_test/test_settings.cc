@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 
 #include "gtest/gtest.h"
@@ -51,7 +52,7 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(SettingsManager::Settings), 1660u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1676u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -676,13 +677,168 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t ntp = dump.find("AT+NTP_SERVER=pool.ntp.org");
     ASSERT_NE(ntp, std::string::npos);
     EXPECT_LT(asterix, ntp);
-    // The altitude filter comes last.
+    // The altitude filter follows.
     EXPECT_LT(ntp, filter_altitude);
-    EXPECT_EQ(dump.find("AT+", filter_altitude + 1), std::string::npos);
+    EXPECT_EQ(dump.find("AT+", filter_altitude + 1), std::string::npos);  // Default RX_POSITION MLAT arguments: no line.
+
+    // Set MLAT arguments come last, with an empty source that keeps the receiver position.
+    manager.settings.rx_position_details.ellipsoid_height_set = true;
+    manager.settings.rx_position_details.ellipsoid_height_m = 31.42f;
+    manager.settings.rx_position_details.moving = true;
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    dump = testing::internal::GetCapturedStdout();
+    size_t details = dump.find("AT+RX_POSITION=,,,,,,,31.42,0.00,0.00,1\r\n");
+    ASSERT_NE(details, std::string::npos);
+    EXPECT_LT(dump.find("AT+FILTER_ALTITUDE_FT="), details);
+    EXPECT_EQ(dump.find("AT+", details + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);
     EXPECT_TRUE(manager.Sanitize());
+}
+
+TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesRxPositionDetailsEmpty) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    // 0xFF past the v18 struct, as erased EEPROM: it must not become RX_POSITION details.
+    uint8_t blob[sizeof(SettingsManager::Settings)];
+    memset(blob, 0xFF, sizeof(blob));
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv6;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
+    v18.auto_update_enabled = true;
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.rx_position_details.ellipsoid_height_set = true;
+    out.rx_position_details.moving = true;
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_TRUE(out.rx_position_details == RxPositionDetails());
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+
+    // A v18 blob too short to hold the struct is rejected.
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
+}
+
+TEST(Settings, RxPositionDetailsATArgs) {
+    RxPositionDetails details;
+    const char* error = nullptr;
+    const char* fixed[] = {"31.42", "2.5", "", "1"};
+    ASSERT_TRUE(details.ApplyATArgs(fixed, error));
+    EXPECT_TRUE(details.ellipsoid_height_set);
+    EXPECT_FLOAT_EQ(details.ellipsoid_height_m, 31.42f);
+    EXPECT_FLOAT_EQ(details.horizontal_accuracy_m, 2.5f);
+    EXPECT_FLOAT_EQ(details.vertical_accuracy_m, 0.0f);
+    EXPECT_TRUE(details.moving);
+
+    char buf[64];
+    details.PrintATArgs(buf, sizeof(buf));
+    EXPECT_STREQ(buf, "31.42,2.50,0.00,1");
+
+    // Rejected arguments leave the details unchanged.
+    const char* bad_height[] = {"100000", "", "", ""};
+    EXPECT_FALSE(details.ApplyATArgs(bad_height, error));
+    const char* not_a_number[] = {"10x", "", "", ""};
+    EXPECT_FALSE(details.ApplyATArgs(not_a_number, error));
+    const char* bad_accuracy[] = {"", "-1", "", ""};
+    EXPECT_FALSE(details.ApplyATArgs(bad_accuracy, error));
+    const char* bad_moving[] = {"", "", "", "2"};
+    EXPECT_FALSE(details.ApplyATArgs(bad_moving, error));
+    EXPECT_FLOAT_EQ(details.ellipsoid_height_m, 31.42f);
+    EXPECT_TRUE(details.moving);
+
+    // Empty arguments keep their values; "-" clears the height.
+    const char* keep[] = {"", "", "", ""};
+    ASSERT_TRUE(details.ApplyATArgs(keep, error));
+    EXPECT_FLOAT_EQ(details.horizontal_accuracy_m, 2.5f);
+    const char* clear[] = {"-", "", "0.75", "0"};
+    ASSERT_TRUE(details.ApplyATArgs(clear, error));
+    EXPECT_FALSE(details.ellipsoid_height_set);
+    EXPECT_FALSE(details.moving);
+    details.PrintATArgs(buf, sizeof(buf));
+    EXPECT_STREQ(buf, "-,2.50,0.75,0");
+
+    // The AT command form takes all AT+RX_POSITION arguments; the MLAT ones start at index 7.
+    std::string_view args[] = {"FIXED", "47.5", "-122.3", "100", "", "", "", "12.5", "", "", "1"};
+    ASSERT_TRUE(details.ApplyATArgs(args, 11, error));
+    EXPECT_FLOAT_EQ(details.ellipsoid_height_m, 12.5f);
+    EXPECT_TRUE(details.moving);
+    std::string_view old_syntax[] = {"FIXED", "47.5", "-122.3", "100", "", "", ""};
+    RxPositionDetails before = details;
+    ASSERT_TRUE(details.ApplyATArgs(old_syntax, 7, error));
+    EXPECT_TRUE(details == before);
+}
+
+TEST(Settings, RxPositionDetailsSanitizeAndMLATPosition) {
+    SettingsManager manager;
+    EXPECT_TRUE(manager.settings.rx_position_details == RxPositionDetails());
+    EXPECT_FALSE(manager.Sanitize());
+
+    // Out of range values and raw booleans from flash are repaired.
+    manager.settings.rx_position_details.ellipsoid_height_set = true;
+    manager.settings.rx_position_details.ellipsoid_height_m = NAN;
+    manager.settings.rx_position_details.horizontal_accuracy_m = -1.0f;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_FALSE(manager.settings.rx_position_details.ellipsoid_height_set);
+    EXPECT_FLOAT_EQ(manager.settings.rx_position_details.horizontal_accuracy_m, 0.0f);
+    uint8_t raw = 0x7F;
+    memcpy(&manager.settings.rx_position_details.moving, &raw, 1);
+    EXPECT_TRUE(manager.Sanitize());
+    memcpy(&raw, &manager.settings.rx_position_details.moving, 1);
+    EXPECT_EQ(raw, 1);
+    EXPECT_FALSE(manager.Sanitize());
+
+    // GNSS reports the live fix, FIXED the fixed position, the other sources nothing. moving applies to all.
+    RxPositionDetails details;
+    details.moving = true;
+    details.horizontal_accuracy_m = 2.0f;
+    SettingsManager::RxPosition rx_position;
+    rx_position.source = SettingsManager::RxPosition::kPositionSourceFixed;
+    rx_position.latitude_deg = 47.5f;
+    rx_position.longitude_deg = -122.25f;
+    rx_position.gnss_altitude_ft = 100;
+    ReceiverPosition gnss;
+    gnss.source = ReceiverPosition::kSourceGNSS;
+    gnss.latitude_deg = 47.123456789;
+    gnss.height_m = 55.5f;
+
+    ReceiverPosition mlat = details.ForMLAT(rx_position, &gnss);
+    EXPECT_EQ(mlat.source, ReceiverPosition::kSourceFixed);
+    EXPECT_DOUBLE_EQ(mlat.latitude_deg, 47.5);
+    EXPECT_DOUBLE_EQ(mlat.longitude_deg, -122.25);
+    EXPECT_FLOAT_EQ(mlat.height_m, 30.48f);  // No ellipsoid height: the GNSS altitude.
+    EXPECT_FLOAT_EQ(mlat.horizontal_accuracy_m, 2.0f);
+    EXPECT_TRUE(mlat.moving);
+    details.ellipsoid_height_set = true;
+    details.ellipsoid_height_m = 12.5f;
+    EXPECT_FLOAT_EQ(details.ForMLAT(rx_position, nullptr).height_m, 12.5f);
+
+    rx_position.source = SettingsManager::RxPosition::kPositionSourceGNSS;
+    mlat = details.ForMLAT(rx_position, &gnss);
+    EXPECT_EQ(mlat.source, ReceiverPosition::kSourceGNSS);
+    EXPECT_DOUBLE_EQ(mlat.latitude_deg, 47.123456789);
+    EXPECT_FLOAT_EQ(mlat.height_m, 55.5f);
+    EXPECT_TRUE(mlat.moving);
+    EXPECT_FALSE(details.ForMLAT(rx_position, nullptr).IsValid());  // No fix.
+
+    for (auto source : {SettingsManager::RxPosition::kPositionSourceNone,
+                        SettingsManager::RxPosition::kPositionSourceLowestAircraft,
+                        SettingsManager::RxPosition::kPositionSourceAircraftMatchingICAO}) {
+        rx_position.source = source;
+        mlat = details.ForMLAT(rx_position, &gnss);
+        EXPECT_FALSE(mlat.IsValid()) << static_cast<int>(source);
+        EXPECT_TRUE(mlat.moving);
+    }
 }
 
 TEST(SettingsMigration, V15ToCurrentPreservesAllFieldsAndDefaultsIPMode) {

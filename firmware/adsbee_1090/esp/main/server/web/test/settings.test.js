@@ -42,12 +42,12 @@ global.document = new FakeDocument();
 global.confirm = () => true;
 const { SettingsEngine, SETTINGS_SCHEMA_1090 } = require('../settings.js');
 
-// The AT+SETTINGS?JSON line from an ADSBee 1090 running 0.9.1-rc9.
+// The AT+SETTINGS?JSON line from an ADSBee 1090 running 0.9.1-rc9, plus the RX_POSITION MLAT arguments.
 const DUMP = 'SETTINGS={"ASTERIX_SAC_SIC":[0,0],"AUTO_UPDATE":[0],"BAUD_RATE":[115207,9600],"BIAS_TEE_ENABLE":[0,0],"ETHERNET":[1],"ESP32_ENABLE":[1],' +
     '"FEED_ENABLE":[1],"FILTER_ALTITUDE_FT":["OFF",0,10000],"FILTER_DISTANCE_NM":[0,100.0],"GNSS":[0,"NONE",0],"HOSTNAME":["test-bee"],"IP_MODE":["DUAL"],"LED_ENABLE":[1],"LOG_LEVEL":["WARNINGS"],' +
     '"MAVLINK_ID":[1,156],"NTP_SERVER":["pool.ntp.org"],"PROTOCOL_OUT":["NONE","NONE"],"REMOTE_ID":[0,7,"0x00"],' +
     '"REMOTE_ID_TX":[0,7,"",1,2,"","0x0000"],"RX_ENABLE":[1,1],' +
-    '"RX_POSITION":["LOWEST","OK",37.000000,-122.000000,-50,125,317.7,74,"000000"],"SUBG_ENABLE":["1"],' +
+    '"RX_POSITION":["LOWEST","OK",37.000000,-122.000000,-50,125,317.7,74,"000000","-",0.00,0.00,0,"none"],"SUBG_ENABLE":["1"],' +
     '"TL_OFFSET":[600,"-104 dBm"],"WATCHDOG":[10],"WIFI_AP":[0,"test-bee","yummyflowers",1],"WIFI_STA":[0,""],' +
     '"WIFI_STA_NETWORK":["office",""]}';
 
@@ -211,6 +211,34 @@ test('the distance filter loads from the dump and saves enable and distance in n
     input('FILTER_DISTANCE_NM', 'nm').value = '35.5';
     await engine.save();
     assert.deepStrictEqual(t.sent.slice(1, 3), ['AT+FILTER_DISTANCE_NM=1,35.5', 'AT+SETTINGS=SAVE']);
+});
+
+test('the receiver position saves the MLAT arguments after the arguments of its source', async () => {
+    const t = makeTransport((cmd) => {
+        if (cmd === 'AT+SETTINGS?JSON') return [DUMP];
+        if (cmd === 'AT+RX_POSITION=LOWEST,,,,,,,-,0,0,1' || cmd === 'AT+SETTINGS=SAVE') return [];
+        throw new Error(`unexpected ${cmd}`);
+    });
+    const engine = makeEngine(t);
+    await engine.refresh();
+    assert.strictEqual(input('RX_POSITION', 'moving').checked, false);
+    assert.strictEqual(input('RX_POSITION', 'height').value, '-');
+    input('RX_POSITION', 'moving').checked = true;
+    await engine.save();
+    assert.deepStrictEqual(t.sent.slice(1, 3), ['AT+RX_POSITION=LOWEST,,,,,,,-,0,0,1', 'AT+SETTINGS=SAVE']);
+
+    const entry = SETTINGS_SCHEMA_1090.find(e => e.cmd === 'RX_POSITION');
+    const fixed = { source: 'FIXED', lat: 47.5, lon: -122.3, gnss_alt: 100, baro_alt: 90, heading: 0, speed: 0,
+        height: '31.42', hacc: 2.5, vacc: 0, moving: false };
+    assert.deepStrictEqual(entry.build(fixed), ['AT+RX_POSITION=FIXED,47.5,-122.3,100,90,0,0,31.42,2.5,0,0']);
+    assert.deepStrictEqual(entry.build({ source: 'ICAO', icao: 'BEE001', moving: true }),
+        ['AT+RX_POSITION=ICAO,BEE001,,,,,,-,0,0,1']);
+    const parsed = entry.parse(['Source: FIXED [OK]', 'Latitude: 47.500000 deg',
+        'MLAT (ellipsoid height, accuracy, moving): 31.42,2.50,0.00,1 [fixed]']);
+    assert.strictEqual(parsed.height, '31.42');
+    assert.strictEqual(parsed.hacc, 2.5);
+    assert.strictEqual(parsed.moving, true);
+    assert.strictEqual(parsed.mlat, 'fixed');
 });
 
 test('the altitude filter loads from the dump and saves mode and altitudes in ft', async () => {

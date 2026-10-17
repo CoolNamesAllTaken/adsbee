@@ -41,6 +41,12 @@ class RawModeSPacket {
     }
 
     /**
+     * The 48MHz timestamp, modulo 2^48 (the width of a Beast timestamp).
+     * @retval 48MHz timestamp, or 0 (no timestamp) for a packet without an MLAT timestamp.
+     */
+    uint64_t GetMLAT48MHzCounter() const { return no_mlat_timestamp ? 0 : mlat_48mhz_64bit_counts & 0xFFFFFFFFFFFF; }
+
+    /**
      * Helper function that returns the timestamp in seconds. Used to abstract the MLAT timestamp resolution for
      * functions that don't care about it.
      * @return Timestamp in seconds.

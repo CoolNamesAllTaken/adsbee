@@ -71,6 +71,10 @@ ADSBee* isr_access = nullptr;
 void __time_critical_func(on_systick_exception)() { isr_access->OnSysTickWrap(); }
 
 void __time_critical_func(on_demod_pin_change)(uint gpio, uint32_t event_mask) {
+    if (gpio == isr_access->pps_irq_pin()) {
+        if (event_mask & GPIO_IRQ_EDGE_RISE) isr_access->OnPPSEdge();
+        return;
+    }
     switch (event_mask) {
         case GPIO_IRQ_EDGE_RISE:
             isr_access->OnDemodBegin(gpio);
@@ -111,6 +115,7 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
 }
 
 bool ADSBee::Init() {
+    mlat_epoch = get_rand_32();
     gpio_init(config_.r1090_led_pin);
     gpio_set_dir(config_.r1090_led_pin, GPIO_OUT);
     gpio_put(config_.r1090_led_pin, 0);
@@ -226,6 +231,10 @@ bool ADSBee::DeInitISRs() {
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         gpio_set_irq_enabled(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, false);
     }
+    if (pps_irq_pin_ != UINT16_MAX) {
+        gpio_set_irq_enabled(pps_irq_pin_, GPIO_IRQ_EDGE_RISE, false);
+        pps_irq_pin_ = UINT16_MAX;  // Re-enabled by SyncPPSCaptureIRQEnable() once the ISRs run again.
+    }
 
     return true;
 }
@@ -236,6 +245,7 @@ bool ADSBee::Update() {
     PruneAircraftDictionary();
 
     UpdateRxPosition();
+    UpdateReceiverPosition();
 
     IngestAndForwardPackets();
 
@@ -445,6 +455,70 @@ void ADSBee::UpdateRxPosition() {
     } else {
         aircraft_dictionary.ClearReferenceAltitude();
     }
+}
+
+void ADSBee::UpdateReceiverPosition() {
+    // Capture PPS while a GNSS receiver is running.
+    uint16_t pps_pin = gnss != nullptr && gnss->IsActive() ? gnss->pps_pin() : UINT16_MAX;
+    if (pps_pin != pps_capture_pin_ || (pps_pin != UINT16_MAX) != pps_capture_enabled_) {
+        SetPPSCapture(pps_pin, pps_pin != UINT16_MAX);
+    }
+
+    ReceiverPosition gnss_position;
+    bool have_gnss = gnss != nullptr && gnss->GetReceiverPosition(gnss_position);
+    receiver_position =
+        settings_manager.settings.rx_position_details.ForMLAT(rx_position, have_gnss ? &gnss_position : nullptr);
+
+    // Read the latest PPS edge; retry if the interrupt updated it in between.
+    uint32_t edge_count, edge_timestamp_ms;
+    uint64_t edge_mlat_48mhz_counts;
+    do {
+        edge_count = pps_edge_count_;
+        edge_mlat_48mhz_counts = pps_edge_mlat_48mhz_counts_;
+        edge_timestamp_ms = pps_edge_timestamp_ms_;
+    } while (edge_count != pps_edge_count_);
+
+    uint32_t unix_time_s;
+    if (gnss != nullptr && edge_count != pps_labeled_edge_count_ &&
+        NMEAParser::PPSEdgeUnixTime(gnss->fix(), edge_timestamp_ms, unix_time_s)) {
+        receiver_pps = {.valid = true, .mlat_48mhz_counts = edge_mlat_48mhz_counts, .unix_time_s = unix_time_s};
+        pps_labeled_edge_count_ = edge_count;
+    }
+    // Stop reporting the reference once pulses or their labels stop.
+    if (receiver_pps.valid && get_time_since_boot_ms() - edge_timestamp_ms > kPPSStaleTimeoutMs) {
+        receiver_pps.valid = false;
+    }
+}
+
+void ADSBee::SetPPSCapture(uint16_t pin, bool enabled) {
+    if (enabled && pin != UINT16_MAX) {
+        gpio_init(pin);
+        gpio_set_dir(pin, GPIO_IN);
+        gpio_pull_down(pin);  // Keeps an unpopulated GNSS footprint from triggering interrupts.
+    }
+    pps_capture_pin_ = pin;
+    pps_capture_enabled_ = enabled && pin != UINT16_MAX;
+#ifndef ISRS_ON_CORE1
+    SyncPPSCaptureIRQEnable();
+#endif
+}
+
+void ADSBee::SyncPPSCaptureIRQEnable() {
+    uint16_t pin = pps_capture_enabled_ ? pps_capture_pin_ : UINT16_MAX;
+    if (pps_irq_pin_ != UINT16_MAX && pps_irq_pin_ != pin) {
+        gpio_set_irq_enabled(pps_irq_pin_, GPIO_IRQ_EDGE_RISE, false);
+    }
+    if (pin != UINT16_MAX) {
+        // Shares the bank callback installed for the demod pins (on_demod_pin_change).
+        gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE, true);
+    }
+    pps_irq_pin_ = pin;
+}
+
+void __time_critical_func(ADSBee::OnPPSEdge)() {
+    pps_edge_mlat_48mhz_counts_ = GetMLAT48MHzCounts();
+    pps_edge_timestamp_ms_ = get_time_since_boot_ms();
+    pps_edge_count_ = pps_edge_count_ + 1;
 }
 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }

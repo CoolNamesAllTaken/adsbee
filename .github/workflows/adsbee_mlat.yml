@@ -1,0 +1,40 @@
+# Tests the MLAT server (software/adsbee_mlat): simulator, core (with end-to-end runs on simulated receivers) and
+# web app, then builds the Docker Compose images.
+name: adsbee_mlat
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "software/adsbee_mlat/**"
+      - ".github/workflows/adsbee_mlat.yml"
+  pull_request:
+    paths:
+      - "software/adsbee_mlat/**"
+      - ".github/workflows/adsbee_mlat.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: software/adsbee_mlat
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e './sim[test]' -e './core[test]' -r web/requirements-dev.txt
+      - name: Simulator
+        run: pytest -q sim/tests
+      - name: Core
+        run: cd core && pytest -q
+      - name: Web (without browser tests)
+        run: cd web && pytest -q -m "not e2e"
+      - name: Docker images
+        run: |
+          cp .env.example .env
+          docker compose --profile sim build

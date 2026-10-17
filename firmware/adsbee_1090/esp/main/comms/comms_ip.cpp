@@ -548,6 +548,9 @@ bool CommsManager::ConnectFeedUDP(uint16_t feed_index) {
     }
     feed_sock_[feed_index] = sock;
     feed_sock_is_connected_[feed_index] = true;
+    if (settings_manager.settings.feed_protocols[feed_index] == SettingsManager::kMLAT) {
+        RestartMLATReceiverInfo(feed_index);  // The next report starts with a receiver info frame.
+    }
     CONSOLE_INFO("CommsManager::IPWANTask", "Feed %d sends UDP datagrams to %s:%d.", feed_index, uri, port);
     return true;
 }
@@ -559,23 +562,39 @@ bool CommsManager::SendFeedDatagrams(uint16_t feed_index, const char* buf, uint1
         return true;
     }
     SettingsManager::ReportingProtocol protocol = settings_manager.settings.feed_protocols[feed_index];
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(buf);
-    uint16_t offset = 0;
-    while (offset < buf_len) {
-        uint16_t datagram_len = FeedDatagram::NextLen(protocol, bytes + offset, buf_len - offset);
-        if (send(feed_sock_[feed_index], bytes + offset, datagram_len, MSG_DONTWAIT) < 0) {
+    // MLAT datagrams each start with a short receiver info frame (v, id, clk, ep), since any of them may be lost.
+    uint8_t info_frame[80];  // v, an ID of up to 32 characters, clk and the epoch.
+    uint16_t info_frame_len = 0;
+    BeastReporter::ReceiverInfo info;
+    if (protocol == SettingsManager::kMLAT && GetMLATReceiverInfo(feed_index, info)) {
+        info_frame_len = BeastReporter::BuildShortReceiverInfoFrame(info_frame, sizeof(info_frame), info);
+    }
+    static uint8_t datagram_buf[FeedDatagram::kMaxPayloadBytes];  // Reporting sends from one task.
+    bool socket_ok = true, dropped = false;
+    FeedDatagram::SendAll(
+        protocol, reinterpret_cast<const uint8_t*>(buf), buf_len, info_frame, info_frame_len, datagram_buf,
+        [&](const uint8_t* datagram, uint16_t datagram_len) {
+            if (send(feed_sock_[feed_index], datagram, datagram_len, MSG_DONTWAIT) >= 0) {
+                return true;
+            }
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOMEM) {
                 // lwIP is briefly out of buffers: the rest of the batch is lost, like a dropped datagram.
-                feed_num_dropped_msgs_[feed_index] += num_msgs;
-                return true;
+                dropped = true;
+                return false;
             }
             CONSOLE_ERROR("CommsManager::SendBuf", "Closing UDP feed %d (%s:%d): errno %d (%s).", feed_index,
                           settings_manager.settings.feed_uris[feed_index],
                           settings_manager.settings.feed_ports[feed_index], errno, strerror(errno));
-            CloseFeedSocket(feed_index);
+            socket_ok = false;
             return false;
-        }
-        offset += datagram_len;
+        });
+    if (!socket_ok) {
+        CloseFeedSocket(feed_index);
+        return false;
+    }
+    if (dropped) {
+        feed_num_dropped_msgs_[feed_index] += num_msgs;
+        return true;
     }
     feed_mps_counter_[feed_index] += num_msgs;
     return true;
@@ -649,11 +668,39 @@ bool CommsManager::FinishFeedSocketConnect(uint16_t feed_index) {
             }
             break;
         }
+        case SettingsManager::ReportingProtocol::kMLAT:
+            // The next report starts the stream with a receiver info frame.
+            RestartMLATReceiverInfo(feed_index);
+            break;
         default:
             // No start of connections actions required for other protocols.
             break;
     }
     return true;
+}
+
+bool CommsManager::GetMLATReceiverInfo(ReportSink sink, BeastReporter::ReceiverInfo& info) {
+    if (sink >= SettingsManager::Settings::kMaxNumFeeds) {
+        return false;
+    }
+    const ObjectDictionary::RP2040DeviceStatus& rp2040 = object_dictionary.composite_device_status.rp2040;
+    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[sink], info.id);
+    info.epoch = rp2040.mlat_epoch;
+    info.position = rp2040.receiver_position;
+    info.pps = rp2040.receiver_pps;
+    strncpy(info.name, settings_manager.settings.core_network_settings.hostname, sizeof(info.name) - 1);
+    BeastReporter::FormatFirmwareVersion(info.firmware_version, sizeof(info.firmware_version), "adsbee_1090",
+                                         ObjectDictionary::kFirmwareVersionMajor,
+                                         ObjectDictionary::kFirmwareVersionMinor,
+                                         ObjectDictionary::kFirmwareVersionPatch,
+                                         ObjectDictionary::kFirmwareVersionReleaseCandidate);
+    // Until the RP2040's status arrives there is no epoch for the timestamps yet.
+    return rp2040.timestamp_ms != 0;
+}
+
+bool GetReceiverPosition(ReceiverPosition& position) {
+    position = object_dictionary.composite_device_status.rp2040.receiver_position;
+    return position.IsValid();
 }
 
 bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, uint16_t num_msgs) {

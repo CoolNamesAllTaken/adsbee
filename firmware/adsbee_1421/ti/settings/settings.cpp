@@ -78,6 +78,10 @@ bool SettingsManager::Apply() {
         settings.filter_altitude_a_ft = Settings::kDefaultFilterAltitudeAFt;
         settings.filter_altitude_b_ft = Settings::kDefaultFilterAltitudeBFt;
     }
+    RxPositionDetails rx_position_details = settings.rx_position_details;  // Copy: Settings is packed.
+    if (rx_position_details.Sanitize()) {
+        settings.rx_position_details = rx_position_details;
+    }
 
     // All of these can fail if the radio fails to open/close or the RX command can't be restarted; fold that
     // into the return value so boot/LOAD callers can see it.
@@ -265,6 +269,11 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
     CONSOLE_PRINTF("\tASTERIX SIC: %u\r\n", settings.asterix_sic);
 
+    RxPositionDetails rx_position_details = settings.rx_position_details;  // Copy: Settings is packed.
+    char details_args[64];
+    rx_position_details.PrintATArgs(details_args, sizeof(details_args));
+    CONSOLE_PRINTF("\tReceiver Position Details (ellipsoid height, accuracy, moving): %s\r\n", details_args);
+
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
     CONSOLE_PRINTF("\t\tSource: %s [%s]\r\n", RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
@@ -353,4 +362,13 @@ void SettingsManager::PrintAT() {
 
     // AT+ASTERIX_SAC_SIC
     CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
+
+    // AT+RX_POSITION MLAT arguments, if set: last, since older firmware rejects the longer line. The empty source
+    // keeps the source and position above.
+    RxPositionDetails rx_position_details = settings.rx_position_details;  // Copy: Settings is packed.
+    if (rx_position_details != RxPositionDetails()) {
+        char details_args[64];
+        rx_position_details.PrintATArgs(details_args, sizeof(details_args));
+        CONSOLE_PRINTF("AT+RX_POSITION=,,,,,,,%s\r\n", details_args);
+    }
 }

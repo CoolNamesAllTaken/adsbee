@@ -188,6 +188,11 @@ bool SettingsManager::Sanitize() {
         }
     }
 
+    if (settings.rx_position_details.Sanitize()) {
+        CONSOLE_ERROR("SettingsManager::Sanitize", "rx_position_details is invalid, clearing it.");
+        changed = true;
+    }
+
     if (settings.subg_mode >= kNumSubGHzRadioModes) {
         CONSOLE_ERROR("SettingsManager::Sanitize", "subg_mode %u out of range, resetting to kSubGHzRadioModeUATRx.",
                       settings.subg_mode);
@@ -278,6 +283,9 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
                    static_cast<unsigned long>(settings.filter_distance_deci_nm / 10),
                    static_cast<unsigned long>(settings.filter_distance_deci_nm % 10));
+    char details_args[64];
+    settings.rx_position_details.PrintATArgs(details_args, sizeof(details_args));
+    CONSOLE_PRINTF("\tReceiver Position Details (ellipsoid height, accuracy, moving): %s\r\n", details_args);
     CONSOLE_PRINTF("\tAltitude Filter: %s, %ld, %ld ft\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
                    (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
@@ -486,4 +494,11 @@ void SettingsManager::PrintAT() {
     // AT+FILTER_ALTITUDE_FT
     CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%s,%ld,%ld\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
                    (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
+    // AT+RX_POSITION MLAT arguments, if set: last, since older firmware rejects the longer line. The empty source
+    // keeps the receiver position as it is.
+    if (settings.rx_position_details != RxPositionDetails()) {
+        char details_args[64];
+        settings.rx_position_details.PrintATArgs(details_args, sizeof(details_args));
+        CONSOLE_PRINTF("AT+RX_POSITION=,,,,,,,%s\r\n", details_args);
+    }
 }

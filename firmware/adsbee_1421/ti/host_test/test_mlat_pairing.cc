@@ -285,3 +285,18 @@ TEST(MlatTimebase, ExtendsCapturesBeforeTheLastUpdate) {
                                 static_cast<uint32_t>((update - start) / kUs)));
     EXPECT_EQ(timebase.Extend(static_cast<uint32_t>(capture) & MlatTimebase::kCounterMask), capture);
 }
+
+TEST(MlatEpoch, RestartGivesANewNonZeroEpoch) {
+    for (uint32_t epoch : {1u, 2u, 0x1421u, 0xDEADBEEFu, 0xFFFFFFFFu}) {
+        for (uint64_t now_us : {0ull, 1ull, 123456789ull, 0xFFFFFFFFull, 0x123456789ABCull}) {
+            uint32_t next = NextMlatEpoch(epoch, now_us);
+            EXPECT_NE(next, 0u);
+            EXPECT_NE(next, epoch);
+        }
+    }
+    // Inputs that hit the fallbacks.
+    uint32_t epoch = 7;
+    uint32_t mixed = epoch * 1664525u + 1013904223u;
+    EXPECT_NE(NextMlatEpoch(epoch, mixed ^ epoch), epoch);
+    EXPECT_NE(NextMlatEpoch(epoch, mixed), 0u);
+}

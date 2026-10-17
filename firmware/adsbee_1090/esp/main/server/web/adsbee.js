@@ -537,7 +537,8 @@ function feedLabel(uri, transport, slot) {
 
 class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
-        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX'];
+        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX',
+        'MLAT'];
     static TRANSPORTS = ['TCP', 'UDP', 'MQTT'];
     // Transport a protocol's feeds usually take (the firmware's DefaultFeedTransport()).
     static DEFAULT_TRANSPORTS = {

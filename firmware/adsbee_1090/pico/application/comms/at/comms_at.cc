@@ -1763,12 +1763,21 @@ void ATRxPositionHelpCallback() {
         "\tspeed_kts: Speed in kts."
         "AT+RX_POSITION=ICAO,<icao>\r\n"
         "\ticao: ICAO address in hex (e.g. 7ABCDEF) of aircraft to use for position bootstrap.\r\n"
+        "AT+RX_POSITION=<source>,<args>,<ellipsoid_height_m>,<hacc_m>,<vacc_m>,<moving>\r\n"
+        "\tOptional, for MLAT, after the 6 FIXED arguments (empty for other sources). An empty argument keeps its "
+        "value.\r\n"
+        "\tellipsoid_height_m: FIXED antenna height above the WGS84 ellipsoid, \"-\" to clear. Without it MLAT uses "
+        "gnss_alt_ft.\r\n"
+        "\thacc_m, vacc_m: FIXED one sigma accuracies, 0 if unknown.\r\n"
+        "\tmoving: 1 for a receiver in a vehicle, for any source.\r\n"
         "AT+RX_POSITION?\r\n\tQuery the receiver's position.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
     switch (op) {
         case '?': {
+            char details_args[64];
+            settings_manager.settings.rx_position_details.PrintATArgs(details_args, sizeof(details_args));
             CPP_AT_PRINTF(
                 "Receiver Position:\r\n"
                 "\tSource: %s [%s] \r\n"
@@ -1778,7 +1787,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 "\tBarometric Altitude: %d ft\r\n"
                 "\tHeading: %.1f deg\r\n"
                 "\tSpeed: %d kts\r\n"
-                "\tICAO: 0x%06X [%s]\r\n",
+                "\tICAO: 0x%06X [%s]\r\n"
+                "\tMLAT (ellipsoid height, accuracy, moving): %s [%s]\r\n",
                 SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                 adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
                 adsbee.rx_position.longitude_deg, adsbee.rx_position.gnss_altitude_ft,
@@ -1787,7 +1797,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 adsbee.rx_position.source ==
                         SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO
                     ? "IN USE"
-                    : "NOT IN USE");
+                    : "NOT IN USE",
+                details_args, ReceiverPosition::SourceToStr(adsbee.receiver_position.source));
             // if (rx_position.source ==
             //     SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
             //     CPP_AT_PRINTF("\tICAO: 0x%06X\r\n", rx_position.icao_address);
@@ -1796,6 +1807,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
             break;
         }
         case '=': {
+            // Optional MLAT arguments, checked before anything changes.
+            RxPositionDetails details = settings_manager.settings.rx_position_details;
+            const char* error = "";
+            if (!details.ApplyATArgs(args, num_args, error)) {
+                CPP_AT_ERROR("%s", error);
+            }
             if (CPP_AT_HAS_ARG(0)) {
                 // Set position source.
                 for (uint16_t i = 0; i <= SettingsManager::RxPosition::kNumPositionSources; i++) {
@@ -1889,6 +1906,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                     }
                 }
             }
+            settings_manager.settings.rx_position_details = details;
             settings_manager.SyncToCoprocessors();
             WarnIfRemoteIDTxPositionSourceNotTransmittable();
             CPP_AT_SUCCESS();
@@ -1964,12 +1982,24 @@ static void PrintSettingsJSON() {
                   JSONEscapeStr(s.remote_id_tx_operator_id, esc, sizeof(esc)), esp32_ll.remote_id_status,
                   RemoteIDAllowedTransports());
     CPP_AT_PRINTF("\"RX_ENABLE\":[%d,%d],", adsbee.Receiver1090IsEnabled(), s.subg_rx_enabled);
-    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\"],",
+    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\",",
                   SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                   adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
                   adsbee.rx_position.longitude_deg, (int)adsbee.rx_position.gnss_altitude_ft,
                   (int)adsbee.rx_position.baro_altitude_ft, adsbee.rx_position.heading_deg,
                   (int)adsbee.rx_position.speed_kts, (unsigned)adsbee.rx_position.icao_address);
+    {
+        // The optional MLAT arguments as AT+RX_POSITION? prints them, then the position source MLAT uses.
+        const RxPositionDetails& details = s.rx_position_details;
+        if (details.ellipsoid_height_set) {
+            CPP_AT_PRINTF("\"%.2f\",", static_cast<double>(details.ellipsoid_height_m));
+        } else {
+            CPP_AT_PRINTF("\"-\",");
+        }
+        CPP_AT_PRINTF("%.2f,%.2f,%d,\"%s\"],", static_cast<double>(details.horizontal_accuracy_m),
+                      static_cast<double>(details.vertical_accuracy_m), details.moving,
+                      ReceiverPosition::SourceToStr(adsbee.receiver_position.source));
+    }
     CPP_AT_PRINTF("\"SUBG_ENABLE\":[\"%s\"],",
                   SettingsManager::EnableStateToATValueStr(adsbee.subg_radio_ll.IsEnabledState()));
     int tl_offset_mv = adsbee.GetTLOffsetMilliVolts();
@@ -2579,7 +2609,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     },
     {.command = "RX_POSITION",
      .min_args = 0,
-     .max_args = 8,
+     .max_args = 11,
      .help_callback = ATRxPositionHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxPositionCallback, comms_manager)},
     {.command = "SETTINGS",

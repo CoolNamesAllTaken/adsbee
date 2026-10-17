@@ -140,6 +140,12 @@ void CommsManager::MQTTEventHandler(int32_t event_id, esp_mqtt_event_handle_t ev
             char status_topic[kMQTTTopicMaxLen + 1];
             MQTTTopic("status", status_topic, sizeof(status_topic));
             esp_mqtt_client_enqueue(event->client, status_topic, "online", 0, 1, 1, true);
+            for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+                if (feed_transports_in_use_[i] == SettingsManager::kFeedTransportMQTT &&
+                    settings_manager.settings.feed_protocols[i] == SettingsManager::kMLAT) {
+                    RestartMLATReceiverInfo(i);  // The next report starts with a receiver info frame.
+                }
+            }
             mqtt_is_connected_ = true;
             CONSOLE_INFO("CommsManager::MQTTEventHandler", "Connected to MQTT broker %s.", host);
             break;
