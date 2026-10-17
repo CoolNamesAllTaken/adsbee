@@ -98,10 +98,12 @@ class ConsoleWebSocket {
 
             this.captureCallback = (text) => {
                 captured.push(text);
-                if (text.split(/[\r\n]+/).some(l => l.trim() === 'ERROR')) {
+                // A failed command prints "ERROR <reason>"; log lines start with "ERROR:".
+                const errorLine = text.split(/[\r\n]+/).map(l => l.trim()).find(l => /^ERROR(?!:)\b/.test(l));
+                if (errorLine !== undefined) {
                     clearTimeout(timer);
                     this.captureCallback = null;
-                    reject(new Error(`ERROR response: ${text.trim()}`));
+                    reject(new Error(errorLine.replace(/^ERROR\s*/, '') || 'ERROR response'));
                 } else if (matches(text)) {
                     clearTimeout(timer);
                     this.captureCallback = null;
@@ -239,7 +241,7 @@ class SparklineChart {
 }
 
 class MetricCard {
-    constructor(container, label, unit = 'msg/s', feedSlot = null, chartOptions = {}) {
+    constructor(container, label, unit = 'msg/s', feedSlot = null, chartOptions = {}, title = label) {
         this.container = container;
         this.label = label;
         this.unit = unit;
@@ -256,7 +258,7 @@ class MetricCard {
             ? `<span class="feed-slot-badge">#${feedSlot}</span>`
             : '';
         card.innerHTML = `
-  <div class="metric-title" title="${label}">${label}${slotBadge}</div>
+  <div class="metric-title" title="${title}">${title}${slotBadge}</div>
   <div class="metric-value">0 ${unit}</div>
   <svg class="sparkline" id="${this.id}" viewBox="0 0 100 30"></svg>
 `;
@@ -335,10 +337,25 @@ class MetricsWebSocket {
         Object.entries(data).forEach(([label, value]) => {
             if (!this.cards[parentLabel][label]) {
                 const slot = this.feedSlotMap[label] ?? null;
-                this.cards[parentLabel][label] = new MetricCard(container, label, 'msg/s', slot);
+                // MQTT feeds have no URI: they publish to the shared broker.
+                const title = label.startsWith('mqtt#') ? 'MQTT' : label;
+                this.cards[parentLabel][label] = new MetricCard(container, label, 'msg/s', slot, {}, title);
             }
             this.cards[parentLabel][label].update(value);
         });
+    }
+
+    // Bar of the ESP32 RAM the active feeds take out of this unit's budget.
+    updateFeedRAM(usedBytes, budgetBytes) {
+        const bar = document.getElementById('feed-ram');
+        if (!bar || !budgetBytes) return;
+        const percent = Math.min(100, Math.round(100 * usedBytes / budgetBytes));
+        const fill = document.getElementById('feed-ram-fill');
+        fill.style.width = `${percent}%`;
+        fill.className = percent >= 100 ? 'full' : percent >= 75 ? 'high' : '';
+        bar.dataset.tip = `ESP32 RAM for feeds: ${Math.round(usedBytes / 1024)} of ${Math.round(budgetBytes / 1024)} kB. `
+            + 'TCP feeds take the most, UDP the least; all MQTT feeds share one connection (TLS adds to it).';
+        bar.style.display = '';
     }
 
     updateDeviceStatus(deviceStatus) {
@@ -448,12 +465,15 @@ class MetricsWebSocket {
                 if (data.hasOwnProperty('server_metrics')) {
                     const serverMetrics = data['server_metrics'];
                     this._feedUris = serverMetrics['feed_uri'];
+                    this._feedTransports = serverMetrics['feed_transport'] || [];
                     const feedMetrics = {};
                     for (let i = 0; i < serverMetrics['feed_uri'].length; i++) {
-                        if (serverMetrics['feed_uri'][i] === '') continue;
-                        feedMetrics[serverMetrics['feed_uri'][i]] = serverMetrics['feed_mps'][i];
-                        this.feedSlotMap[serverMetrics['feed_uri'][i]] = i;
+                        const label = feedLabel(serverMetrics['feed_uri'][i], this._feedTransports[i], i);
+                        if (label === null) continue;
+                        feedMetrics[label] = serverMetrics['feed_mps'][i];
+                        this.feedSlotMap[label] = i;
                     }
+                    this.updateFeedRAM(serverMetrics['feed_ram_bytes'], serverMetrics['feed_ram_budget_bytes']);
                     this.updateFeedCards(feedMetrics);
                     this.feedsCountEl.textContent = `Feeds: ${Object.keys(feedMetrics).length}`;
                     const addBtn = document.getElementById('add-feed-btn');
@@ -479,7 +499,7 @@ class MetricsWebSocket {
     getFirstEmptySlot() {
         if (!this._feedUris) return 0;
         for (let i = 0; i < this._feedUris.length; i++) {
-            if (this._feedUris[i] === '') return i;
+            if (feedLabel(this._feedUris[i], (this._feedTransports || [])[i], i) === null) return i;
         }
         return -1;
     }
@@ -509,11 +529,41 @@ function whereplaneMapUrl(uri, protocol, receiverId) {
     return `https://globe.whereplane.xyz/?feed=${uuid}`;
 }
 
+/** Card label of a feed slot, or null if the slot is empty. MQTT feeds have no URI. */
+function feedLabel(uri, transport, slot) {
+    if (uri) return uri;
+    return transport === 'MQTT' ? `mqtt#${slot}` : null;
+}
+
 class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
         'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX',
         'MLAT'];
     static TRANSPORTS = ['TCP', 'UDP', 'MQTT'];
+    // Transport a protocol's feeds usually take (the firmware's DefaultFeedTransport()).
+    static DEFAULT_TRANSPORTS = {
+        GDL90: 'UDP', GDL90_NO_UAT_UPLINK: 'UDP', MAVLINK1: 'UDP', MAVLINK2: 'UDP',
+        AIRCRAFT_JSON: 'MQTT', AIRCRAFT_JSON_UAT_UPLINK: 'MQTT',
+    };
+    // 192.168.4.255 reaches every device on the ADSBee's WiFi access point.
+    static PRESETS = [
+        { name: 'adsb.fi', protocol: 'BEAST_NO_UAT', transport: 'TCP', host: 'feed.adsb.fi', port: 30004 },
+        { name: 'adsb.lol', protocol: 'BEAST_NO_UAT', transport: 'TCP', host: 'feed.adsb.lol', port: 30004 },
+        { name: 'airplanes.live', protocol: 'BEAST_NO_UAT', transport: 'TCP', host: 'feed.airplanes.live', port: 30004 },
+        { name: 'whereplane', protocol: 'BEAST', transport: 'TCP', host: 'feed.whereplane.xyz', port: 30004 },
+        {
+            name: 'EFB tablets', protocol: 'GDL90', transport: 'UDP', host: '192.168.4.255', port: 4000,
+            tip: 'GDL90 broadcast on port 4000 to tablets on the ADSBee WiFi (ForeFlight, Garmin Pilot, SkyDemon...)',
+        },
+        {
+            name: 'Ground station', protocol: 'MAVLINK2', transport: 'UDP', host: '192.168.4.255', port: 14550,
+            tip: 'MAVLink on UDP 14550 for QGroundControl or Mission Planner on the ADSBee WiFi. Use the ground station\'s address on other networks.',
+        },
+        {
+            name: 'Home Assistant', protocol: 'AIRCRAFT_JSON', transport: 'MQTT', host: 'homeassistant.local', port: 1883,
+            tip: 'Aircraft JSON to the Home Assistant MQTT broker (Mosquitto add-on). Set its username and password.',
+        },
+    ];
 
     static async open(feedSlot) {
         const modal = document.getElementById('feed-modal');
@@ -541,41 +591,76 @@ class FeedEditor {
             .map(p => `<option value="${p}"${p === current.protocol ? ' selected' : ''}>${p}</option>`)
             .join('');
         FeedEditor.receiverId = current.receiver_id;
-        const transport = current.transport || 'TCP';
         const transportSel = document.getElementById('feed-transport');
-        transportSel.innerHTML = FeedEditor.TRANSPORTS
-            .map(t => `<option value="${t}"${t === transport ? ' selected' : ''}>${t}</option>`)
-            .join('');
+        transportSel.innerHTML = FeedEditor.TRANSPORTS.map(t => `<option value="${t}">${t}</option>`).join('');
+        transportSel.value = current.transport || 'TCP';
         const mqtt = current.mqtt || {};
+        document.getElementById('feed-mqtt-host').value = mqtt.host || '';
+        document.getElementById('feed-mqtt-port').value = mqtt.port || 1883;
         document.getElementById('feed-mqtt-prefix').value = mqtt.topic_prefix || '';
         document.getElementById('feed-mqtt-username').value = mqtt.username || '';
         const password = document.getElementById('feed-mqtt-password');
         password.value = '';
         password.placeholder = mqtt.has_password ? '(unchanged)' : 'none';
         document.getElementById('feed-mqtt-tls').checked = !!mqtt.tls;
+        document.getElementById('feed-mqtt-ws').checked = mqtt.transport === 'WS';
+        document.getElementById('feed-mqtt-path').value = mqtt.path || '';
         document.getElementById('feed-mqtt-qos').value = String(mqtt.qos || 0);
+        FeedEditor.renderPresets();
         document.getElementById('feed-uri').oninput = FeedEditor.updateMapLink;
-        sel.onchange = FeedEditor.updateMapLink;
+        sel.onchange = () => {
+            transportSel.value = FeedEditor.DEFAULT_TRANSPORTS[sel.value] || 'TCP';
+            FeedEditor.updateMapLink();
+        };
         transportSel.onchange = FeedEditor.updateMapLink;
         document.getElementById('feed-mqtt-prefix').oninput = FeedEditor.updateMapLink;
+        document.getElementById('feed-mqtt-ws').onchange = FeedEditor.updateMapLink;
         FeedEditor.updateMapLink();
         statusEl.textContent = '';
         document.getElementById('feed-form').style.display = '';
     }
 
-    // Shows the whereplane.xyz map link while the form describes a Beast feed to whereplane, and the MQTT options and
-    // topics while the transport is MQTT.
+    static renderPresets() {
+        const row = document.getElementById('feed-presets');
+        row.innerHTML = '';
+        FeedEditor.PRESETS.forEach((preset, i) => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'feed-preset';
+            chip.textContent = preset.name;
+            chip.title = preset.tip || `${preset.protocol} over ${preset.transport} to ${preset.host}:${preset.port}`;
+            chip.onclick = () => FeedEditor.applyPreset(i);
+            row.appendChild(chip);
+        });
+    }
+
+    // Fills protocol, transport, host and port. MQTT presets fill the shared broker.
+    static applyPreset(i) {
+        const preset = FeedEditor.PRESETS[i];
+        document.getElementById('feed-protocol').value = preset.protocol;
+        document.getElementById('feed-transport').value = preset.transport;
+        const isMqtt = preset.transport === 'MQTT';
+        document.getElementById(isMqtt ? 'feed-mqtt-host' : 'feed-uri').value = preset.host;
+        document.getElementById(isMqtt ? 'feed-mqtt-port' : 'feed-port').value = preset.port;
+        document.getElementById('feed-active').checked = true;
+        FeedEditor.updateMapLink();
+    }
+
+    // Shows the whereplane.xyz map link while the form describes a Beast feed to whereplane, and the broker options
+    // and topics instead of host and port while the transport is MQTT.
     static updateMapLink() {
         const isMqtt = document.getElementById('feed-transport').value === 'MQTT';
         document.getElementById('feed-mqtt').style.display = isMqtt ? '' : 'none';
+        document.getElementById('feed-endpoint').style.display = isMqtt ? 'none' : '';
+        document.getElementById('feed-mqtt-path').style.display =
+            document.getElementById('feed-mqtt-ws').checked ? '' : 'none';
         if (isMqtt) {
             const prefix = document.getElementById('feed-mqtt-prefix').value.trim() || 'adsbee';
             const base = `${prefix}/${String(FeedEditor.receiverId).toLowerCase()}`;
             const protocol = document.getElementById('feed-protocol').value.toLowerCase();
-            document.getElementById('feed-mqtt-topics').textContent =
-                `Publishes ${base}/${protocol}, ${base}/status and ${base}/metrics.`;
+            document.getElementById('feed-mqtt-topics').textContent = `${base}/${protocol}, /status, /metrics`;
         }
-        const url = whereplaneMapUrl(document.getElementById('feed-uri').value,
+        const url = isMqtt ? null : whereplaneMapUrl(document.getElementById('feed-uri').value,
             document.getElementById('feed-protocol').value, FeedEditor.receiverId);
         const link = document.getElementById('feed-map-link');
         if (url) link.href = url;
@@ -608,28 +693,34 @@ class FeedEditor {
 
     static async save() {
         const slot = document.getElementById('feed-slot').value;
-        const uri = document.getElementById('feed-uri').value.trim();
-        const port = document.getElementById('feed-port').value;
         const active = document.getElementById('feed-active').checked ? 1 : 0;
         const protocol = document.getElementById('feed-protocol').value;
         const transport = document.getElementById('feed-transport').value || 'TCP';
         const statusEl = document.getElementById('feed-modal-status');
+        // MQTT feeds publish to the shared broker and have no host and port of their own.
+        const uri = transport === 'MQTT' ? '-' : document.getElementById('feed-uri').value.trim();
+        const port = transport === 'MQTT' ? 0 : document.getElementById('feed-port').value;
 
         statusEl.textContent = 'Saving...';
         try {
-            await consoleWebSocket.sendAndCapture(
-                `AT+FEED=${slot},${uri},${port},${active},${protocol},${transport}\r\n`, 'OK', 5000);
             if (transport === 'MQTT') {
                 // "-" clears a string; an empty password keeps the stored one unless the username is cleared.
+                const host = document.getElementById('feed-mqtt-host').value.trim() || '-';
+                const brokerPort = document.getElementById('feed-mqtt-port').value || 1883;
                 const prefix = document.getElementById('feed-mqtt-prefix').value.trim() || '-';
                 const username = document.getElementById('feed-mqtt-username').value.trim() || '-';
                 let password = document.getElementById('feed-mqtt-password').value;
                 if (username === '-') password = '-';
                 const tls = document.getElementById('feed-mqtt-tls').checked ? 1 : 0;
                 const qos = document.getElementById('feed-mqtt-qos').value;
+                const ws = document.getElementById('feed-mqtt-ws').checked ? 'WS' : 'TCP';
+                const path = document.getElementById('feed-mqtt-path').value.trim() || '-';
                 await consoleWebSocket.sendAndCapture(
-                    `AT+FEED_MQTT=${slot},${prefix},${username},${password},${tls},${qos}\r\n`, 'OK', 5000);
+                    `AT+MQTT=${host},${brokerPort},${username},${password},${tls},${qos},${prefix},${ws},${path}\r\n`,
+                    'OK', 5000);
             }
+            await consoleWebSocket.sendAndCapture(
+                `AT+FEED=${slot},${uri},${port},${active},${protocol},${transport}\r\n`, 'OK', 5000);
             await consoleWebSocket.sendAndCapture(`AT+SETTINGS=SAVE\r\n`, 'OK', 5000);
             statusEl.textContent = 'Saved.';
             setTimeout(() => FeedEditor.close(), 800);

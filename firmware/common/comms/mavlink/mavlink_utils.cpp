@@ -101,7 +101,8 @@ mavlink_adsb_vehicle_t ModeSAircraftToMAVLINKADSBVehicleMessage(const ModeSAircr
     // Prefer GNSS altitude for MAVLINK applications (e.g. drone traffic avoidance).
     bool use_gnss_altitude = aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSAltitudeValid);
     mavlink_adsb_vehicle_t adsb_vehicle_msg = {};
-    adsb_vehicle_msg.ICAO_address = aircraft.icao_address;
+    // Non-ICAO addresses keep their address qualifier bits, as UAT addresses do, so they can't match an ICAO address.
+    adsb_vehicle_msg.ICAO_address = Aircraft::UIDToICAOAddress(aircraft.GetUID());
     // Latitude [degE7]
     adsb_vehicle_msg.lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f);
     // Longitude [degE7]

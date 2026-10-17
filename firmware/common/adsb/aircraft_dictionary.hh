@@ -174,7 +174,7 @@ class ModeSAircraft : public Aircraft {
         kBitFlagIdent = 16,                     // IDENT switch is currently active.
         kBitFlagAlert = 17,                     // Aircraft is indicating an alert.
         kBitFlagTCASRA = 18,                    // Indicates a TCAS resolution advisory is active.
-        kBitFlagIsNonTransponder = 19,          // Aircraft is being rebroadcast (this is not a primary source).
+        kBitFlagIsNonTransponder = 19,          // Reported address type is a DF18 one (GetAddressType()).
         kBitFlagReserved0 = 20,
         kBitFlagReserved1 = 21,
         kBitFlagReserved2 = 22,
@@ -193,12 +193,60 @@ class ModeSAircraft : public Aircraft {
 
     static const uint8_t kBitFlagEndOfPersistentFlags = kBitFlagUpdatedBaroAltitude;
 
+    // How the aircraft is heard, in readsb's order: a lower value is a more direct source. DO-260C Table 2-7.
+    enum AddressType : uint8_t {
+        kAddressTypeADSBICAO = 0,                // DF17.
+        kAddressTypeADSBICAONonTransponder = 1,  // DF18 CF=0.
+        kAddressTypeADSRICAO = 2,                // DF18 CF=6, rebroadcast of UAT ADS-B.
+        kAddressTypeTISBICAO = 3,                // DF18 CF=2, radar or multilateration track.
+        kAddressTypeModeS = 4,                   // Mode S replies or DF19 only.
+        // Addresses below aren't ICAO addresses and get their own dictionary entries.
+        kAddressTypeADSBOther = 5,      // DF18 CF=1: anonymous, ground vehicle or obstruction address.
+        kAddressTypeADSROther = 6,      // DF18 CF=6 with IMF (ICAO/Mode A flag) set.
+        kAddressTypeTISBTrackFile = 7,  // DF18 CF=2 with IMF set: Mode A code and track file number.
+        kAddressTypeTISBOther = 8,      // DF18 CF=5.
+        kAddressTypeInvalid = 0xF
+    };
+    static constexpr AddressType kFirstNonICAOAddressType = kAddressTypeADSBOther;
+    // A less direct source can't replace position, velocity or other data from a more direct one for this long.
+    static constexpr uint32_t kAddressTypeHoldMs = 15e3;
+
+    /**
+     * Returns the address type of an extended squitter, or kAddressTypeInvalid if it doesn't describe a target
+     * (DF18 CF=3, 4 and 7). The ICAO/Mode A flag position depends on the type code (DO-260C 2.2.17, 2.2.18).
+     */
+    static AddressType GetAddressType(const ModeSADSBPacket& packet);
+
+    // TIS-B or ADS-R (DF18 CF=2, 5, 6).
+    static inline bool IsRebroadcast(AddressType type) {
+        return type == kAddressTypeADSRICAO || type == kAddressTypeTISBICAO || type >= kAddressTypeADSROther;
+    }
+    static inline bool IsTISB(AddressType type) {
+        return type == kAddressTypeTISBICAO || type == kAddressTypeTISBTrackFile || type == kAddressTypeTISBOther;
+    }
+    static inline bool IsADSR(AddressType type) {
+        return type == kAddressTypeADSRICAO || type == kAddressTypeADSROther;
+    }
+
+    /**
+     * Dictionary key of a Mode S address: non-ICAO address types go in the address qualifier bits so they never
+     * collide with an ICAO address.
+     */
+    static inline uint32_t AddressToUID(uint32_t address, AddressType type) {
+        uint32_t qualifier = type >= kFirstNonICAOAddressType && type != kAddressTypeInvalid ? type : 0;
+        return ICAOToUID((address & 0xFFFFFF) | (qualifier << kAddressQualifierBitShift), kAircraftTypeModeS);
+    }
+
     struct Metrics {
         // We can only confirm that valid frames came from this aircraft. Not sure who invalid frames are from.
         uint16_t valid_squitter_frames = 0;
         uint16_t valid_extended_squitter_frames = 0;
     };
 
+    /**
+     * @param[in] icao_address_in 24-bit address. A non-ICAO address carries its address type in the address
+     * qualifier bits (AddressToUID).
+     */
     ModeSAircraft(uint32_t icao_address_in);
     ModeSAircraft();
 
@@ -211,7 +259,7 @@ class ModeSAircraft : public Aircraft {
      * with the same ICAO address.
      * @retval Unique identifier for the aircraft.
      */
-    inline uint32_t GetUID() const { return ICAOToUID(icao_address, kAircraftTypeModeS); }
+    inline uint32_t GetUID() const { return AddressToUID(icao_address, static_cast<AddressType>(last_address_type)); }
 
     /**
      * Standard Functions
@@ -402,6 +450,31 @@ class ModeSAircraft : public Aircraft {
     uint16_t width_m = 0;
 
     int8_t adsb_version = 0;
+
+    AddressType position_address_type = kAddressTypeADSBICAO;  // Source of the position.
+    AddressType velocity_address_type = kAddressTypeADSBICAO;  // Source of the velocity.
+    uint8_t cpr_address_type  : 4 = kAddressTypeADSBICAO;      // Source of the cached CPR packets.
+    uint8_t last_address_type : 4 = kAddressTypeModeS;         // Source of the last extended squitter applied.
+
+    /**
+     * Returns how the aircraft is heard: the source of its position, or of the last extended squitter applied if it
+     * has no position. kAddressTypeModeS if no extended squitter was applied.
+     */
+    inline AddressType GetAddressType() const {
+        return HasBitFlag(kBitFlagPositionValid) ? position_address_type : static_cast<AddressType>(last_address_type);
+    }
+
+    /**
+     * Decides whether an extended squitter may update the aircraft, and records its source. Like readsb, a less
+     * direct source is ignored for kAddressTypeHoldMs after a more direct one updated the same data: position
+     * messages are held against the position, velocity messages against the velocity, and others against the
+     * position.
+     * @param[in] type Address type of the message.
+     * @param[in] type_code Type code of the message.
+     * @param[in] timestamp_ms Local time (get_time_since_boot_ms()).
+     * @retval True if the message should be applied.
+     */
+    bool AcceptAddressType(AddressType type, uint16_t type_code, uint32_t timestamp_ms);
 
     /**
      * GENERIC COMMENT FOR ALL MESSAGE INGESTION HELPERS
@@ -1191,15 +1264,16 @@ class AircraftDictionary {
      */
     bool ContainsAircraft(uint32_t uid) const;
 
-    // One ICAO address can have several entries: its own 1090ES, its own UAT ADS-B, and ground rebroadcasts (DF18, UAT
-    // TIS-B/ADS-R). Address-keyed outputs (aircraft JSON, GDL90 traffic) report one: the best-ranked entry with a
-    // position newer than kPreferredReportPositionFreshMs, else the newest position. 15 s covers a TIS-B radar scan.
+    // One ICAO address can have up to three entries: Mode S (direct, ADS-R or TIS-B, see ModeSAircraft::AddressType),
+    // UAT ADS-B, and UAT TIS-B/ADS-R. Address-keyed outputs (aircraft JSON, GDL90 traffic, ASTERIX) report one: the
+    // best-ranked entry with a position newer than kPreferredReportPositionFreshMs, else the newest position. 15 s
+    // covers a TIS-B radar scan.
     static constexpr uint32_t kPreferredReportPositionFreshMs = 15e3;
     enum AddressSourceRank : int8_t {
-        kAddressSourceRankDirect = 0,       // 1090ES DF17 / Mode S replies, or UAT ADS-B with an ICAO address.
-        kAddressSourceRankRebroadcast = 1,  // DF18 (ADS-R / TIS-B / non-transponder on 1090).
-        kAddressSourceRankTISB = 2,         // UAT TIS-B or ADS-R with an ICAO address (address qualifier 2).
-        kAddressSourceRankUnique = -1       // Not an ICAO-addressed entry (Remote ID, track files, self-assigned).
+        kAddressSourceRankDirect = 0,       // DF17, DF18 CF=0, Mode S replies, or UAT ADS-B with an ICAO address.
+        kAddressSourceRankRebroadcast = 1,  // 1090 ADS-R (DF18 CF=6) with an ICAO address.
+        kAddressSourceRankTISB = 2,         // 1090 TIS-B, or UAT TIS-B/ADS-R, with an ICAO address.
+        kAddressSourceRankUnique = -1       // Not an ICAO-addressed entry (Remote ID, track files, anonymous).
     };
 
     /**

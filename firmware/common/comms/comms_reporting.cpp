@@ -1033,19 +1033,30 @@ bool CommsManager::ReportASTERIX(ReportSink* sinks, uint16_t num_sinks) {
             block + len, sizeof(block) - len, ctx.sac, ctx.sic, time_of_day, ctx.clock.utc_valid,
             track_numbering_restarted, kASTERIXReportingIntervalMs / 1000);
         const uint8_t kReportPeriodHalfSeconds = kASTERIXReportingIntervalMs / 500;
-        len += ASTERIXReporter::WriteCAT023ServiceStatusRecord(
-            block + len, sizeof(block) - len, ctx.sac, ctx.sic, ASTERIXReporter::kServiceID1090ES,
-            ASTERIXReporter::kServiceType1090ES, time_of_day, kReportPeriodHalfSeconds,
-            kASTERIXReportingIntervalMs / 1000,
-            settings_manager.settings.r1090_rx_enabled ? ASTERIXReporter::kServiceStatusNormal
-                                                       : ASTERIXReporter::kServiceStatusDisabled);
-        len += ASTERIXReporter::WriteCAT023ServiceStatusRecord(
-            block + len, sizeof(block) - len, ctx.sac, ctx.sic, ASTERIXReporter::kServiceIDUAT,
-            ASTERIXReporter::kServiceTypeUAT, time_of_day, kReportPeriodHalfSeconds, kASTERIXReportingIntervalMs / 1000,
-            settings_manager.settings.subg_rx_enabled ? ASTERIXReporter::kServiceStatusNormal
-                                                      : ASTERIXReporter::kServiceStatusDisabled);
+        // Direct and rebroadcast services of each receiver.
+        const struct {
+            uint8_t id;
+            uint8_t type;
+            bool enabled;
+        } kServices[] = {
+            {ASTERIXReporter::kServiceID1090ES, ASTERIXReporter::kServiceType1090ES,
+             settings_manager.settings.r1090_rx_enabled},
+            {ASTERIXReporter::kServiceIDUAT, ASTERIXReporter::kServiceTypeUAT,
+             settings_manager.settings.subg_rx_enabled},
+            {ASTERIXReporter::kServiceID1090ESRebroadcast, ASTERIXReporter::kServiceTypeTISB1090ES,
+             settings_manager.settings.r1090_rx_enabled},
+            {ASTERIXReporter::kServiceIDUATRebroadcast, ASTERIXReporter::kServiceTypeTISBUAT,
+             settings_manager.settings.subg_rx_enabled},
+        };
+        for (const auto& service : kServices) {
+            len += ASTERIXReporter::WriteCAT023ServiceStatusRecord(
+                block + len, sizeof(block) - len, ctx.sac, ctx.sic, service.id, service.type, time_of_day,
+                kReportPeriodHalfSeconds, kASTERIXReportingIntervalMs / 1000,
+                service.enabled ? ASTERIXReporter::kServiceStatusNormal : ASTERIXReporter::kServiceStatusDisabled);
+        }
         ASTERIXReporter::FinishDataBlock(block, len);
-        ret &= SendBufToSinks(sinks, num_sinks, (char*)block, len, asterix_tally, 3);
+        ret &= SendBufToSinks(sinks, num_sinks, (char*)block, len, asterix_tally,
+                              1 + sizeof(kServices) / sizeof(kServices[0]));
         track_numbering_restarted = false;
     }
 

@@ -39,6 +39,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         main.cc
         settings.cc
         # test_ads_b_decoder.cc
+        test_aircraft_dictionary_contact_modes.cc
         test_aircraft_dictionary_mode_s.cc
         test_aircraft_dictionary_allocator.cc
         test_broadcast_ring.cc
@@ -67,6 +68,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_reporting_gdl90.cc
         test_reporting_mavlink.cc
         test_reporting_raw.cc
+        test_remote_id_guard.cc
         test_settings.cc
         test_settings_hash.cc
         test_settings_release_blobs.cc

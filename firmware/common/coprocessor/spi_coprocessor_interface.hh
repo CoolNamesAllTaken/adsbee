@@ -168,7 +168,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     uint16_t num_queued_log_messages = 0;                // Number of log messages queued to be read from the slave.
     uint16_t queued_log_messages_packed_size_bytes = 0;  // Size of the pending log messages in bytes.
     uint16_t num_queued_sc_command_requests = 0;         // Number of SCCommand requests queued on the slave.
-    // Cached ESP32 Remote ID receiver status bitfield (see RemoteIDManager::Status). Only meaningful for the ESP32
+    // Cached ESP32 Remote ID status bitfield (see RemoteIDGuard::Status). Only meaningful for the ESP32
     // coprocessor; left 0 for others. Surfaced to the user via AT+REMOTE_ID?.
     uint16_t remote_id_status = 0;
     // Cached ESP32 hardware capabilities (ObjectDictionary::ESP32HardwareCapability) and PSRAM heap sizes. ESP32 only;
@@ -176,6 +176,8 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     uint8_t hardware_capabilities = 0;
     uint16_t psram_total_kb = 0;
     uint16_t psram_free_kb = 0;
+    uint32_t heap_free_bytes = 0;                // ESP32 internal heap.
+    uint32_t heap_largest_free_block_bytes = 0;
     // ESP32 only: UTC from SNTP (network_utc_ms_of_day) held at network_utc_timestamp_ms, local milliseconds since boot.
     bool network_utc_time_valid = false;
     uint32_t network_utc_ms_of_day = 0;

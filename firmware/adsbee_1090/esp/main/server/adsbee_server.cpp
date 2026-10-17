@@ -8,8 +8,10 @@
 #include "comms.hh"
 #include "aircraftjson_utils.hh"
 #include "auto_update_manager.hh"
+#include "feed_ram_budget.hh"
 #include "network_time.hh"
 #include "gdl90/gdl90_utils.hh"
+#include "hardware_capabilities.hh"
 #include "heap_diagnostics.hh"
 #include "json_utils.hh"
 #include "pico.hh"
@@ -279,6 +281,7 @@ bool ADSBeeServer::Update() {
         // RP2040 and SubG status are updated by the RP2040 writing to the object dictionary periodically. Nothing to do
         // here.
         SendNetworkMetricsMessage();
+        last_network_metrics_timestamp_ms_ = timestamp_ms;
     }
 
     if (timestamp_ms - last_http_session_sweep_timestamp_ms_ > kHTTPSessionSweepIntervalMs) {
@@ -401,8 +404,14 @@ bool ADSBeeServer::Update() {
     }
 
     // Broadcast aircraft JSON to connected /aircraft WebSocket clients. A report starts once the last one is done.
-    if (aircraft_json_next_uid_ >= aircraft_json_num_uids_ &&
-        timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
+    // Reports start between metrics messages (or on their own while none are sent).
+    const uint32_t ms_since_metrics = timestamp_ms - last_network_metrics_timestamp_ms_;
+    const bool between_metrics = (ms_since_metrics >= kAircraftJSONMetricsGapMs &&
+                                  ms_since_metrics < kAircraftJSONReportingIntervalMs - kAircraftJSONMetricsGapMs) ||
+                                 ms_since_metrics >= 2 * kAircraftJSONReportingIntervalMs;
+    if (aircraft_json_next_uid_ >= aircraft_json_num_uids_ && between_metrics &&
+        timestamp_ms - last_aircraft_json_report_timestamp_ms_ >=
+            kAircraftJSONReportingIntervalMs - kAircraftJSONMetricsGapMs) {
         last_aircraft_json_report_timestamp_ms_ = timestamp_ms;
         aircraft_json_num_uids_ =
             network_aircraft.GetNumClients() > 0
@@ -793,22 +802,27 @@ static esp_err_t feed_api_get_handler(httpd_req_t* req) {
     json_escape(escaped_uri, sizeof(escaped_uri), settings_manager.settings.feed_uris[index]);
     char receiver_id[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
     SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id);
-    const SettingsManager::Settings::FeedMQTT& mqtt = settings_manager.settings.feed_mqtt[index];
-    char escaped_prefix[sizeof(mqtt.topic_prefix) * 2];
-    json_escape(escaped_prefix, sizeof(escaped_prefix), mqtt.topic_prefix);
+    // The shared MQTT broker, without its password.
+    const SettingsManager::Settings::MQTTBroker& mqtt = settings_manager.settings.mqtt_broker;
+    char escaped_host[sizeof(mqtt.host) * 2];
+    json_escape(escaped_host, sizeof(escaped_host), mqtt.host);
     char escaped_username[sizeof(mqtt.username) * 2];
     json_escape(escaped_username, sizeof(escaped_username), mqtt.username);
-    char json[640];
-    // The MQTT password is never sent back.
+    char escaped_prefix[sizeof(mqtt.topic_prefix) * 2];
+    json_escape(escaped_prefix, sizeof(escaped_prefix), mqtt.topic_prefix);
+    char escaped_path[sizeof(mqtt.websocket_path) * 2];
+    json_escape(escaped_path, sizeof(escaped_path), mqtt.websocket_path);
+    char json[1152];
     snprintf(json, sizeof(json),
              "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\",\"receiver_id\":\"%s\","
-             "\"transport\":\"%s\",\"mqtt\":{\"topic_prefix\":\"%s\",\"username\":\"%s\",\"has_password\":%s,"
-             "\"tls\":%s,\"qos\":%u}}",
+             "\"transport\":\"%s\",\"mqtt\":{\"host\":\"%s\",\"port\":%u,\"username\":\"%s\",\"has_password\":%s,"
+             "\"tls\":%s,\"qos\":%u,\"topic_prefix\":\"%s\",\"transport\":\"%s\",\"path\":\"%s\"}}",
              index, escaped_uri, settings_manager.settings.feed_ports[index],
              (int)settings_manager.settings.feed_is_active[index],
              SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]], receiver_id,
-             SettingsManager::kFeedTransportStrs[settings_manager.settings.feed_transports[index]], escaped_prefix,
-             escaped_username, mqtt.password[0] ? "true" : "false", mqtt.tls ? "true" : "false", mqtt.qos);
+             SettingsManager::kFeedTransportStrs[settings_manager.settings.feed_transports[index]], escaped_host,
+             mqtt.port, escaped_username, mqtt.password[0] ? "true" : "false", mqtt.tls ? "true" : "false", mqtt.qos,
+             escaped_prefix, SettingsManager::kMQTTTransportStrs[mqtt.transport], escaped_path);
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     send_response(req, "application/json", json, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
@@ -926,7 +940,21 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
                 settings_manager.settings.feed_uris, "\"%s\"", true);
     ArrayToJSON(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
                 kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "feed_mps",
-                comms_manager.feed_mps, "%u", false);  // Mo trailing comma.
+                comms_manager.feed_mps, "%u", true);
+    // Transport of each feed and the RAM the active feeds take out of this unit's budget.
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             "\"feed_transport\": [");
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+                 kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "%s\"%s\"",
+                 i ? "," : "", SettingsManager::kFeedTransportStrs[settings_manager.settings.feed_transports[i]]);
+    }
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             "], \"feed_ram_bytes\": %lu, \"feed_ram_budget_bytes\": %lu",
+             (unsigned long)FeedRAMBudget::UsedBytes(settings_manager.settings),
+             (unsigned long)FeedRAMBudget::BudgetBytes(settings_manager.settings, HardwareCapabilities::HasPSRAM()));
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              "}, \"device_status\": { ");
@@ -1191,7 +1219,7 @@ void ADSBeeServer::SendAircraftJSONMessages() {
     // Batch aircraft into JSON arrays of up to one websocket message each. One frame per aircraft (two socket writes
     // each) cost ~100 TCP segments per second per client at a busy site; on the W5500 Ethernet board the network tasks
     // doing that outrank the SPI receive task, which then missed RP2040 handshakes until the RP2040 reset the board.
-    // Frames of up to kNonBlockingMessageMaxLen always fit a writable socket whole.
+    // Frames of up to kAircraftJSONBatchMaxLen always fit a writable socket whole.
     if (aircraft_json_next_uid_ >= aircraft_json_num_uids_) {
         return;
     }
@@ -1199,7 +1227,7 @@ void ADSBeeServer::SendAircraftJSONMessages() {
         aircraft_json_next_uid_ = aircraft_json_num_uids_;  // Nobody left to send the rest to.
         return;
     }
-    char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
+    char batch_buf[kAircraftJSONBatchMaxLen];
     uint64_t start_us = get_time_since_boot_us();
     while (get_time_since_boot_us() - start_us < kAircraftJSONPassBudgetUs) {
         uint16_t len =

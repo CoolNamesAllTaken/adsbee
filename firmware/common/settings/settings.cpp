@@ -97,23 +97,31 @@ bool SettingsManager::Sanitize() {
         changed |= SanitizeString(settings.feed_uris[i], sizeof(settings.feed_uris[i]), "feed_uris", i);
     }
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
-        Settings::FeedMQTT& mqtt = settings.feed_mqtt[i];
-        changed |= SanitizeBool(mqtt.tls, "feed_mqtt.tls", i);
-        changed |= SanitizeString(mqtt.topic_prefix, sizeof(mqtt.topic_prefix), "feed_mqtt.topic_prefix", i);
-        changed |= SanitizeString(mqtt.username, sizeof(mqtt.username), "feed_mqtt.username", i);
-        changed |= SanitizeString(mqtt.password, sizeof(mqtt.password), "feed_mqtt.password", i);
-        if (mqtt.qos > Settings::kFeedMQTTMaxQoS) {
-            CONSOLE_ERROR("SettingsManager::Sanitize", "feed_mqtt[%u].qos=%u out of range, resetting to %u.", i,
-                          mqtt.qos, Settings::kFeedMQTTMaxQoS);
-            mqtt.qos = Settings::kFeedMQTTMaxQoS;
-            changed = true;
-        }
         if (settings.feed_transports[i] >= kNumFeedTransports) {
             CONSOLE_ERROR("SettingsManager::Sanitize", "feed_transports[%u]=%u out of range, resetting to TCP.", i,
                           settings.feed_transports[i]);
             settings.feed_transports[i] = kFeedTransportTCP;
             changed = true;
         }
+    }
+    Settings::MQTTBroker& mqtt = settings.mqtt_broker;
+    changed |= SanitizeString(mqtt.host, sizeof(mqtt.host), "mqtt_broker.host");
+    changed |= SanitizeBool(mqtt.tls, "mqtt_broker.tls");
+    changed |= SanitizeString(mqtt.username, sizeof(mqtt.username), "mqtt_broker.username");
+    changed |= SanitizeString(mqtt.password, sizeof(mqtt.password), "mqtt_broker.password");
+    changed |= SanitizeString(mqtt.topic_prefix, sizeof(mqtt.topic_prefix), "mqtt_broker.topic_prefix");
+    changed |= SanitizeString(mqtt.websocket_path, sizeof(mqtt.websocket_path), "mqtt_broker.websocket_path");
+    if (mqtt.qos > Settings::kMQTTMaxQoS) {
+        CONSOLE_ERROR("SettingsManager::Sanitize", "mqtt_broker.qos=%u out of range, resetting to %u.", mqtt.qos,
+                      Settings::kMQTTMaxQoS);
+        mqtt.qos = Settings::kMQTTMaxQoS;
+        changed = true;
+    }
+    if (mqtt.transport >= kNumMQTTTransports) {
+        CONSOLE_ERROR("SettingsManager::Sanitize", "mqtt_broker.transport=%u out of range, resetting to TCP.",
+                      mqtt.transport);
+        mqtt.transport = kMQTTTransportTCP;
+        changed = true;
     }
     for (uint16_t i = 0; i < Settings::kWiFiSTANumExtraNetworks; i++) {
         Settings::WiFiNetwork& net = settings.wifi_sta_extra_networks[i];
@@ -366,6 +374,10 @@ void SettingsManager::Print() {
         CONSOLE_PRINTF("%s\r\n", print_buf);
         print_buf_len = 0;
     }
+    const Settings::MQTTBroker& mqtt = settings.mqtt_broker;
+    CONSOLE_PRINTF("\tMQTT broker: %s:%u %s%s QoS:%u Prefix:%s User:%s\r\n", mqtt.host, mqtt.port,
+                   kMQTTTransportStrs[mqtt.transport], mqtt.tls ? " TLS" : "", mqtt.qos,
+                   mqtt.topic_prefix[0] ? mqtt.topic_prefix : "adsbee", mqtt.username);
 #endif
 }
 
@@ -450,18 +462,15 @@ void SettingsManager::PrintAT() {
     CONSOLE_PRINTF("AT+FILTER_DISTANCE_NM=%d,%lu.%lu\r\n", settings.filter_distance_enabled,
                    static_cast<unsigned long>(settings.filter_distance_deci_nm / 10),
                    static_cast<unsigned long>(settings.filter_distance_deci_nm % 10));
-    // AT+FEED transport and AT+FEED_MQTT, for feeds that don't use the default TCP transport. "-" is an empty string.
+    // AT+MQTT. "-" is an empty string.
+    const Settings::MQTTBroker& mqtt = settings.mqtt_broker;
+    CONSOLE_PRINTF("AT+MQTT=%s,%u,%s,%s,%d,%u,%s,%s,%s\r\n", mqtt.host[0] ? mqtt.host : "-", mqtt.port,
+                   mqtt.username[0] ? mqtt.username : "-", mqtt.password[0] ? mqtt.password : "-", mqtt.tls, mqtt.qos,
+                   mqtt.topic_prefix[0] ? mqtt.topic_prefix : "-", kMQTTTransportStrs[mqtt.transport],
+                   mqtt.websocket_path[0] ? mqtt.websocket_path : "-");
+    // AT+FEED transports: the five-argument AT+FEED lines above keep a feed's transport unless its protocol changes.
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
-        if (settings.feed_transports[i] == kFeedTransportTCP) {
-            continue;
-        }
         CONSOLE_PRINTF("AT+FEED=%d,,,,,%s\r\n", i, kFeedTransportStrs[settings.feed_transports[i]]);
-        if (settings.feed_transports[i] == kFeedTransportMQTT) {
-            const Settings::FeedMQTT& mqtt = settings.feed_mqtt[i];
-            CONSOLE_PRINTF("AT+FEED_MQTT=%d,%s,%s,%s,%d,%u\r\n", i, mqtt.topic_prefix[0] ? mqtt.topic_prefix : "-",
-                           mqtt.username[0] ? mqtt.username : "-", mqtt.password[0] ? mqtt.password : "-", mqtt.tls,
-                           mqtt.qos);
-        }
     }
     // AT+ASTERIX_SAC_SIC
     CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
