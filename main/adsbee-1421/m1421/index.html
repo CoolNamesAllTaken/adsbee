@@ -1243,7 +1243,7 @@
 <li>1090MHz Mode S / ADS-B and 978MHz UAT reception, including ADS-R, TIS-B, and FIS-B (including NOTAMs and weather).</li>
 <li>Onboard aircraft dictionary with up to 400 simultaneous aircraft.</li>
 <li>UART console with an AT command set for configuration; settings are saved to flash.</li>
-<li>Reporting protocols: Raw packets, CSBee, MAVLINK1, MAVLINK2, GDL90, Mode S Beast, and Aircraft JSON.</li>
+<li>Reporting protocols: Raw packets, CSBee, MAVLINK1, MAVLINK2, GDL90, Mode S Beast, Aircraft JSON, and ASTERIX.</li>
 <li>SYNC line for host-controlled sleep, which also hands the LR2021 (and its 2.4GHz radio) over to an external MCU.</li>
 <li>Firmware updates over the UART ROM bootloader (no debugger needed) or JTAG.</li>
 <li>Available in standard and NDAA-compliant variants.</li>
@@ -1288,7 +1288,7 @@
 </tr>
 <tr>
 <td><strong>Output protocols</strong></td>
-<td>Raw, CSBee, MAVLINK1, MAVLINK2, GDL90, Mode S Beast, Aircraft JSON</td>
+<td>Raw, CSBee, MAVLINK1, MAVLINK2, GDL90, Mode S Beast, Aircraft JSON, ASTERIX</td>
 </tr>
 <tr>
 <td><strong>Dimensions</strong></td>
@@ -1549,7 +1549,11 @@
 </tr>
 <tr>
 <td><code>AT+PROTOCOL_OUT=CONSOLE,&lt;protocol&gt;</code></td>
-<td>NONE, RAW, BEAST, BEAST_NO_UAT, BEAST_NO_UAT_UPLINK, CSBEE, MAVLINK1, MAVLINK2, GDL90, GDL90_NO_UAT_UPLINK, AIRCRAFT_JSON.</td>
+<td>NONE, RAW, BEAST, BEAST_NO_UAT, BEAST_NO_UAT_UPLINK, CSBEE, MAVLINK1, MAVLINK2, GDL90, GDL90_NO_UAT_UPLINK, AIRCRAFT_JSON, AIRCRAFT_JSON_UAT_UPLINK, ASTERIX.</td>
+</tr>
+<tr>
+<td><code>AT+ASTERIX_SAC_SIC=&lt;sac&gt;,&lt;sic&gt;</code></td>
+<td>ASTERIX data source codes for the <a href="https://github.com/PantsForBirds/adsbee/blob/main/firmware/common/comms/asterix/README.md">ASTERIX output</a>.</td>
 </tr>
 <tr>
 <td><code>AT+R1090_PREAMBLE=&lt;mode&gt;</code></td>

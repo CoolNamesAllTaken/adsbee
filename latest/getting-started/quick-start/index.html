@@ -569,6 +569,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="🌐 Feed an Aggregator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mqtt-feeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT feeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1268,6 +1285,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="🌐 Feed an Aggregator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mqtt-feeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT feeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1516,8 +1550,23 @@
 <li><code>BEAST_RAW</code> = All received transponder packets, regardless of whether they had a valid checksum.</li>
 </ul>
 </li>
+<li><code>&lt;transport&gt;</code> (optional sixth argument): <code>TCP</code> connects to a server, <code>UDP</code> sends datagrams to a host, broadcast (e.g. <code>192.168.1.255</code>) or multicast address, <code>MQTT</code> publishes to the MQTT broker (see <a href="#mqtt-feeds">MQTT feeds</a>). Without it, a feed keeps its transport unless its protocol changes; a new protocol takes its default: <code>UDP</code> for GDL90 and MAVLink, <code>MQTT</code> for aircraft JSON, <code>TCP</code> for the others.</li>
+<li>The ADSBee refuses a feed when the active feeds would need more ESP32 RAM than it has for them. The bar next to the feed count in the web interface shows how much is in use.</li>
 <li>Check that your values were set correctly with <code>AT+FEED?</code>. You should see a sparkline graph below the terminal indicating a non-zero number of packets per second being forwarded to your feed (assuming your ADSBee is receiving packets).</li>
 </ol>
+<h3 id="mqtt-feeds">MQTT feeds<a class="headerlink" href="#mqtt-feeds" title="Permanent link">&para;</a></h3>
+<p>MQTT feeds publish to one broker, such as Mosquitto for Home Assistant or Node-RED, over a single connection.</p>
+<ol>
+<li>Set the broker with <code>AT+MQTT=&lt;host&gt;,&lt;port&gt;,&lt;username&gt;,&lt;password&gt;,&lt;tls&gt;,&lt;qos&gt;,&lt;topic_prefix&gt;,&lt;transport&gt;,&lt;path&gt;</code>, e.g. <code>AT+MQTT=192.168.1.10,1883,bee,secret,0,0</code>. Leave an argument empty to keep it, or use <code>-</code> to clear it. TLS checks the broker's certificate against the built-in list of public certificate authorities (port 8883 is usual). <code>&lt;transport&gt;</code> <code>WS</code> runs MQTT over a WebSocket (port 80, or 443 with TLS) for brokers behind web proxies, on <code>&lt;path&gt;</code> (default <code>/mqtt</code>).</li>
+<li>Add a feed with the <code>MQTT</code> transport, e.g. <code>AT+FEED=4,,,1,AIRCRAFT_JSON,MQTT</code>. MQTT feeds ignore the URI and port.</li>
+<li>Save with <code>AT+SETTINGS=SAVE</code>.</li>
+</ol>
+<p>Topics, with <code>&lt;topic_prefix&gt;</code> defaulting to <code>adsbee</code> and <code>&lt;receiver_id&gt;</code> shown by <code>AT+FEED?</code>:</p>
+<ul>
+<li><code>&lt;topic_prefix&gt;/&lt;receiver_id&gt;/&lt;protocol&gt;</code>: the feed's data in lower case protocol name, e.g. <code>aircraft_json</code> (one JSON object per aircraft per message) or <code>beast</code> (binary frames).</li>
+<li><code>&lt;topic_prefix&gt;/&lt;receiver_id&gt;/status</code>: <code>online</code> or <code>offline</code>, retained.</li>
+<li><code>&lt;topic_prefix&gt;/&lt;receiver_id&gt;/metrics</code>: JSON with firmware version, uptime, aircraft count and the message rate of each MQTT feed, every 10 seconds.</li>
+</ul>
 <p>Want to check the status of your feed? Use the links below to see your feed status for various aggregators. Note that values other than aircraft location, e.g. RSSI, are often shown for aircraft that are aggregated across all feeders, and may not reflect what your ADSBee is receiving.</p>
 <ul>
 <li>Airplanes.live</li>
