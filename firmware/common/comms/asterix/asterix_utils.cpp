@@ -235,8 +235,8 @@ bool ASTERIXReporter::SquawkToMode3A(uint16_t squawk, uint16_t& mode_3a) {
 
 bool ASTERIXReporter::BuildCAT021Report(CAT021TargetReport& report, const ModeSAircraft& aircraft,
                                         const ReportContext& ctx) {
-    if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagPositionValid) ||
-        aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsNonTransponder)) {
+    ModeSAircraft::AddressType address_type = aircraft.GetAddressType();
+    if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagPositionValid)) {
         return false;
     }
     report = CAT021TargetReport();
@@ -244,11 +244,13 @@ bool ASTERIXReporter::BuildCAT021Report(CAT021TargetReport& report, const ModeSA
     report.sic = ctx.sic;
     report.no_go = !ctx.clock.utc_valid;
     report.address = aircraft.icao_address & 0xFFFFFF;
-    report.address_type = kAddressTypeICAO;
+    // DF18 CF=1 and the other non-ICAO addresses are anonymous (ATP 3), as the I021/040 notes recommend.
+    report.address_type =
+        address_type >= ModeSAircraft::kFirstNonICAOAddressType ? kAddressTypeAnonymous : kAddressTypeICAO;
     report.altitude_reporting_capability = kARCUnknown;  // The altitude's Q bit isn't kept.
     report.on_ground = !aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne);
     report.has_service_id = true;
-    report.service_id = kServiceID1090ES;
+    report.service_id = ModeSAircraft::IsRebroadcast(address_type) ? kServiceID1090ESRebroadcast : kServiceID1090ES;
 
     report.has_position = true;
     report.latitude_deg = aircraft.latitude_deg;
@@ -268,7 +270,8 @@ bool ASTERIXReporter::BuildCAT021Report(CAT021TargetReport& report, const ModeSA
                           aircraft.navigation_integrity_category, aircraft.navigation_integrity_category_baro,
                           aircraft.surveillance_integrity_level, aircraft.navigation_accuracy_category_position,
                           aircraft.system_design_assurance, aircraft.geometric_vertical_accuracy);
-    if (aircraft.adsb_version >= 0 && aircraft.adsb_version <= 3) {
+    // TIS-B messages carry no ADS-B version.
+    if (!ModeSAircraft::IsTISB(address_type) && aircraft.adsb_version >= 0 && aircraft.adsb_version <= 3) {
         report.has_mops_version = true;
         report.mops_version = aircraft.adsb_version;
         report.link_technology = kLinkTechnology1090ES;
@@ -365,9 +368,20 @@ bool ASTERIXReporter::BuildCAT021Report(CAT021TargetReport& report, const UATAir
             report.address_type = kAddressTypeICAO;
             report.from_field_monitor = true;
             break;
+        case UATAircraft::kTISBTargetWithICAO24BitAddress:  // TIS-B or ADS-R.
+            report.address_type = kAddressTypeICAO;
+            break;
+        case UATAircraft::kTISBTargetWithTrackFileIdentifier:
+        case UATAircraft::kADSRTargetWithNonICAOAddress:
+            report.address_type = kAddressTypeAnonymous;
+            break;
         default:
-            return false;  // TIS-B and ADS-R rebroadcasts.
+            return false;  // Reserved address qualifier.
     }
+    UATAircraft::AddressQualifier qualifier = aircraft.GetAddressQualifier();
+    bool rebroadcast = qualifier == UATAircraft::kTISBTargetWithICAO24BitAddress ||
+                       qualifier == UATAircraft::kTISBTargetWithTrackFileIdentifier ||
+                       qualifier == UATAircraft::kADSRTargetWithNonICAOAddress;
     report.sac = ctx.sac;
     report.sic = ctx.sic;
     report.no_go = !ctx.clock.utc_valid;
@@ -375,7 +389,7 @@ bool ASTERIXReporter::BuildCAT021Report(CAT021TargetReport& report, const UATAir
     report.altitude_reporting_capability = kARC25Ft;  // UAT altitudes have 25 ft steps.
     report.on_ground = !aircraft.HasBitFlag(UATAircraft::kBitFlagIsAirborne);
     report.has_service_id = true;
-    report.service_id = kServiceIDUAT;
+    report.service_id = rebroadcast ? kServiceIDUATRebroadcast : kServiceIDUAT;
 
     report.has_position = true;
     report.latitude_deg = aircraft.latitude_deg;

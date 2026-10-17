@@ -339,9 +339,6 @@ TEST(ASTERIXUtils, BuildCAT021ReportModeSFilters) {
     no_position.WriteBitFlag(ModeSAircraft::kBitFlagPositionValid, false);
     EXPECT_FALSE(ASTERIXReporter::BuildCAT021Report(r, no_position, ctx));
 
-    ModeSAircraft df18 = AirborneModeSAircraft();
-    df18.WriteBitFlag(ModeSAircraft::kBitFlagIsNonTransponder, true);
-    EXPECT_FALSE(ASTERIXReporter::BuildCAT021Report(r, df18, ctx));
 
     // Surface targets keep their position but leave the airborne velocity items out.
     ModeSAircraft surface = AirborneModeSAircraft();
@@ -438,12 +435,59 @@ TEST(ASTERIXUtils, BuildCAT021ReportUATAddressQualifiers) {
     EXPECT_EQ(r.address_type, ASTERIXReporter::kAddressTypeSurfaceVehicle);
     ASSERT_TRUE(ASTERIXReporter::BuildCAT021Report(r, aircraft_with_qualifier(UATAircraft::kFixedADSBBeacon), ctx));
     EXPECT_TRUE(r.from_field_monitor);
-    EXPECT_FALSE(ASTERIXReporter::BuildCAT021Report(
-        r, aircraft_with_qualifier(UATAircraft::kTISBTargetWithICAO24BitAddress), ctx));
-    EXPECT_FALSE(ASTERIXReporter::BuildCAT021Report(
-        r, aircraft_with_qualifier(UATAircraft::kTISBTargetWithTrackFileIdentifier), ctx));
-    EXPECT_FALSE(
-        ASTERIXReporter::BuildCAT021Report(r, aircraft_with_qualifier(UATAircraft::kADSRTargetWithNonICAOAddress), ctx));
+    EXPECT_EQ(r.service_id, ASTERIXReporter::kServiceIDUAT);
+
+    // TIS-B and ADS-R go to the UAT rebroadcast service. Track files and non-ICAO addresses are anonymous.
+    const struct {
+        UATAircraft::AddressQualifier qualifier;
+        ASTERIXReporter::AddressType address_type;
+    } kRebroadcasts[] = {
+        {UATAircraft::kTISBTargetWithICAO24BitAddress, ASTERIXReporter::kAddressTypeICAO},
+        {UATAircraft::kTISBTargetWithTrackFileIdentifier, ASTERIXReporter::kAddressTypeAnonymous},
+        {UATAircraft::kADSRTargetWithNonICAOAddress, ASTERIXReporter::kAddressTypeAnonymous},
+    };
+    for (const auto& c : kRebroadcasts) {
+        ASSERT_TRUE(ASTERIXReporter::BuildCAT021Report(r, aircraft_with_qualifier(c.qualifier), ctx));
+        EXPECT_EQ(r.address_type, c.address_type);
+        EXPECT_EQ(r.service_id, ASTERIXReporter::kServiceIDUATRebroadcast);
+        EXPECT_FALSE(r.from_field_monitor);
+    }
+}
+
+TEST(ASTERIXUtils, BuildCAT021ReportModeSAddressTypes) {
+    ASTERIXReporter::ReportContext ctx = Context(3000);
+    CAT021TargetReport r;
+    const struct {
+        ModeSAircraft::AddressType type;
+        ASTERIXReporter::AddressType address_type;
+        uint8_t service_id;
+        bool has_mops_version;
+    } kCases[] = {
+        {ModeSAircraft::kAddressTypeADSBICAO, ASTERIXReporter::kAddressTypeICAO, ASTERIXReporter::kServiceID1090ES,
+         true},
+        {ModeSAircraft::kAddressTypeADSBICAONonTransponder, ASTERIXReporter::kAddressTypeICAO,
+         ASTERIXReporter::kServiceID1090ES, true},
+        {ModeSAircraft::kAddressTypeADSBOther, ASTERIXReporter::kAddressTypeAnonymous,
+         ASTERIXReporter::kServiceID1090ES, true},
+        {ModeSAircraft::kAddressTypeADSRICAO, ASTERIXReporter::kAddressTypeICAO,
+         ASTERIXReporter::kServiceID1090ESRebroadcast, true},
+        {ModeSAircraft::kAddressTypeADSROther, ASTERIXReporter::kAddressTypeAnonymous,
+         ASTERIXReporter::kServiceID1090ESRebroadcast, true},
+        {ModeSAircraft::kAddressTypeTISBICAO, ASTERIXReporter::kAddressTypeICAO,
+         ASTERIXReporter::kServiceID1090ESRebroadcast, false},
+        {ModeSAircraft::kAddressTypeTISBTrackFile, ASTERIXReporter::kAddressTypeAnonymous,
+         ASTERIXReporter::kServiceID1090ESRebroadcast, false},
+        {ModeSAircraft::kAddressTypeTISBOther, ASTERIXReporter::kAddressTypeAnonymous,
+         ASTERIXReporter::kServiceID1090ESRebroadcast, false},
+    };
+    for (const auto& c : kCases) {
+        ModeSAircraft aircraft = AirborneModeSAircraft();
+        aircraft.position_address_type = c.type;
+        ASSERT_TRUE(ASTERIXReporter::BuildCAT021Report(r, aircraft, ctx));
+        EXPECT_EQ(r.address_type, c.address_type) << int(c.type);
+        EXPECT_EQ(r.service_id, c.service_id) << int(c.type);
+        EXPECT_EQ(r.has_mops_version, c.has_mops_version) << int(c.type);
+    }
 }
 
 TEST(ASTERIXUtils, TrackNumbersAreStableAndUnique) {

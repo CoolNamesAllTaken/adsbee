@@ -460,7 +460,7 @@ TEST(Settings, DefaultFeedTransports) {
     for (S::ReportingProtocol p : {S::kNoReports, S::kRaw, S::kBeast, S::kBeastNoUAT, S::kBeastNoUATUplink, S::kCSBee}) {
         EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportTCP) << S::kReportingProtocolStrs[p];
     }
-    for (S::ReportingProtocol p : {S::kGDL90, S::kGDL90NoUATUplink, S::kMAVLINK1, S::kMAVLINK2}) {
+    for (S::ReportingProtocol p : {S::kGDL90, S::kGDL90NoUATUplink, S::kMAVLINK1, S::kMAVLINK2, S::kASTERIX}) {
         EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportUDP) << S::kReportingProtocolStrs[p];
     }
     for (S::ReportingProtocol p : {S::kAircraftJSON, S::kAircraftJSONUATUplink}) {
