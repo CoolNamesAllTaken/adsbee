@@ -34,10 +34,12 @@ test('whereplaneMapUrl is null for other feeds', () => {
 // FeedEditor.open() from adsbee.js against a fake DOM and /api/feed.
 function loadFeedEditor(feed) {
     const els = {};
-    const get = (id) => (els[id] ||= { id, value: '', checked: false, style: {}, textContent: '', innerHTML: '', href: '' });
+    const get = (id) => (els[id] ||= {
+        id, value: '', checked: false, style: {}, textContent: '', innerHTML: '', href: '', appendChild() {},
+    });
     const ctx = vm.createContext({
         HOST_URI: 'adsbee.local',
-        document: { getElementById: get },
+        document: { getElementById: get, createElement: () => ({ style: {} }) },
         fetch: async () => ({ ok: true, json: async () => feed }),
     });
     vm.runInContext(`${ADSBEE_SRC}\nthis.FeedEditor = FeedEditor;`, ctx);
