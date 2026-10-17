@@ -185,7 +185,7 @@ class SettingsEngine {
                 input.type = 'number';
                 if (field.min !== undefined) input.min = field.min;
                 if (field.max !== undefined) input.max = field.max;
-                input.step = field.type === 'float' ? 'any' : '1';
+                input.step = field.step !== undefined ? field.step : (field.type === 'float' ? 'any' : '1');
                 break;
             case 'enum': {
                 input = document.createElement('select');
@@ -682,7 +682,8 @@ class SettingsEngine {
 // Constants and schema-entry factories for AT commands shared by both products.
 
 const SETTINGS_PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK', 'CSBEE',
-    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK'];
+    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX',
+    'MLAT'];
 const SETTINGS_LOG_LEVELS = ['SILENT', 'ERRORS', 'WARNINGS', 'INFO'];
 
 // RX_POSITION is identical on both products; the entry is built by a factory so each
@@ -690,7 +691,7 @@ const SETTINGS_LOG_LEVELS = ['SILENT', 'ERRORS', 'WARNINGS', 'INFO'];
 function makeRxPositionEntry() {
     return {
         cmd: 'RX_POSITION', label: 'Receiver Position', group: 'Position',
-        help: 'Where the receiver is located, used for range calculations and position decoding.',
+        help: 'Where the receiver is located, used for range calculations and position decoding. MLAT feeds get the GNSS fix (GNSS) or the fixed position (FIXED), and no position for the other sources.',
         query: { expect: /^(Receiver Position:|Source:|Latitude:|Longitude:|GNSS Altitude:|Barometric Altitude:|Heading:|Speed:|ICAO:)/ },
         fields: [
             {
@@ -711,6 +712,11 @@ function makeRxPositionEntry() {
             { id: 'heading', label: 'Heading (deg)', type: 'float', min: 0, max: 359.9, visibleIf: v => v.source === 'FIXED' },
             { id: 'speed', label: 'Speed (kts)', type: 'int', min: 0, visibleIf: v => v.source === 'FIXED' },
             { id: 'icao', label: 'ICAO Address (hex)', type: 'hex', maxLen: 6, visibleIf: v => v.source === 'ICAO' },
+            { id: 'height', label: 'MLAT: Height above ellipsoid (m, - for GNSS altitude)', type: 'string', maxLen: 12, visibleIf: v => v.source === 'FIXED' },
+            { id: 'hacc', label: 'MLAT: Horizontal accuracy, 1 sigma (m, 0 if unknown)', type: 'float', min: 0, visibleIf: v => v.source === 'FIXED' },
+            { id: 'vacc', label: 'MLAT: Vertical accuracy, 1 sigma (m, 0 if unknown)', type: 'float', min: 0, visibleIf: v => v.source === 'FIXED' },
+            { id: 'moving', label: 'MLAT: Receiver may move (vehicle)', type: 'bool' },
+            { id: 'mlat', label: 'MLAT position in use', type: 'display' },
         ],
         parse(lines) {
             const values = {};
@@ -726,15 +732,24 @@ function makeRxPositionEntry() {
                 else if ((m = l.match(/^Heading:\s*(-?[\d.]+)/))) values.heading = parseFloat(m[1]);
                 else if ((m = l.match(/^Speed:\s*(-?\d+)/))) values.speed = parseInt(m[1], 10);
                 else if ((m = l.match(/^ICAO:\s*0x([0-9A-Fa-f]+)/))) values.icao = m[1].toUpperCase();
+                else if ((m = l.match(/^MLAT[^:]*:\s*([^,]+),(-?[\d.]+),(-?[\d.]+),([01])\s*\[([^\]]*)\]/))) {
+                    values.height = m[1];
+                    values.hacc = parseFloat(m[2]);
+                    values.vacc = parseFloat(m[3]);
+                    values.moving = m[4] === '1';
+                    values.mlat = m[5];
+                }
             }
             return values.source === undefined ? null : values;
         },
         build(v) {
+            // The MLAT arguments follow the 6 FIXED arguments, which are empty for the other sources.
+            const mlat = `${v.height === undefined || v.height === '' ? '-' : v.height},${v.hacc ?? 0},${v.vacc ?? 0},${v.moving ? 1 : 0}`;
             if (v.source === 'FIXED') {
-                return [`AT+RX_POSITION=FIXED,${v.lat},${v.lon},${v.gnss_alt},${v.baro_alt},${v.heading},${v.speed}`];
+                return [`AT+RX_POSITION=FIXED,${v.lat},${v.lon},${v.gnss_alt},${v.baro_alt},${v.heading},${v.speed},${mlat}`];
             }
-            if (v.source === 'ICAO') return [`AT+RX_POSITION=ICAO,${v.icao}`];
-            return [`AT+RX_POSITION=${v.source}`];
+            if (v.source === 'ICAO') return [`AT+RX_POSITION=ICAO,${v.icao},,,,,,${mlat}`];
+            return [`AT+RX_POSITION=${v.source},,,,,,,${mlat}`];
         },
     };
 }
@@ -759,6 +774,32 @@ function makeMavlinkIdEntry() {
             return values.sys === undefined ? null : values;
         },
         build(v) { return [`AT+MAVLINK_ID=${v.sys},${v.comp}`]; },
+    };
+}
+
+// FILTER_DISTANCE_NM is identical on both products.
+function makeFilterDistanceEntry() {
+    return {
+        cmd: 'FILTER_DISTANCE_NM', label: 'Distance Filter', group: 'Reporting',
+        help: 'Leave aircraft farther than this from the receiver out of aircraft reports: the aircraft list and map, aircraft JSON, GDL90, MAVLink and CSBee. Raw, Beast and MLAT output and feeds of them always carry every packet.',
+        tip: 'Needs a receiver position (Position settings). Aircraft without a known position are always reported.',
+        fields: [
+            { id: 'en', label: 'Enabled', type: 'bool' },
+            { id: 'nm', label: 'Distance (nm)', type: 'float', min: 0.1, max: 10000, step: 0.1 },
+        ],
+    };
+}
+
+// ASTERIX_SAC_SIC is identical on both products.
+function makeAsterixSacSicEntry() {
+    return {
+        cmd: 'ASTERIX_SAC_SIC', label: 'ASTERIX Data Source', group: 'Reporting',
+        help: 'System Area Code and System Identification Code sent in every ASTERIX record.',
+        query: { expect: /^ASTERIX_SAC_SIC=/ },
+        fields: [
+            { id: 'sac', label: 'SAC', type: 'int', min: 0, max: 255 },
+            { id: 'sic', label: 'SIC', type: 'int', min: 0, max: 255 },
+        ],
     };
 }
 
@@ -922,6 +963,13 @@ const SETTINGS_SCHEMA_1090 = [
         build(v, dirty) { return [...dirty].map(iface => `AT+PROTOCOL_OUT=${iface},${v[iface]}`); },
     },
     makeMavlinkIdEntry(),
+    makeFilterDistanceEntry(),
+    makeAsterixSacSicEntry(),
+    {
+        cmd: 'NTP_SERVER', label: 'NTP Server', group: 'Reporting',
+        help: 'Time server for ASTERIX output when GNSS has no time. Used only while an output uses ASTERIX.',
+        fields: [{ id: 'host', label: 'Host', type: 'string', maxLen: 63 }],
+    },
     // ── Position ──
     makeRxPositionEntry(),
     {

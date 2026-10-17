@@ -4,6 +4,8 @@
 #include "esp_heap_caps.h"
 #include "hardware_capabilities.hh"  // Internal-RAM heap guards (PSRAM must not mask an internal shortage).
 #include "esp_mac.h"
+#include "crc.hh"
+#include "feed_datagram.hh"
 #include "hal.hh"
 #include "heap_diagnostics.hh"
 #include "lwip/dns.h"
@@ -73,12 +75,12 @@ void ip6_link_up_event_handler(void* arg, esp_event_base_t event_base, int32_t e
 void ip_wan_task(void* pvParameters) { comms_manager.IPWANTask(pvParameters); }
 /** End "Pass-Through" functions. **/
 
-// Resolves a feed URI (hostname, IPv4 or IPv6 literal) to a TCP address of the given family (AF_INET, AF_INET6 or
-// AF_UNSPEC). The caller frees *res with freeaddrinfo().
-static bool ResolveFeedURI(const char* uri, uint16_t port, int family, struct addrinfo** res) {
+// Resolves a feed URI (hostname, IPv4 or IPv6 literal) to an address of the given family (AF_INET, AF_INET6 or
+// AF_UNSPEC) and socket type. The caller frees *res with freeaddrinfo().
+static bool ResolveFeedURI(const char* uri, uint16_t port, int family, int socktype, struct addrinfo** res) {
     struct addrinfo hints = {};
     hints.ai_family = family;
-    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_socktype = socktype;
     char port_str[6];
     snprintf(port_str, sizeof(port_str), "%u", port);
 
@@ -308,6 +310,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
 
         UpdateFeedMetrics();
         UpdateFeedSendBuffers();
+        PublishFeedMQTTMetrics();
         LogWANQueueOverflows();
 
         uint16_t num_active_report_sinks = 0;
@@ -329,6 +332,18 @@ void CommsManager::IPWANTask(void* pvParameters) {
                 continue;
             } else {
                 // Feed is active, ensure socket is open and add to active sinks if connected.
+                uint32_t config_crc = FeedConfigCRC(i);
+                if (feed_sock_is_connected_[i] || feed_sock_is_connecting_[i]) {
+                    if (config_crc != feed_config_crcs_[i]) {
+                        CONSOLE_INFO("CommsManager::IPWANTask", "Settings of feed %d changed, reconnecting.", i);
+                        CloseFeedSocket(i);
+                        feed_sock_last_connect_timestamp_ms_[i] = 0;  // Reconnect without waiting.
+                    }
+                }
+                if (!feed_sock_is_connected_[i] && !feed_sock_is_connecting_[i]) {
+                    feed_config_crcs_[i] = config_crc;
+                    feed_transports_in_use_[i] = settings_manager.settings.feed_transports[i];
+                }
                 if (!feed_sock_is_connected_[i] && !ConnectFeedSocket(i)) {
                     // Need to open the socket connection, but failed to do so.
                     continue;  // Failed to connect, try again later.
@@ -382,9 +397,28 @@ void CommsManager::IPWANTask(void* pvParameters) {
     CONSOLE_INFO("CommsManager::IPWANTask", "IP WAN Task exiting.");
 }
 
+uint32_t CommsManager::FeedConfigCRC(uint16_t feed_index) {
+    const SettingsManager::Settings& s = settings_manager.settings;
+    uint32_t crc = crc32_ieee_802_3(reinterpret_cast<const uint8_t*>(s.feed_uris[feed_index]),
+                                    sizeof(s.feed_uris[feed_index]));
+    crc = crc32_ieee_802_3(reinterpret_cast<const uint8_t*>(&s.feed_ports[feed_index]), sizeof(s.feed_ports[0]), crc);
+    crc = crc32_ieee_802_3(reinterpret_cast<const uint8_t*>(&s.feed_protocols[feed_index]), sizeof(s.feed_protocols[0]),
+                           crc);
+    crc = crc32_ieee_802_3(reinterpret_cast<const uint8_t*>(&s.feed_transports[feed_index]),
+                           sizeof(s.feed_transports[0]), crc);
+    crc = crc32_ieee_802_3(s.feed_receiver_ids[feed_index], sizeof(s.feed_receiver_ids[0]), crc);
+    if (s.feed_transports[feed_index] == SettingsManager::kFeedTransportMQTT) {
+        crc = crc32_ieee_802_3(reinterpret_cast<const uint8_t*>(&s.feed_mqtt[feed_index]), sizeof(s.feed_mqtt[0]), crc);
+    }
+    return crc;
+}
+
 void CommsManager::CloseFeedSocket(uint16_t feed_index) {
-    // Need to close the socket connection.
-    close(feed_sock_[feed_index]);
+    if (feed_transports_in_use_[feed_index] == SettingsManager::kFeedTransportMQTT) {
+        CloseFeedMQTT(feed_index);
+    } else {
+        close(feed_sock_[feed_index]);
+    }
     feed_send_buffers_[feed_index].Close();
     feed_sock_is_connected_[feed_index] = false;
     feed_sock_is_connecting_[feed_index] = false;
@@ -392,6 +426,14 @@ void CommsManager::CloseFeedSocket(uint16_t feed_index) {
 }
 
 bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
+    switch (feed_transports_in_use_[feed_index]) {
+        case SettingsManager::kFeedTransportUDP:
+            return ConnectFeedUDP(feed_index);
+        case SettingsManager::kFeedTransportMQTT:
+            return ConnectFeedMQTT(feed_index);
+        default:
+            break;
+    }
     if (feed_sock_is_connecting_[feed_index]) {
         return PollFeedSocketConnect(feed_index);
     }
@@ -412,7 +454,7 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
     }
     struct addrinfo* dest = nullptr;
     if (!ResolveFeedURI(settings_manager.settings.feed_uris[feed_index], settings_manager.settings.feed_ports[feed_index],
-                        family, &dest)) {
+                        family, SOCK_STREAM, &dest)) {
         CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to resolve URI %s for feed %d",
                       settings_manager.settings.feed_uris[feed_index], feed_index);
         return false;
@@ -471,6 +513,93 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
         return false;
     }
     return FinishFeedSocketConnect(feed_index);
+}
+
+bool CommsManager::ConnectFeedUDP(uint16_t feed_index) {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - feed_sock_last_connect_timestamp_ms_[feed_index] <= kTCPSocketReconnectIntervalMs) {
+        return false;
+    }
+    feed_sock_last_connect_timestamp_ms_[feed_index] = timestamp_ms;
+
+    const char* uri = settings_manager.settings.feed_uris[feed_index];
+    uint16_t port = settings_manager.settings.feed_ports[feed_index];
+    struct addrinfo* dest = nullptr;
+    if (!ResolveFeedURI(uri, port, HasIPv4() ? (HasIPv6() ? AF_UNSPEC : AF_INET) : AF_INET6, SOCK_DGRAM, &dest)) {
+        return false;
+    }
+    int sock = socket(dest->ai_family, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0) {
+        CONSOLE_ERROR("CommsManager::IPWANTask", "Unable to create UDP socket for feed %d: errno %d (%s)", feed_index,
+                      errno, strerror(errno));
+        freeaddrinfo(dest);
+        return false;
+    }
+    // Allows broadcast destinations such as 192.168.1.255.
+    static const int kBroadcastEnable = 1;
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &kBroadcastEnable, sizeof(kBroadcastEnable));
+    fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
+    // Sets the destination for send(); no packets are exchanged.
+    int err = connect(sock, dest->ai_addr, dest->ai_addrlen);
+    freeaddrinfo(dest);
+    if (err != 0) {
+        CONSOLE_ERROR("CommsManager::IPWANTask", "Unable to send UDP to %s:%d for feed %d: errno %d (%s)", uri, port,
+                      feed_index, errno, strerror(errno));
+        close(sock);
+        return false;
+    }
+    feed_sock_[feed_index] = sock;
+    feed_sock_is_connected_[feed_index] = true;
+    if (settings_manager.settings.feed_protocols[feed_index] == SettingsManager::kMLAT) {
+        RestartMLATReceiverInfo(feed_index);  // The next report starts with a receiver info frame.
+    }
+    CONSOLE_INFO("CommsManager::IPWANTask", "Feed %d sends UDP datagrams to %s:%d.", feed_index, uri, port);
+    return true;
+}
+
+bool CommsManager::SendFeedDatagrams(uint16_t feed_index, const char* buf, uint16_t buf_len, uint16_t num_msgs) {
+    feed_send_heap_is_low_ = FeedSendHeapIsLow();
+    if (feed_send_heap_is_low_) {
+        feed_num_dropped_msgs_[feed_index] += num_msgs;
+        return true;
+    }
+    SettingsManager::ReportingProtocol protocol = settings_manager.settings.feed_protocols[feed_index];
+    // MLAT datagrams each start with a short receiver info frame (v, id, clk, ep), since any of them may be lost.
+    uint8_t info_frame[80];  // v, an ID of up to 32 characters, clk and the epoch.
+    uint16_t info_frame_len = 0;
+    BeastReporter::ReceiverInfo info;
+    if (protocol == SettingsManager::kMLAT && GetMLATReceiverInfo(feed_index, info)) {
+        info_frame_len = BeastReporter::BuildShortReceiverInfoFrame(info_frame, sizeof(info_frame), info);
+    }
+    static uint8_t datagram_buf[FeedDatagram::kMaxPayloadBytes];  // Reporting sends from one task.
+    bool socket_ok = true, dropped = false;
+    FeedDatagram::SendAll(
+        protocol, reinterpret_cast<const uint8_t*>(buf), buf_len, info_frame, info_frame_len, datagram_buf,
+        [&](const uint8_t* datagram, uint16_t datagram_len) {
+            if (send(feed_sock_[feed_index], datagram, datagram_len, MSG_DONTWAIT) >= 0) {
+                return true;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOMEM) {
+                // lwIP is briefly out of buffers: the rest of the batch is lost, like a dropped datagram.
+                dropped = true;
+                return false;
+            }
+            CONSOLE_ERROR("CommsManager::SendBuf", "Closing UDP feed %d (%s:%d): errno %d (%s).", feed_index,
+                          settings_manager.settings.feed_uris[feed_index],
+                          settings_manager.settings.feed_ports[feed_index], errno, strerror(errno));
+            socket_ok = false;
+            return false;
+        });
+    if (!socket_ok) {
+        CloseFeedSocket(feed_index);
+        return false;
+    }
+    if (dropped) {
+        feed_num_dropped_msgs_[feed_index] += num_msgs;
+        return true;
+    }
+    feed_mps_counter_[feed_index] += num_msgs;
+    return true;
 }
 
 bool CommsManager::PollFeedSocketConnect(uint16_t feed_index) {
@@ -541,11 +670,39 @@ bool CommsManager::FinishFeedSocketConnect(uint16_t feed_index) {
             }
             break;
         }
+        case SettingsManager::ReportingProtocol::kMLAT:
+            // The next report starts the stream with a receiver info frame.
+            RestartMLATReceiverInfo(feed_index);
+            break;
         default:
             // No start of connections actions required for other protocols.
             break;
     }
     return true;
+}
+
+bool CommsManager::GetMLATReceiverInfo(ReportSink sink, BeastReporter::ReceiverInfo& info) {
+    if (sink >= SettingsManager::Settings::kMaxNumFeeds) {
+        return false;
+    }
+    const ObjectDictionary::RP2040DeviceStatus& rp2040 = object_dictionary.composite_device_status.rp2040;
+    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[sink], info.id);
+    info.epoch = rp2040.mlat_epoch;
+    info.position = rp2040.receiver_position;
+    info.pps = rp2040.receiver_pps;
+    strncpy(info.name, settings_manager.settings.core_network_settings.hostname, sizeof(info.name) - 1);
+    BeastReporter::FormatFirmwareVersion(info.firmware_version, sizeof(info.firmware_version), "adsbee_1090",
+                                         ObjectDictionary::kFirmwareVersionMajor,
+                                         ObjectDictionary::kFirmwareVersionMinor,
+                                         ObjectDictionary::kFirmwareVersionPatch,
+                                         ObjectDictionary::kFirmwareVersionReleaseCandidate);
+    // Until the RP2040's status arrives there is no epoch for the timestamps yet.
+    return rp2040.timestamp_ms != 0;
+}
+
+bool GetReceiverPosition(ReceiverPosition& position) {
+    position = object_dictionary.composite_device_status.rp2040.receiver_position;
+    return position.IsValid();
 }
 
 bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, uint16_t num_msgs) {
@@ -556,6 +713,14 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, ui
     if (!feed_sock_is_connected_[iface]) {
         CONSOLE_ERROR("CommsManager::SendBuf", "Can't send to feed %d, socket not connected.", iface);
         return false;
+    }
+    switch (feed_transports_in_use_[iface]) {
+        case SettingsManager::kFeedTransportUDP:
+            return SendFeedDatagrams(iface, buf, buf_len, num_msgs);
+        case SettingsManager::kFeedTransportMQTT:
+            return PublishFeedMQTT(iface, buf, buf_len, num_msgs);
+        default:
+            break;
     }
 
 #ifdef ENABLE_TCP_SOCKET_RATE_LIMITING
@@ -631,7 +796,7 @@ void CommsManager::UpdateFeedSendBuffers() {
 
     bool log_drops = timestamp_ms - feed_drop_last_log_timestamp_ms_ >= kFeedDropLogIntervalMs;
     for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-        if (feed_sock_is_connected_[i]) {
+        if (feed_sock_is_connected_[i] && feed_transports_in_use_[i] == SettingsManager::kFeedTransportTCP) {
             if (feed_send_buffers_[i].BacklogLenBytes() == 0) {
                 // Caught up: earn back waiting time.
                 feed_wait_budget_ms_[i] = MIN(kFeedWaitBudgetMs, feed_wait_budget_ms_[i] + wait_budget_refill_ms);

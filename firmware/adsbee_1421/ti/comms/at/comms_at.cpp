@@ -7,6 +7,7 @@
 #include "adsbee.hh"
 #include "ccfg_bootloader_flash.hh"
 #include "comms.hh"
+#include "mlat/mlat_clear_dma.hh"
 #include "object_dictionary.hh"
 #include "packet_decoder.hh"
 #include "flash_utils.hh"
@@ -23,6 +24,7 @@
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
+#include "unit_conversions.hh"  // ParseDeciNm
 #endif
 
 // For mapping cpp_at_printf
@@ -185,6 +187,30 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATASTERIXSACSICCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%u,%u", settings_manager.settings.asterix_sac, settings_manager.settings.asterix_sic);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
+                CPP_AT_ERROR("Requires two arguments: AT+ASTERIX_SAC_SIC=<sac>,<sic>.");
+            }
+            uint16_t sac, sic;
+            CPP_AT_TRY_ARG2NUM(0, sac);
+            CPP_AT_TRY_ARG2NUM(1, sic);
+            if (sac > 255 || sic > 255) {
+                CPP_AT_ERROR("SAC and SIC must be between 0 and 255.");
+            }
+            settings_manager.settings.asterix_sac = static_cast<uint8_t>(sac);
+            settings_manager.settings.asterix_sic = static_cast<uint8_t>(sic);
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     switch (op) {
         case '?':
@@ -212,6 +238,35 @@ CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
+CPP_AT_CALLBACK(CommsManager::ATFilterDistanceNMCallback) {
+    using Settings = SettingsManager::Settings;
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d,%lu.%lu", settings_manager.settings.filter_distance_enabled,
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm / 10),
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm % 10));
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            bool enabled = settings_manager.settings.filter_distance_enabled;
+            uint32_t deci_nm = settings_manager.settings.filter_distance_deci_nm;
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+            }
+            if (CPP_AT_HAS_ARG(1) && (!ParseDeciNm(args[1].data(), args[1].size(), deci_nm,
+                                                   Settings::kMaxFilterDistanceDeciNm) ||
+                                      deci_nm < Settings::kMinFilterDistanceDeciNm)) {
+                CPP_AT_ERROR("Distance must be 0.1 to 10000.0 nm, e.g. 50 or 12.5.");
+            }
+            settings_manager.settings.filter_distance_enabled = enabled;
+            settings_manager.settings.filter_distance_deci_nm = deci_nm;
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 
 CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     switch (op) {
@@ -355,8 +410,9 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             if (!adsbee.ReceiverConfigRejected() && !adsbee.lr2021.GetOokRxStatsAdv(&stats)) {
                 CPP_AT_ERROR("Failed to read LR2021 Rx stats.");
             }
-            CPP_AT_CMD_PRINTF(
-                "=pkt_rx=%u,crc_error=%u,len_error=%u,pbl_det=%u,sync_ok=%u,sync_fail=%u,timeout=%u,"
+            // One line in two prints: each print formats into a 1000-byte buffer.
+            CPP_AT_PRINTF(
+                "%s=pkt_rx=%u,crc_error=%u,len_error=%u,pbl_det=%u,sync_ok=%u,sync_fail=%u,timeout=%u,"
                 "fifo_full=%lu,q_ovf=%lu,bitflips_fixed=%lu,uat_rx_restarts=%lu,uat_setlen_errs=%lu,"
                 "max_loop_us=%lu,max_lr2021_us=%lu,drain_max_us=%lu,"
                 "irq_drains=%lu,irq_skip_busy=%lu,irq_skip_slots=%lu,irq_restarts=%lu,irq_timeouts=%lu,"
@@ -365,9 +421,9 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 "dma_timeouts=%lu,report_q_ovf=%lu,"
                 "validity_reconfigs=%lu,stale_edges=%lu,uat_len_mismatch=%lu,uat_report_q_ovf=%lu,"
                 "parse_max_cyc=%lu,decode_max_cyc=%lu,loop_max_cyc=%lu,loop_avg_cyc=%lu,cpu_1090_pm=%lu,"
-                "cfg_perrs=%lu,rx_cfg_error=%u,irq_kept_reads=%lu",
-                stats.pkt_rx, stats.crc_error, stats.len_error, stats.pbl_det, stats.sync_ok, stats.sync_fail,
-                stats.timeout, (unsigned long)adsbee.lr2021_fifo_full_count,
+                "cfg_perrs=%lu,rx_cfg_error=%u,irq_kept_reads=%lu,irq_defer_sync=%lu",
+                def.command.data(), stats.pkt_rx, stats.crc_error, stats.len_error, stats.pbl_det, stats.sync_ok,
+                stats.sync_fail, stats.timeout, (unsigned long)adsbee.lr2021_fifo_full_count,
                 (unsigned long)packet_decoder.raw_queue_overflow_count,
                 (unsigned long)packet_decoder.bitflips_fixed_count, (unsigned long)subg_radio.rx_error_restart_count,
                 (unsigned long)subg_radio.set_len_error_count,
@@ -392,7 +448,20 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                                     ? adsbee.rx1090_total_cycles * 1000 / adsbee.loop_total_cycles
                                     : 0),
                 (unsigned long)adsbee.lr2021_config_perr_count, adsbee.ReceiverConfigRejected() ? 1u : 0u,
-                (unsigned long)adsbee.lr2021.irq_drain_kept_reads);
+                (unsigned long)adsbee.lr2021.irq_drain_kept_reads, (unsigned long)adsbee.lr2021.irq_drain_defer_sync);
+            CPP_AT_PRINTF(
+                ",mlat_stamped=%lu,mlat_more_pkts=%lu,mlat_more_edges=%lu,mlat_unpaired=%lu,mlat_orphans=%lu,"
+                "mlat_edge_drops=%lu,mlat_overruns=%lu,mlat_restarts=%lu,mlat_kicks=%lu,mlat_pending_clears=%lu,"
+                "mlat_clear_timeouts=%lu\r\n",
+                (unsigned long)adsbee.mlat_counters().stamped,
+                (unsigned long)adsbee.mlat_counters().unstamped_more_packets,
+                (unsigned long)adsbee.mlat_counters().unstamped_more_edges,
+                (unsigned long)adsbee.mlat_counters().unstamped_unpaired,
+                (unsigned long)adsbee.mlat_counters().orphan_events,
+                (unsigned long)adsbee.mlat_counters().dropped_edges, (unsigned long)adsbee.mlat_capture_overruns,
+                (unsigned long)adsbee.mlat_timebase_restarts, (unsigned long)mlat_clear_dma::counters().kicks,
+                (unsigned long)mlat_clear_dma::counters().pending_clears,
+                (unsigned long)mlat_clear_dma::counters().wait_timeouts);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -404,6 +473,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 CPP_AT_ERROR("Failed to reset LR2021 Rx stats.");
             }
             adsbee.lr2021_fifo_full_count = 0;
+            adsbee.ResetMlatCounters();
             packet_decoder.raw_queue_overflow_count = 0;
             packet_decoder.bitflips_fixed_count = 0;
             subg_radio.rx_error_restart_count = 0;
@@ -414,6 +484,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             adsbee.lr2021.irq_drain_count = 0;
             adsbee.lr2021.irq_drain_skip_busy = 0;
             adsbee.lr2021.irq_drain_kept_reads = 0;
+            adsbee.lr2021.irq_drain_defer_sync = 0;
             adsbee.lr2021.irq_drain_skip_slots = 0;
             adsbee.lr2021.irq_drain_restarts = 0;
             adsbee.lr2021.irq_chain_timeouts = 0;
@@ -707,12 +778,24 @@ void ATRxPositionHelpCallback() {
         "\tspeed_kts: Speed in kts."
         "AT+RX_POSITION=ICAO,<icao>\r\n"
         "\ticao: ICAO address in hex (e.g. 7ABCDEF) of aircraft to use for position bootstrap.\r\n"
+        "AT+RX_POSITION=<source>,<args>,<ellipsoid_height_m>,<hacc_m>,<vacc_m>,<moving>\r\n"
+        "\tOptional, for MLAT, after the 6 FIXED arguments (empty for other sources). An empty argument keeps its "
+        "value.\r\n"
+        "\tellipsoid_height_m: FIXED antenna height above the WGS84 ellipsoid, \"-\" to clear. Without it MLAT uses "
+        "gnss_alt_ft.\r\n"
+        "\thacc_m, vacc_m: FIXED one sigma accuracies, 0 if unknown.\r\n"
+        "\tmoving: 1 for a receiver in a vehicle, for any source.\r\n"
         "AT+RX_POSITION?\r\n\tQuery the receiver's position.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
     switch (op) {
         case '?': {
+            RxPositionDetails details = settings_manager.settings.rx_position_details;  // Copy: Settings is packed.
+            char details_args[64];
+            details.PrintATArgs(details_args, sizeof(details_args));
+            ReceiverPosition in_use;
+            GetReceiverPosition(in_use);
             CPP_AT_PRINTF(
                 "Receiver Position:\r\n"
                 "\tSource: %s [%s] \r\n"
@@ -722,7 +805,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 "\tBarometric Altitude: %d ft\r\n"
                 "\tHeading: %.1f deg\r\n"
                 "\tSpeed: %d kts\r\n"
-                "\tICAO: 0x%06X [%s]\r\n",
+                "\tICAO: 0x%06X [%s]\r\n"
+                "\tMLAT (ellipsoid height, accuracy, moving): %s [%s]\r\n",
                 SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                 adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
                 adsbee.rx_position.longitude_deg, adsbee.rx_position.gnss_altitude_ft,
@@ -731,7 +815,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 adsbee.rx_position.source ==
                         SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO
                     ? "IN USE"
-                    : "NOT IN USE");
+                    : "NOT IN USE",
+                details_args, ReceiverPosition::SourceToStr(in_use.source));
             // if (rx_position.source ==
             //     SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
             //     CPP_AT_PRINTF("\tICAO: 0x%06X\r\n", rx_position.icao_address);
@@ -740,6 +825,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
             break;
         }
         case '=': {
+            // Optional MLAT arguments, checked before anything changes.
+            RxPositionDetails details = settings_manager.settings.rx_position_details;  // Copy: Settings is packed.
+            const char* error = "";
+            if (!details.ApplyATArgs(args, num_args, error)) {
+                CPP_AT_ERROR("%s", error);
+            }
             if (CPP_AT_HAS_ARG(0)) {
                 // Set position source.
                 for (uint16_t i = 0; i <= SettingsManager::RxPosition::kNumPositionSources; i++) {
@@ -833,6 +924,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                     }
                 }
             }
+            settings_manager.settings.rx_position_details = details;
             CPP_AT_SUCCESS();
             break;
         }
@@ -862,8 +954,12 @@ static void PrintSettingsJSON() {
     }
 
     CPP_AT_PRINTF("SETTINGS={");
+    CPP_AT_PRINTF("\"ASTERIX_SAC_SIC\":[%u,%u],", s.asterix_sac, s.asterix_sic);
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu],", (unsigned long)comms_manager.GetBaudRate());
     CPP_AT_PRINTF("\"BOOTLOADER_PIN\":[%d],", CcfgBootloader::BackdoorEnabled(CcfgBootloader::ReadBlConfig()));
+    CPP_AT_PRINTF("\"FILTER_DISTANCE_NM\":[%d,%lu.%lu],", s.filter_distance_enabled,
+                  static_cast<unsigned long>(s.filter_distance_deci_nm / 10),
+                  static_cast<unsigned long>(s.filter_distance_deci_nm % 10));
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
     CPP_AT_PRINTF("\"LR_ENABLE\":[%d],", adsbee.LR2021IsEnabled());
     CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
@@ -874,12 +970,26 @@ static void PrintSettingsJSON() {
                   SettingsManager::kR1090PreambleModeStrs[adsbee.GetR1090PreambleMode()]);
     CPP_AT_PRINTF("\"R1090_RX_BOOST\":[%u],", adsbee.GetR1090RxBoost());
     CPP_AT_PRINTF("\"RX_ENABLE\":[%d,%d],", adsbee.Rx1090IsEnabled(), adsbee.RxSubGHzIsEnabled());
-    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\"],",
+    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\",",
                   SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                   adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
                   adsbee.rx_position.longitude_deg, (int)adsbee.rx_position.gnss_altitude_ft,
                   (int)adsbee.rx_position.baro_altitude_ft, adsbee.rx_position.heading_deg,
                   (int)adsbee.rx_position.speed_kts, (unsigned)adsbee.rx_position.icao_address);
+    {
+        // The optional MLAT arguments as AT+RX_POSITION? prints them, then the position source MLAT uses.
+        RxPositionDetails details = s.rx_position_details;  // Copy: Settings is packed.
+        ReceiverPosition in_use;
+        GetReceiverPosition(in_use);
+        if (details.ellipsoid_height_set) {
+            CPP_AT_PRINTF("\"%.2f\",", static_cast<double>(details.ellipsoid_height_m));
+        } else {
+            CPP_AT_PRINTF("\"-\",");
+        }
+        CPP_AT_PRINTF("%.2f,%.2f,%d,\"%s\"],", static_cast<double>(details.horizontal_accuracy_m),
+                      static_cast<double>(details.vertical_accuracy_m), details.moving,
+                      ReceiverPosition::SourceToStr(in_use.source));
+    }
     CPP_AT_PRINTF("\"SUBG_MODE\":[\"%s\"],", SettingsManager::kSubGHzModeStrs[subg_radio.GetMode()]);
     CPP_AT_PRINTF("\"WATCHDOG\":[%lu]", (unsigned long)adsbee.GetWatchdogTimeoutSec());
     CPP_AT_PRINTF("}\r\n");
@@ -1305,6 +1415,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxCWCallback) {
 #endif
 
 const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command = "ASTERIX_SAC_SIC",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+ASTERIX_SAC_SIC=<sac>,<sic>\r\n\tSet the ASTERIX System Area Code and System Identification "
+                    "Code (0-255 each) sent in every ASTERIX record.\r\n\tAT+ASTERIX_SAC_SIC?\r\n\tQuery them.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATASTERIXSACSICCallback, comms_manager)},
     {.command = "BAUD_RATE",
      .min_args = 0,
      .max_args = 2,
@@ -1345,6 +1461,15 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 5,  // TODO: check this value.
      .help_string = "AT+DEVICE_INFO?\r\n\tQuery device information.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATDeviceInfoCallback, comms_manager)},
+    {.command = "FILTER_DISTANCE_NM",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+FILTER_DISTANCE_NM=<enabled [0 1]>,<distance_nm>\r\n\tLeave aircraft farther than distance_nm "
+                    "nautical miles (0.1 to 10000.0, 0.1 nm steps) from the receiver out of aircraft reports (aircraft JSON, GDL90, MAVLink, CSBee). Raw "
+                    "packets (Raw, Beast, MLAT) are never filtered. Aircraft at an unknown distance (no position yet, or "
+                    "no receiver position, see AT+RX_POSITION) are always kept. Default: 0,100.0 (off).\r\n\t"
+                    "AT+FILTER_DISTANCE_NM?\r\n\tQuery whether the filter is enabled and its distance.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterDistanceNMCallback, comms_manager)},
     {.command = "LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,
@@ -1407,7 +1532,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     },
     {.command = "RX_POSITION",
      .min_args = 0,
-     .max_args = 8,
+     .max_args = 11,
      .help_callback = ATRxPositionHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxPositionCallback, comms_manager)},
     {.command = "RX_STATS",
@@ -1427,7 +1552,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "max/avg; cpu_1090_pm = per mille of main loop time in the 1090 receive and decode path; "
                     "cfg_perrs = receiver config attempts the LR2021 answered with CMD_PERR, each followed by "
                     "a hard reset and a retry of the same config; rx_cfg_error = 1 while the selected config "
-                    "is rejected and the 1090 MHz receiver is down).\r\n\tAT+RX_STATS=RESET\r\n\t"
+                    "is rejected and the 1090 MHz receiver is down; mlat_* = packets given an "
+                    "MLAT timestamp, packets left without one by reason (read with more packets than sync edges / "
+                    "more edges than packets / read never paired: IRQ-paced or FIFO overflow), sync edges without "
+                    "a packet, edges dropped, capture ring overflows, time base restarts, latch clears started late "
+                    "/ run between sweep frames / that did not end in time)."
+                    "\r\n\tAT+RX_STATS=RESET\r\n\t"
                     "Reset all Rx stats counters.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxStatsCallback, comms_manager)},
     {.command = "SETTINGS",

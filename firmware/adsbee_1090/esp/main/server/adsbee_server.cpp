@@ -8,6 +8,7 @@
 #include "comms.hh"
 #include "aircraftjson_utils.hh"
 #include "auto_update_manager.hh"
+#include "network_time.hh"
 #include "gdl90/gdl90_utils.hh"
 #include "heap_diagnostics.hh"
 #include "json_utils.hh"
@@ -235,6 +236,7 @@ bool ADSBeeServer::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
     auto_update_manager.Update();
+    network_time.Update();
 
     // Ingest any Broadcast Remote ID advertisements received on the BLE/WiFi radios into the local aircraft dictionary
     // (and forward rate-limited copies up to the RP2040), then service the WiFi channel hopper. Done on this task so all
@@ -253,9 +255,13 @@ bool ADSBeeServer::Update() {
     }
     if (received_rp2040_metrics ||
         timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateFallbackIntervalMs) {
-        aircraft_dictionary.SetReferencePosition(
-            object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
-            object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
+        if (object_dictionary.composite_device_status.rp2040.rx_position_available) {
+            aircraft_dictionary.SetReferencePosition(
+                object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
+                object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
+        } else {
+            aircraft_dictionary.ClearReferencePosition();
+        }
 
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
@@ -394,13 +400,19 @@ bool ADSBeeServer::Update() {
         }
     }
 
-    // Broadcast aircraft JSON to connected /aircraft WebSocket clients.
-    if (timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
+    // Broadcast aircraft JSON to connected /aircraft WebSocket clients. A report starts once the last one is done.
+    if (aircraft_json_next_uid_ >= aircraft_json_num_uids_ &&
+        timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
         last_aircraft_json_report_timestamp_ms_ = timestamp_ms;
-        if (network_aircraft.GetNumClients() > 0) {
-            SendAircraftJSONMessages();
-        }
+        aircraft_json_num_uids_ =
+            network_aircraft.GetNumClients() > 0
+                ? ListAircraftJSONLiveMapUIDs(aircraft_dictionary, timestamp_ms, aircraft_json_uids_,
+                                              kAircraftDictionaryMaxNumAircraft,
+                                              settings_manager.settings.FilterDistanceMeters())
+                : 0;
+        aircraft_json_next_uid_ = 0;
     }
+    SendAircraftJSONMessages();
 
     // Prune inactive WebSocket clients and other housekeeping.
     // Broadcast RP2040 console output queued by the SPI receive task.
@@ -477,10 +489,15 @@ bool ADSBeeServer::ReportGDL90() {
     uint8_t aircraft_msg_buf[CommsManager::NetworkMessage::kMaxLenBytes];
     uint16_t aircraft_msg_buf_len = 0;
     uint32_t timestamp_ms = get_time_since_boot_ms();
+    uint32_t filter_distance_m = settings_manager.settings.FilterDistanceMeters();
     for (auto& itr : aircraft_dictionary.dict) {
         aircraft_index++;
         if (!aircraft_dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
             continue;  // Another entry (e.g. the aircraft's own ADS-B) is reported for this ICAO address.
+        }
+        if (std::visit([filter_distance_m](const Aircraft& a) { return a.IsBeyondDistance(filter_distance_m); },
+                       itr.second)) {
+            continue;  // AT+FILTER_DISTANCE_NM.
         }
 
         if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
@@ -776,12 +793,22 @@ static esp_err_t feed_api_get_handler(httpd_req_t* req) {
     json_escape(escaped_uri, sizeof(escaped_uri), settings_manager.settings.feed_uris[index]);
     char receiver_id[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
     SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id);
-    char json[512];
+    const SettingsManager::Settings::FeedMQTT& mqtt = settings_manager.settings.feed_mqtt[index];
+    char escaped_prefix[sizeof(mqtt.topic_prefix) * 2];
+    json_escape(escaped_prefix, sizeof(escaped_prefix), mqtt.topic_prefix);
+    char escaped_username[sizeof(mqtt.username) * 2];
+    json_escape(escaped_username, sizeof(escaped_username), mqtt.username);
+    char json[640];
+    // The MQTT password is never sent back.
     snprintf(json, sizeof(json),
-             "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\",\"receiver_id\":\"%s\"}",
+             "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\",\"receiver_id\":\"%s\","
+             "\"transport\":\"%s\",\"mqtt\":{\"topic_prefix\":\"%s\",\"username\":\"%s\",\"has_password\":%s,"
+             "\"tls\":%s,\"qos\":%u}}",
              index, escaped_uri, settings_manager.settings.feed_ports[index],
              (int)settings_manager.settings.feed_is_active[index],
-             SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]], receiver_id);
+             SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]], receiver_id,
+             SettingsManager::kFeedTransportStrs[settings_manager.settings.feed_transports[index]], escaped_prefix,
+             escaped_username, mqtt.password[0] ? "true" : "false", mqtt.tls ? "true" : "false", mqtt.qos);
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     send_response(req, "application/json", json, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
@@ -929,6 +956,16 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              static_cast<long>(rp2040_status.gnss_altitude_ft), rp2040_status.gnss_heading_deg,
              static_cast<long>(rp2040_status.gnss_speed_kts), static_cast<unsigned int>(rp2040_status.gnss_num_satellites),
              gnss_utc_time);
+    const ReceiverPosition& receiver_position = rp2040_status.receiver_position;
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"receiver_position\": { \"source\": \"%s\", \"latitude_deg\": %.7f, \"longitude_deg\": %.7f, "
+             "\"height_m\": %.2f, \"horizontal_accuracy_m\": %.2f, \"vertical_accuracy_m\": %.2f, \"moving\": %s, "
+             "\"pps_valid\": %s }",
+             ReceiverPosition::SourceToStr(receiver_position.source), receiver_position.latitude_deg,
+             receiver_position.longitude_deg, receiver_position.height_m, receiver_position.horizontal_accuracy_m,
+             receiver_position.vertical_accuracy_m, receiver_position.moving ? "true" : "false",
+             rp2040_status.receiver_pps.valid ? "true" : "false");
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              ", \"subg\": { \"uptime_ms\": %lu, \"user_core_usage_percent\": %u, "
@@ -952,6 +989,13 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              ", \"auto_update\": { \"enabled\": %s, \"state\": \"%s\", \"version\": \"%s\", \"progress\": %u }",
              auto_update.enabled ? "true" : "false", auto_update.state, auto_update.version,
              auto_update.progress_percent);
+    NetworkTime::Status sntp;
+    network_time.GetStatus(sntp);
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"sntp\": { \"enabled\": %s, \"server\": \"%s\", \"synced\": %s, \"last_sync_age_s\": %lu }",
+             sntp.enabled ? "true" : "false", sntp.server, sntp.synced ? "true" : "false",
+             static_cast<unsigned long>(sntp.last_sync_age_s));
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
 
@@ -1148,7 +1192,22 @@ void ADSBeeServer::SendAircraftJSONMessages() {
     // each) cost ~100 TCP segments per second per client at a busy site; on the W5500 Ethernet board the network tasks
     // doing that outrank the SPI receive task, which then missed RP2040 handshakes until the RP2040 reset the board.
     // Frames of up to kNonBlockingMessageMaxLen always fit a writable socket whole.
+    if (aircraft_json_next_uid_ >= aircraft_json_num_uids_) {
+        return;
+    }
+    if (network_aircraft.GetNumClients() == 0) {
+        aircraft_json_next_uid_ = aircraft_json_num_uids_;  // Nobody left to send the rest to.
+        return;
+    }
     char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
-    WriteAircraftJSONLiveMapArrays(aircraft_dictionary, get_time_since_boot_ms(), batch_buf, sizeof(batch_buf),
-                                   [this](const char* buf, uint16_t len) { network_aircraft.BroadcastMessage(buf, len); });
+    uint64_t start_us = get_time_since_boot_us();
+    while (get_time_since_boot_us() - start_us < kAircraftJSONPassBudgetUs) {
+        uint16_t len =
+            WriteAircraftJSONLiveMapArray(aircraft_dictionary, get_time_since_boot_ms(), aircraft_json_uids_,
+                                          aircraft_json_num_uids_, aircraft_json_next_uid_, batch_buf, sizeof(batch_buf));
+        if (len == 0) {
+            break;
+        }
+        network_aircraft.BroadcastMessage(batch_buf, len);
+    }
 }

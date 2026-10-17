@@ -33,6 +33,9 @@ Escaping makes frame length for a given type variable, up to
 * `0x33`: Mode-S long frame
   * 1 byte RSSI
   * 14 byte Mode-S long data
+* `0xe9`: Receiver info (ADSBee MLAT feed, `software/adsbee_mlat/PROTOCOL.md`)
+  * ASCII `key=value` fields separated by `;`, ended by `0x0a`: receiver ID, clock rate, clock epoch, antenna position
+  * Sent by the `MLAT` reporting protocol, whose Mode S frames carry a 48 MHz timestamp
 * `0x34`: Status data
   * *Appears to only be used by Mode-S Beast hardware later versions*
   * ?? byte status data
@@ -47,7 +50,8 @@ receiving stations across multiple packets, and then use the differences between
 station receive timing to calculate signal source position.
 
 FlightAware's dump1090 fork sends `0x00 0x00 0x00 0x00 0x00 0x00` when it has
-no MLAT data.
+no MLAT data. ADSBee does the same for a packet without an MLAT timestamp
+(`RawModeSPacket::no_mlat_timestamp`, set by the ADSBee m1421).
 
 
 ## RSSI

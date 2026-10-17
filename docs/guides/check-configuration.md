@@ -9,7 +9,7 @@ Send `AT+CONFIG_HASH?` on the [CLI](../getting-started/quick-start.md#connect-to
 ```
 AT+CONFIG_HASH?
 CONFIG_HASH=0x01B412E7
-SETTINGS_FLEET=0x41982E33 (settings version 18, 1340 Bytes)
+SETTINGS_FLEET=0x41982E33 (settings version 19, 1344 Bytes)
 SETTINGS_FULL=0x34C6C16A
 CCFG_CC1312=0x4BB06FBD
 FIRMWARE=0x2AE30B6C
@@ -23,8 +23,8 @@ An ADSBee m1421 answers:
 ```
 AT+CONFIG_HASH?
 CONFIG_HASH=0xDC99B0AC
-SETTINGS_FLEET=0x7215D7D8 (settings version 5, 62 Bytes)
-SETTINGS_FULL=0x7215D7D8
+SETTINGS_FLEET=0xC165D6B7 (settings version 6, 67 Bytes)
+SETTINGS_FULL=0xC165D6B7
 CCFG_CC1314=0x66E9858D
 FIRMWARE=0xB8A29C75
 FIRMWARE_CC1314=0x80AB341C (577348 Bytes)
@@ -49,7 +49,7 @@ Settings are hashed as the unit is running now, saved or not. Run `AT+SETTINGS=S
 
 `SETTINGS_FLEET` leaves out the settings that normally differ between units:
 
-- ADSBee 1090: hostname, WiFi access point SSID and channel, feed receiver IDs, Remote ID UAS ID, and the receiver position values. The receiver position source (`AT+RX_POSITION`) still counts.
+- ADSBee 1090: hostname, WiFi access point SSID and channel, feed receiver IDs, Remote ID UAS ID, and the receiver position values. The receiver position source (`AT+RX_POSITION`) and its moving flag still count.
 - ADSBee m1421: the receiver position values.
 
 `SETTINGS_FULL` covers those too. The receiver position values count only for a `FIXED` position, and the ICAO address only for the `ICAO` source, because the other sources update the position while the unit runs.

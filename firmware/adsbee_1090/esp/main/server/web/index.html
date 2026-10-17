@@ -115,6 +115,8 @@
                             <th data-sort-key="track">Hdg</th>
                             <th data-sort-key="lat">Lat</th>
                             <th data-sort-key="lon">Lon</th>
+                            <th data-sort-key="r_dst" title="Distance from the receiver">Dist&nbsp;(nm)</th>
+                            <th data-sort-key="r_dir" title="Bearing from the receiver">Brg</th>
                             <th data-sort-key="rssi">RSSI</th>
                         </tr>
                     </thead>
@@ -163,6 +165,33 @@
                 <div class="feed-field">
                     <label>Protocol</label>
                     <select id="feed-protocol"></select>
+                </div>
+                <div class="feed-field">
+                    <label>Transport</label>
+                    <select id="feed-transport"></select>
+                </div>
+                <div id="feed-mqtt" style="display:none;">
+                    <div class="feed-field">
+                        <label>Topic prefix</label>
+                        <input type="text" id="feed-mqtt-prefix" maxlength="31" placeholder="adsbee">
+                    </div>
+                    <div class="feed-field">
+                        <label>Username</label>
+                        <input type="text" id="feed-mqtt-username" maxlength="31" placeholder="none">
+                    </div>
+                    <div class="feed-field">
+                        <label>Password</label>
+                        <input type="password" id="feed-mqtt-password" maxlength="63">
+                    </div>
+                    <div class="feed-field feed-field-inline">
+                        <label>TLS</label>
+                        <input type="checkbox" id="feed-mqtt-tls">
+                    </div>
+                    <div class="feed-field">
+                        <label>QoS</label>
+                        <select id="feed-mqtt-qos"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select>
+                    </div>
+                    <p id="feed-mqtt-topics" class="feed-mqtt-topics"></p>
                 </div>
                 <div id="feed-map-row" class="feed-map-row" style="display:none;">
                     <a id="feed-map-link" target="_blank" rel="noopener">View this receiver on the whereplane.xyz map</a>

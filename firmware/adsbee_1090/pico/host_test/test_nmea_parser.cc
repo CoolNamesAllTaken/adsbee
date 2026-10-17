@@ -119,7 +119,7 @@ TEST(NMEAParser, RejectsBadChecksum) {
     // Establish a known-good fix first.
     FeedSentence(parser, "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n");
     ASSERT_TRUE(parser.fix().valid);
-    float good_lat = parser.fix().latitude_deg;
+    double good_lat = parser.fix().latitude_deg;
 
     // Now feed a sentence with a deliberately wrong checksum (*00); it must be rejected.
     auto type = FeedSentence(
@@ -142,4 +142,74 @@ TEST(NMEAParser, UnknownSentenceType) {
     NMEAParser parser;
     auto type = FeedSentence(parser, "$GPVTG,084.4,T,,M,022.4,N,041.5,K*6C\r\n");
     EXPECT_EQ(type, NMEAParser::kSentenceUnknown);
+}
+
+// Fix for MLAT: double precision coordinates, ellipsoid height from the geoid separation, GST accuracies, RMC date.
+TEST(NMEAParser, ReceiverPositionFromGGAAndGST) {
+    NMEAParser parser;
+    parser.SetTimestampMs(2000);
+    EXPECT_EQ(FeedSentence(parser, "$GNGGA,000001.00,3725.31990,N,12205.04345,W,1,12,0.8,61.32,M,-29.9,M,,*40\r\n"),
+              NMEAParser::kSentenceGGA);
+    const NMEAParser::GNSSFix& fix = parser.fix();
+    EXPECT_NEAR(fix.latitude_deg, 37.0 + 25.3199 / 60.0, 1e-9);
+    EXPECT_NEAR(fix.longitude_deg, -122.0840575, 1e-9);
+    EXPECT_TRUE(fix.geoid_separation_valid);
+    EXPECT_FLOAT_EQ(fix.geoid_separation_m, -29.9f);
+
+    ReceiverPosition position;
+    ASSERT_TRUE(NMEAParser::FixToReceiverPosition(fix, position));
+    EXPECT_EQ(position.source, ReceiverPosition::kSourceGNSS);
+    EXPECT_NEAR(position.height_m, 31.42f, 1e-4);
+    EXPECT_FLOAT_EQ(position.horizontal_accuracy_m, 0.0f);  // No GST yet: unknown.
+
+    parser.SetTimestampMs(2100);
+    EXPECT_EQ(FeedSentence(parser, "$GNGST,000001.00,1.2,2.0,1.5,30.0,1.5,2.0,3.5*7E\r\n"), NMEAParser::kSentenceGST);
+    ASSERT_TRUE(NMEAParser::FixToReceiverPosition(fix, position));
+    EXPECT_FLOAT_EQ(position.horizontal_accuracy_m, 2.5f);
+    EXPECT_FLOAT_EQ(position.vertical_accuracy_m, 3.5f);
+
+    // A GST from long before the fix is not used.
+    parser.SetTimestampMs(9000);
+    FeedSentence(parser, "$GNGGA,000001.00,3725.31990,N,12205.04345,W,1,12,0.8,61.32,M,-29.9,M,,*40\r\n");
+    ASSERT_TRUE(NMEAParser::FixToReceiverPosition(fix, position));
+    EXPECT_FLOAT_EQ(position.horizontal_accuracy_m, 0.0f);
+}
+
+TEST(NMEAParser, NoReceiverPositionWithoutGeoidSeparation) {
+    NMEAParser parser;
+    FeedSentence(parser, "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,,M,,*52\r\n");
+    ASSERT_TRUE(parser.fix().valid);
+    EXPECT_FALSE(parser.fix().geoid_separation_valid);
+    ReceiverPosition position;
+    EXPECT_FALSE(NMEAParser::FixToReceiverPosition(parser.fix(), position));
+}
+
+TEST(NMEAParser, UnixTime) {
+    EXPECT_EQ(NMEAParser::UnixTime(1970, 1, 1, 0, 0, 0), 0u);
+    EXPECT_EQ(NMEAParser::UnixTime(2000, 3, 1, 0, 0, 0), 951868800u);
+    EXPECT_EQ(NMEAParser::UnixTime(2024, 2, 29, 12, 0, 0), 1709208000u);
+    EXPECT_EQ(NMEAParser::UnixTime(2099, 12, 31, 23, 59, 59), 4102444799u);
+}
+
+TEST(NMEAParser, PPSEdgeLabeledWithTheNextWholeSecond) {
+    NMEAParser parser;
+    uint32_t unix_time_s = 0;
+    parser.SetTimestampMs(5300);
+    FeedSentence(parser, "$GNRMC,000001.00,A,3725.31990,N,12205.04345,W,0.0,,141026,,,A*7E\r\n");
+    ASSERT_TRUE(parser.fix().utc_date_valid);
+    EXPECT_EQ(parser.fix().utc_year, 2026);
+    EXPECT_EQ(parser.fix().utc_month, 10);
+    EXPECT_EQ(parser.fix().utc_day, 14);
+
+    // Time received 300 ms after the edge labels it.
+    ASSERT_TRUE(NMEAParser::PPSEdgeUnixTime(parser.fix(), 5000, unix_time_s));
+    EXPECT_EQ(unix_time_s, 1791936001u);
+    // Received before the edge, or more than a second after it: not this edge's label.
+    EXPECT_FALSE(NMEAParser::PPSEdgeUnixTime(parser.fix(), 5400, unix_time_s));
+    EXPECT_FALSE(NMEAParser::PPSEdgeUnixTime(parser.fix(), 4200, unix_time_s));
+
+    // A time that isn't a whole second labels nothing.
+    parser.SetTimestampMs(6300);
+    FeedSentence(parser, "$GNRMC,000001.50,A,3725.31990,N,12205.04345,W,0.0,,141026,,,A*7B\r\n");
+    EXPECT_FALSE(NMEAParser::PPSEdgeUnixTime(parser.fix(), 6000, unix_time_s));
 }

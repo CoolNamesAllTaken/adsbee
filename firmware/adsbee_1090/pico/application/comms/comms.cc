@@ -3,7 +3,12 @@
 #include <cstdarg>  // For debug printf.
 #include <cstdio>   // Regular pico/stdio.h doesn't support vprint functions.
 
+#include "adsbee.hh"  // For the receiver position and MLAT epoch.
+#include "cpu_utils.hh"
+#include "esp32.hh"
+#include "object_dictionary.hh"
 #include "pico/stdlib.h"
+#include "pico/unique_id.h"
 #include "spi_coprocessor.hh"
 
 static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kConsole,
@@ -40,6 +45,7 @@ bool CommsManager::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - last_raw_report_check_timestamp_ms_ > kRawReportingCheckIntervalMs) {
         last_raw_report_check_timestamp_ms_ = timestamp_ms;  // Proceed with update and record timestamp.
+        CPUMonitor::WorkScope work;
 
         // Calculate how much buffer space the current packets would need.
         uint16_t required_buffer_len = CompositeArray::CalculateRawPacketsBufferLength(
@@ -157,6 +163,7 @@ int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const cha
 int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const char* format, va_list args) {
     char buf[kPrintfBufferMaxSize];
 
+    CPUMonitor::WorkScope work;
     // Formatted print to buffer.
     int res = vsnprintf(buf, kPrintfBufferMaxSize, format, args);
     if (res <= 0) {
@@ -181,7 +188,7 @@ bool CommsManager::iface_putc(SettingsManager::SerialInterface iface, char c) {
             return true;  // Function is void so we won't know if it succeeds.
             break;
         case SettingsManager::kConsole:
-            return putchar(c) >= 0 && (!esp32.IsEnabled() || network_console_putc(c) >= 0);
+            return putchar(c) >= 0 && (!MirrorToNetworkConsole() || network_console_putc(c) >= 0);
             break;
         case SettingsManager::kNumSerialInterfaces:
         default:
@@ -201,7 +208,7 @@ bool CommsManager::iface_write(SettingsManager::SerialInterface iface, const cha
         return true;
     }
     stdio_put_string(buf, len, false, false);
-    if (esp32.IsEnabled()) {
+    if (MirrorToNetworkConsole()) {
         for (uint16_t i = 0; i < len; i++) {
             network_console_putc(buf[i]);
         }
@@ -255,7 +262,7 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
             break;
         case SettingsManager::kConsole:
             // Note: Using fputs instead of standard puts, since puts adds a line feed.
-            return fputs(buf, stdout) >= 0 && (!esp32.IsEnabled() || network_console_puts(buf) >= 0);
+            return fputs(buf, stdout) >= 0 && (!MirrorToNetworkConsole() || network_console_puts(buf) >= 0);
             break;
         case SettingsManager::kNumSerialInterfaces:
         default:
@@ -265,6 +272,8 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
     }
     return false;  // Should never get here.
 }
+
+bool CommsManager::MirrorToNetworkConsole() { return esp32.IsEnabled() && esp32_ll.NetworkConsoleHasConsumers(); }
 
 bool CommsManager::network_console_putc(char c) {
     static bool recursion_alert = false;
@@ -296,5 +305,39 @@ bool CommsManager::network_console_puts(const char* buf, uint16_t len) {
             return false;
         }
     }
+    return true;
+}
+
+bool GetReceiverPosition(ReceiverPosition& position) {
+    position = adsbee.receiver_position;
+    return position.IsValid();
+}
+
+bool CommsManager::GetMLATReceiverInfo(ReportSink sink, BeastReporter::ReceiverInfo& info) {
+    (void)sink;  // Every serial output carries this device's receiver ID.
+    static char receiver_id[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes + 1] = {0};
+    if (receiver_id[0] == '\0') {
+        // The default feed receiver ID from the part code, else the RP2040 flash unique ID.
+        uint8_t id[SettingsManager::Settings::kFeedReceiverIDNumBytes];
+        SettingsManager::DeviceInfo device_info;
+        if (SettingsManager::GetDeviceInfo(device_info)) {
+            device_info.GetDefaultFeedReceiverID(id);
+        } else {
+            pico_unique_board_id_t unique_id;
+            pico_get_unique_board_id(&unique_id);
+            memcpy(id, unique_id.id, sizeof(id));
+        }
+        SettingsManager::ReceiverIDToStr(id, receiver_id);
+    }
+    strncpy(info.id, receiver_id, sizeof(info.id) - 1);
+    info.epoch = adsbee.mlat_epoch;
+    info.position = adsbee.receiver_position;
+    info.pps = adsbee.receiver_pps;
+    strncpy(info.name, settings_manager.settings.core_network_settings.hostname, sizeof(info.name) - 1);
+    BeastReporter::FormatFirmwareVersion(info.firmware_version, sizeof(info.firmware_version), "adsbee_1090",
+                                         ObjectDictionary::kFirmwareVersionMajor,
+                                         ObjectDictionary::kFirmwareVersionMinor,
+                                         ObjectDictionary::kFirmwareVersionPatch,
+                                         ObjectDictionary::kFirmwareVersionReleaseCandidate);
     return true;
 }

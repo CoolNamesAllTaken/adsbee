@@ -6,6 +6,7 @@
 #include "adsbee.hh"
 #include "comms.hh"
 #include "core1.hh"  // For turning multiprocessor on / off during firmware flashing.
+#include "cpu_utils.hh"
 #include "eeprom.hh"
 #include "esp32.hh"  // Access to ESP32 low level SPICoprocessorSlaveInterface.
 #include "esp32_firmware_check.hh"
@@ -24,6 +25,7 @@
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
+#include "unit_conversions.hh"  // ParseDeciNm
 #endif
 
 // For mapping cpp_at_printf
@@ -883,11 +885,23 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
 
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
-        "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>\r\n\tSet details for a "
-        "network feed.\r\n\tindex = [0-%d], uri = ip address or URL, feed_port = [0-65535], "
-        "active = [0 1], protocol = [BEAST BEAST_RAW].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
+        "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>[,<transport>]\r\n\tSet details for a "
+        "network feed. Empty arguments keep their value.\r\n\tindex = [0-%d], uri = IP address or hostname (\"-\" "
+        "clears it), port = [0-65535], active = [0 1], protocol = [BEAST RAW AIRCRAFT_JSON ...], transport = [TCP UDP "
+        "MQTT] (default TCP).\r\n\tUDP sends whole frames per datagram to a host, broadcast or multicast address. "
+        "MQTT publishes to a broker, see AT+FEED_MQTT.\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
         "feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]\r\n",
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
+}
+
+static void PrintFeed(const CppAT::ATCommandDef_t& def, uint16_t index) {
+    const SettingsManager::Settings& s = settings_manager.settings;
+    char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
+    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
+    CPP_AT_CMD_PRINTF("=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID),%s(TRANSPORT)", index,
+                      s.feed_uris[index], s.feed_ports[index], s.feed_is_active[index],
+                      SettingsManager::kReportingProtocolStrs[s.feed_protocols[index]], receiver_id_str,
+                      SettingsManager::kFeedTransportStrs[s.feed_transports[index]]);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
@@ -901,30 +915,16 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
                                  SettingsManager::Settings::kMaxNumFeeds - 1, index);
                 }
-                char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
-                SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
-                CPP_AT_CMD_PRINTF(
-                    "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", index,
-                    settings_manager.settings.feed_uris[index], settings_manager.settings.feed_ports[index],
-                    settings_manager.settings.feed_is_active[index],
-                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]],
-                    receiver_id_str);
+                PrintFeed(def, index);
             } else {
                 // Querying info about all feeds.
                 for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-                    char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
-                    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[i], receiver_id_str);
-                    CPP_AT_CMD_PRINTF(
-                        "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", i,
-                        settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
-                        settings_manager.settings.feed_is_active[i],
-                        SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[i]],
-                        receiver_id_str);
+                    PrintFeed(def, i);
                 }
             }
             CPP_AT_SILENT_SUCCESS();
             break;
-        case '=':
+        case '=': {
             // Setting feed information for a specific feed.
             uint16_t index = UINT16_MAX;
             if (!CPP_AT_HAS_ARG(0)) {
@@ -934,6 +934,31 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             if (index >= SettingsManager::Settings::kMaxNumFeeds) {
                 CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
                              SettingsManager::Settings::kMaxNumFeeds - 1, index);
+            }
+            // Check the names before changing anything.
+            SettingsManager::ReportingProtocol feed_protocol = settings_manager.settings.feed_protocols[index];
+            if (CPP_AT_HAS_ARG(4)) {
+                uint16_t i = 0;
+                while (i < SettingsManager::ReportingProtocol::kNumProtocols &&
+                       args[4].compare(SettingsManager::kReportingProtocolStrs[i]) != 0) {
+                    i++;
+                }
+                if (i == SettingsManager::ReportingProtocol::kNumProtocols) {
+                    CPP_AT_ERROR("Unknown protocol '%.*s'.", (int)args[4].length(), args[4].data());
+                }
+                feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
+            }
+            SettingsManager::FeedTransport feed_transport = settings_manager.settings.feed_transports[index];
+            if (CPP_AT_HAS_ARG(5)) {
+                char transport_str[SettingsManager::kFeedTransportStrMaxLen] = {0};
+                if (args[5].length() >= sizeof(transport_str)) {
+                    CPP_AT_ERROR("Unknown transport '%.*s'. Use TCP, UDP or MQTT.", (int)args[5].length(),
+                                 args[5].data());
+                }
+                memcpy(transport_str, args[5].data(), args[5].length());
+                if (!SettingsManager::FeedTransportFromStr(transport_str, feed_transport)) {
+                    CPP_AT_ERROR("Unknown transport '%s'. Use TCP, UDP or MQTT.", transport_str);
+                }
             }
             // Set FEED_URI. A single "-" is a sentinel meaning "clear the URI to empty".
             if (CPP_AT_HAS_ARG(1)) {
@@ -951,22 +976,99 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             }
             // Set ACTIVE
             if (CPP_AT_HAS_ARG(3)) {
-                uint8_t is_active;
                 CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[index]);
             }
-            // Set PROTOCOL
-            if (CPP_AT_HAS_ARG(4)) {
-                SettingsManager::ReportingProtocol feed_protocol;
-                for (uint16_t i = 0; i < SettingsManager::ReportingProtocol::kNumProtocols; i++) {
-                    if (args[4].compare(SettingsManager::kReportingProtocolStrs[i]) == 0) {
-                        feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
-                    }
-                }
-                settings_manager.settings.feed_protocols[index] = feed_protocol;
-            }
+            settings_manager.settings.feed_protocols[index] = feed_protocol;
+            settings_manager.settings.feed_transports[index] = feed_transport;
             settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+// Copies an AT argument into a settings string: "-" clears it, an empty argument keeps it.
+static bool SetFeedMQTTString(std::string_view arg, char* dest, uint16_t max_len) {
+    if (arg.empty()) {
+        return true;
+    }
+    if (arg == "-") {
+        dest[0] = '\0';
+        return true;
+    }
+    if (arg.length() > max_len) {
+        return false;
+    }
+    memset(dest, '\0', max_len + 1);
+    memcpy(dest, arg.data(), arg.length());
+    return true;
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFeedMQTTCallback) {
+    switch (op) {
+        case '?': {
+            uint16_t first = 0, last = SettingsManager::Settings::kMaxNumFeeds - 1;
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, first);
+                if (first >= SettingsManager::Settings::kMaxNumFeeds) {
+                    CPP_AT_ERROR("Feed index must be between 0-%d.", SettingsManager::Settings::kMaxNumFeeds - 1);
+                }
+                last = first;
+            }
+            for (uint16_t i = first; i <= last; i++) {
+                SettingsManager::Settings::FeedMQTT& mqtt = settings_manager.settings.feed_mqtt[i];
+                char redacted_password[SettingsManager::Settings::kFeedMQTTPasswordMaxLen + 1];
+                SettingsManager::RedactPassword(mqtt.password, redacted_password,
+                                                SettingsManager::Settings::kFeedMQTTPasswordMaxLen);
+                CPP_AT_CMD_PRINTF("=%d(INDEX),%s(TOPIC_PREFIX),%s(USERNAME),%s(PASSWORD),%d(TLS),%u(QOS)", i,
+                                  mqtt.topic_prefix, mqtt.username, redacted_password, mqtt.tls, mqtt.qos);
+            }
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+        case '=': {
+            uint16_t index = UINT16_MAX;
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Feed index is required.");
+            }
+            CPP_AT_TRY_ARG2NUM(0, index);
+            if (index >= SettingsManager::Settings::kMaxNumFeeds) {
+                CPP_AT_ERROR("Feed index must be between 0-%d.", SettingsManager::Settings::kMaxNumFeeds - 1);
+            }
+            SettingsManager::Settings::FeedMQTT mqtt = settings_manager.settings.feed_mqtt[index];
+            if (num_args > 1 && !SetFeedMQTTString(args[1], mqtt.topic_prefix,
+                                                   SettingsManager::Settings::kFeedMQTTTopicPrefixMaxLen)) {
+                CPP_AT_ERROR("Topic prefix must be %d characters or fewer.",
+                             SettingsManager::Settings::kFeedMQTTTopicPrefixMaxLen);
+            }
+            if (num_args > 2 &&
+                !SetFeedMQTTString(args[2], mqtt.username, SettingsManager::Settings::kFeedMQTTUsernameMaxLen)) {
+                CPP_AT_ERROR("Username must be %d characters or fewer.",
+                             SettingsManager::Settings::kFeedMQTTUsernameMaxLen);
+            }
+            if (num_args > 3 &&
+                !SetFeedMQTTString(args[3], mqtt.password, SettingsManager::Settings::kFeedMQTTPasswordMaxLen)) {
+                CPP_AT_ERROR("Password must be %d characters or fewer.",
+                             SettingsManager::Settings::kFeedMQTTPasswordMaxLen);
+            }
+            if (CPP_AT_HAS_ARG(4)) {
+                CPP_AT_TRY_ARG2NUM(4, mqtt.tls);
+            }
+            if (CPP_AT_HAS_ARG(5)) {
+                CPP_AT_TRY_ARG2NUM(5, mqtt.qos);
+                if (mqtt.qos > SettingsManager::Settings::kFeedMQTTMaxQoS) {
+                    CPP_AT_ERROR("QoS must be 0, 1 or 2.");
+                }
+            }
+            if (strpbrk(mqtt.topic_prefix, "+#") != nullptr) {
+                CPP_AT_ERROR("Topic prefix can't contain the MQTT wildcards + or #.");
+            }
+            settings_manager.settings.feed_mqtt[index] = mqtt;
+            settings_manager.SyncToCoprocessors();
+            CPP_AT_SUCCESS();
+            break;
+        }
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
@@ -1210,6 +1312,55 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATASTERIXSACSICCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%u,%u", settings_manager.settings.asterix_sac, settings_manager.settings.asterix_sic);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
+                CPP_AT_ERROR("Requires two arguments: AT+ASTERIX_SAC_SIC=<sac>,<sic>.");
+            }
+            uint16_t sac, sic;
+            CPP_AT_TRY_ARG2NUM(0, sac);
+            CPP_AT_TRY_ARG2NUM(1, sic);
+            if (sac > 255 || sic > 255) {
+                CPP_AT_ERROR("SAC and SIC must be between 0 and 255.");
+            }
+            settings_manager.settings.asterix_sac = static_cast<uint8_t>(sac);
+            settings_manager.settings.asterix_sic = static_cast<uint8_t>(sic);
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATNTPServerCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s", settings_manager.settings.ntp_server);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            if (!CPP_AT_HAS_ARG(0) || args[0].size() > SettingsManager::Settings::kNTPServerMaxLen) {
+                CPP_AT_ERROR("Requires a host name or IP address of up to %u characters. AT+NTP_SERVER=<host>",
+                             SettingsManager::Settings::kNTPServerMaxLen);
+            }
+            for (char c : args[0]) {
+                if (!(isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == ':')) {
+                    CPP_AT_ERROR("Invalid character '%c' in NTP server.", c);
+                }
+            }
+            memset(settings_manager.settings.ntp_server, '\0', sizeof(settings_manager.settings.ntp_server));
+            memcpy(settings_manager.settings.ntp_server, args[0].data(), args[0].size());
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     switch (op) {
         case '?':
@@ -1234,6 +1385,36 @@ CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
             settings_manager.settings.mavlink_component_id = static_cast<uint8_t>(component_id);
             CPP_AT_SUCCESS();
             break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFilterDistanceNMCallback) {
+    using Settings = SettingsManager::Settings;
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d,%lu.%lu", settings_manager.settings.filter_distance_enabled,
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm / 10),
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm % 10));
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            bool enabled = settings_manager.settings.filter_distance_enabled;
+            uint32_t deci_nm = settings_manager.settings.filter_distance_deci_nm;
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+            }
+            if (CPP_AT_HAS_ARG(1) && (!ParseDeciNm(args[1].data(), args[1].size(), deci_nm,
+                                                   Settings::kMaxFilterDistanceDeciNm) ||
+                                      deci_nm < Settings::kMinFilterDistanceDeciNm)) {
+                CPP_AT_ERROR("Distance must be 0.1 to 10000.0 nm, e.g. 50 or 12.5.");
+            }
+            settings_manager.settings.filter_distance_enabled = enabled;
+            settings_manager.settings.filter_distance_deci_nm = deci_nm;
+            settings_manager.SyncToCoprocessors();  // The ESP32 filters its web UI, GDL90 and feeds too.
+            CPP_AT_SUCCESS();
+            break;
+        }
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
@@ -1426,12 +1607,21 @@ void ATRxPositionHelpCallback() {
         "\tspeed_kts: Speed in kts."
         "AT+RX_POSITION=ICAO,<icao>\r\n"
         "\ticao: ICAO address in hex (e.g. 7ABCDEF) of aircraft to use for position bootstrap.\r\n"
+        "AT+RX_POSITION=<source>,<args>,<ellipsoid_height_m>,<hacc_m>,<vacc_m>,<moving>\r\n"
+        "\tOptional, for MLAT, after the 6 FIXED arguments (empty for other sources). An empty argument keeps its "
+        "value.\r\n"
+        "\tellipsoid_height_m: FIXED antenna height above the WGS84 ellipsoid, \"-\" to clear. Without it MLAT uses "
+        "gnss_alt_ft.\r\n"
+        "\thacc_m, vacc_m: FIXED one sigma accuracies, 0 if unknown.\r\n"
+        "\tmoving: 1 for a receiver in a vehicle, for any source.\r\n"
         "AT+RX_POSITION?\r\n\tQuery the receiver's position.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
     switch (op) {
         case '?': {
+            char details_args[64];
+            settings_manager.settings.rx_position_details.PrintATArgs(details_args, sizeof(details_args));
             CPP_AT_PRINTF(
                 "Receiver Position:\r\n"
                 "\tSource: %s [%s] \r\n"
@@ -1441,7 +1631,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 "\tBarometric Altitude: %d ft\r\n"
                 "\tHeading: %.1f deg\r\n"
                 "\tSpeed: %d kts\r\n"
-                "\tICAO: 0x%06X [%s]\r\n",
+                "\tICAO: 0x%06X [%s]\r\n"
+                "\tMLAT (ellipsoid height, accuracy, moving): %s [%s]\r\n",
                 SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                 adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
                 adsbee.rx_position.longitude_deg, adsbee.rx_position.gnss_altitude_ft,
@@ -1450,7 +1641,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 adsbee.rx_position.source ==
                         SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO
                     ? "IN USE"
-                    : "NOT IN USE");
+                    : "NOT IN USE",
+                details_args, ReceiverPosition::SourceToStr(adsbee.receiver_position.source));
             // if (rx_position.source ==
             //     SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
             //     CPP_AT_PRINTF("\tICAO: 0x%06X\r\n", rx_position.icao_address);
@@ -1459,6 +1651,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
             break;
         }
         case '=': {
+            // Optional MLAT arguments, checked before anything changes.
+            RxPositionDetails details = settings_manager.settings.rx_position_details;
+            const char* error = "";
+            if (!details.ApplyATArgs(args, num_args, error)) {
+                CPP_AT_ERROR("%s", error);
+            }
             if (CPP_AT_HAS_ARG(0)) {
                 // Set position source.
                 for (uint16_t i = 0; i <= SettingsManager::RxPosition::kNumPositionSources; i++) {
@@ -1552,6 +1750,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                     }
                 }
             }
+            settings_manager.settings.rx_position_details = details;
             settings_manager.SyncToCoprocessors();
             WarnIfRemoteIDTxPositionSourceNotTransmittable();
             CPP_AT_SUCCESS();
@@ -1594,6 +1793,7 @@ static void PrintSettingsJSON() {
     const SettingsManager::Settings::CoreNetworkSettings& cns = s.core_network_settings;
 
     CPP_AT_PRINTF("SETTINGS={");
+    CPP_AT_PRINTF("\"ASTERIX_SAC_SIC\":[%u,%u],", s.asterix_sac, s.asterix_sic);
     CPP_AT_PRINTF("\"AUTO_UPDATE\":[%d],", s.auto_update_enabled);
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu,%lu],",
                   (unsigned long)s.baud_rates[SettingsManager::SerialInterface::kCommsUART],
@@ -1602,6 +1802,9 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"ETHERNET\":[%d],", cns.ethernet_enabled);
     CPP_AT_PRINTF("\"ESP32_ENABLE\":[%d],", esp32.IsEnabled());
     CPP_AT_PRINTF("\"FEED_ENABLE\":[%d],", s.feeds_enabled);
+    CPP_AT_PRINTF("\"FILTER_DISTANCE_NM\":[%d,%lu.%lu],", s.filter_distance_enabled,
+                  static_cast<unsigned long>(s.filter_distance_deci_nm / 10),
+                  static_cast<unsigned long>(s.filter_distance_deci_nm % 10));
     CPP_AT_PRINTF("\"GNSS\":[%d,\"%s\",%d],", s.gnss_enabled,
                   GNSSModuleTypeToStr(SettingsToGNSSModuleType(s.gnss_receiver_type)), s.gnss_notify);
     CPP_AT_PRINTF("\"HOSTNAME\":[\"%s\"],", JSONEscapeStr(cns.hostname, esc, sizeof(esc)));
@@ -1609,6 +1812,7 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"LED_ENABLE\":[%d],", s.led_enabled);
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
     CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
+    CPP_AT_PRINTF("\"NTP_SERVER\":[\"%s\"],", s.ntp_server);
     CPP_AT_PRINTF("\"PROTOCOL_OUT\":[\"%s\",\"%s\"],",
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kConsole]],
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kCommsUART]]);
@@ -1619,12 +1823,24 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("%d,%d,\"%s\",\"0x%04X\"],", s.remote_id_tx_uas_id_type, s.remote_id_tx_ua_type,
                   JSONEscapeStr(s.remote_id_tx_operator_id, esc, sizeof(esc)), esp32_ll.remote_id_status);
     CPP_AT_PRINTF("\"RX_ENABLE\":[%d,%d],", adsbee.Receiver1090IsEnabled(), s.subg_rx_enabled);
-    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\"],",
+    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\",",
                   SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                   adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
                   adsbee.rx_position.longitude_deg, (int)adsbee.rx_position.gnss_altitude_ft,
                   (int)adsbee.rx_position.baro_altitude_ft, adsbee.rx_position.heading_deg,
                   (int)adsbee.rx_position.speed_kts, (unsigned)adsbee.rx_position.icao_address);
+    {
+        // The optional MLAT arguments as AT+RX_POSITION? prints them, then the position source MLAT uses.
+        const RxPositionDetails& details = s.rx_position_details;
+        if (details.ellipsoid_height_set) {
+            CPP_AT_PRINTF("\"%.2f\",", static_cast<double>(details.ellipsoid_height_m));
+        } else {
+            CPP_AT_PRINTF("\"-\",");
+        }
+        CPP_AT_PRINTF("%.2f,%.2f,%d,\"%s\"],", static_cast<double>(details.horizontal_accuracy_m),
+                      static_cast<double>(details.vertical_accuracy_m), details.moving,
+                      ReceiverPosition::SourceToStr(adsbee.receiver_position.source));
+    }
     CPP_AT_PRINTF("\"SUBG_ENABLE\":[\"%s\"],",
                   SettingsManager::EnableStateToATValueStr(adsbee.subg_radio_ll.IsEnabledState()));
     int tl_offset_mv = adsbee.GetTLOffsetMilliVolts();
@@ -1992,6 +2208,12 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTANetworkCallback) {
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command = "ASTERIX_SAC_SIC",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+ASTERIX_SAC_SIC=<sac>,<sic>\r\n\tSet the ASTERIX System Area Code and System Identification "
+                    "Code (0-255 each) sent in every ASTERIX record.\r\n\tAT+ASTERIX_SAC_SIC?\r\n\tQuery them.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATASTERIXSACSICCallback, comms_manager)},
     {.command = "AUTO_UPDATE",
      .min_args = 0,
      .max_args = 1,
@@ -2068,7 +2290,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
 #endif
     {.command = "FEED",
      .min_args = 0,
-     .max_args = 5,
+     .max_args = 6,
      .help_callback = ATFeedHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
     {.command = "FEED_ENABLE",
@@ -2078,6 +2300,24 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "all feeds, or 1 to allow feeds marked active. Does not change per-feed active flags set with "
                     "AT+FEED.\r\n\tAT+FEED_ENABLE?\r\n\tQuery whether outbound feeds are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedEnableCallback, comms_manager)},
+    {.command = "FEED_MQTT",
+     .min_args = 0,
+     .max_args = 6,
+     .help_string = "AT+FEED_MQTT=<index>,<topic_prefix>,<username>,<password>,<tls>,<qos>\r\n\tSet the broker "
+                    "options of a feed with the MQTT transport. Empty arguments keep their value, \"-\" clears a "
+                    "string.\r\n\ttopic_prefix = up to 31 characters (empty: adsbee), username and password = "
+                    "optional, tls = [0 1], qos = [0 1 2].\r\n\tTopics are <topic_prefix>/<receiver ID>/<protocol> "
+                    "plus status.\r\n\tAT+FEED_MQTT?[index]\r\n\tPrint the broker options (password redacted).",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedMQTTCallback, comms_manager)},
+    {.command = "FILTER_DISTANCE_NM",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+FILTER_DISTANCE_NM=<enabled [0 1]>,<distance_nm>\r\n\tLeave aircraft farther than distance_nm "
+                    "nautical miles (0.1 to 10000.0, 0.1 nm steps) from the receiver out of aircraft reports (aircraft JSON, the web UI's list and map, GDL90, MAVLink, CSBee). Raw "
+                    "packets (Raw, Beast, MLAT and every feed of them) are never filtered. Aircraft at an unknown distance (no position yet, or "
+                    "no receiver position, see AT+RX_POSITION) are always kept. Default: 0,100.0 (off).\r\n\t"
+                    "AT+FILTER_DISTANCE_NM?\r\n\tQuery whether the filter is enabled and its distance.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterDistanceNMCallback, comms_manager)},
     {.command = "GNSS",
      .min_args = 0,
      .max_args = 3,
@@ -2136,6 +2376,13 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
                     "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
+    {.command = "NTP_SERVER",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "AT+NTP_SERVER=<host>\r\n\tSet the Network Time Protocol server the ESP32 takes UTC from while an "
+                    "output uses ASTERIX and GNSS has no time (default pool.ntp.org).\r\n\tAT+NTP_SERVER?\r\n\tQuery "
+                    "it.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATNTPServerCallback, comms_manager)},
     {.command = "NETWORK_INFO",
      .min_args = 0,
      .max_args = 0,
@@ -2183,7 +2430,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     },
     {.command = "RX_POSITION",
      .min_args = 0,
-     .max_args = 8,
+     .max_args = 11,
      .help_callback = ATRxPositionHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxPositionCallback, comms_manager)},
     {.command = "SETTINGS",
@@ -2293,6 +2540,7 @@ bool CommsManager::UpdateAT() {
     // Check for new AT commands from STDIO.
     int ci = getchar_timeout_us(0);
     while (ci != PICO_ERROR_TIMEOUT) {
+        CPUMonitor::WorkScope work;
         switch (stdio_at_line_.Push(static_cast<char>(ci), get_time_since_boot_ms())) {
             case ATLineAssembler<kATCommandBufMaxLen>::kLine:
                 at_parser_.ParseMessage(stdio_at_line_.line());
@@ -2316,6 +2564,7 @@ bool CommsManager::UpdateAT() {
         // Receive incoming network console characters.
         char c;
         while (!at_console_guard_.PayloadInProgress() && esp32_console_rx_queue.Dequeue(c)) {
+            CPUMonitor::WorkScope work;
             switch (network_at_line_.Push(c, get_time_since_boot_ms())) {
                 case ATLineAssembler<kATCommandBufMaxLen>::kLine:
                     CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %.*s\r\n",

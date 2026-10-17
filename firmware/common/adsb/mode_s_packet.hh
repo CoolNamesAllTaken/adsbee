@@ -34,9 +34,17 @@ class RawModeSPacket {
 
     /**
      * Rescales the 48MHz timestamp to a 12MHz timestamp.
-     * @retval 12MHz timestamp.
+     * @retval 12MHz timestamp, or 0 (no timestamp, as in the Beast protocol) for a packet without an MLAT timestamp.
      */
-    uint64_t GetMLAT12MHzCounter() const { return (mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
+    uint64_t GetMLAT12MHzCounter() const {
+        return no_mlat_timestamp ? 0 : (mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF;
+    }
+
+    /**
+     * The 48MHz timestamp, modulo 2^48 (the width of a Beast timestamp).
+     * @retval 48MHz timestamp, or 0 (no timestamp) for a packet without an MLAT timestamp.
+     */
+    uint64_t GetMLAT48MHzCounter() const { return no_mlat_timestamp ? 0 : mlat_48mhz_64bit_counts & 0xFFFFFFFFFFFF; }
 
     /**
      * Helper function that returns the timestamp in seconds. Used to abstract the MLAT timestamp resolution for
@@ -56,10 +64,16 @@ class RawModeSPacket {
     uint32_t buffer[kMaxPacketLenWords32] = {0};
     uint16_t buffer_len_bytes = 0;
     int8_t source = -1;                    // Source of the ADS-B packet (PIO state machine number).
+    // mlat_48mhz_64bit_counts is only a coarse receive time (about 1 ms): good for ordering and aging packets,
+    // never for MLAT. Fills a padding byte, so the layout is unchanged.
+    bool no_mlat_timestamp = false;
     int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
     int16_t sigq_db = INT16_MIN;           // Signal quality (dB above noise floor), in dB.
     uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
 };
+
+// Sent between processors as raw bytes: new fields may only fill padding.
+static_assert(sizeof(RawModeSPacket) == 32);
 
 class DecodedModeSPacket {
    public:

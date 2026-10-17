@@ -1,8 +1,15 @@
+#include <algorithm>
+#include <cstring>
+#include <vector>
+
 #include "aircraft_dictionary.hh"
+#include "beast_utils.hh"
 #include "decode_utils.hh"  // for location calculation utility functions
 #include "gtest/gtest.h"
 #include "hal_god_powers.hh"  // for changing timestamp
 #include "mode_s_packet.hh"
+#include "raw_utils.hh"
+#include "settings.hh"
 
 constexpr float kLatDegCloseEnough = 0.001f;
 constexpr float kLonDegCloseEnough = 0.0001f;
@@ -759,10 +766,10 @@ TEST(AircraftDictionary, IngestAltitudeReplyAltitudeNotAvailable) {
 // fails to ingest.
 TEST(AircraftDictionary, IngestValidADSBPacketsWithNothingToApply) {
     AircraftDictionary dictionary = AircraftDictionary();
-    const uint32_t icao = 0xADF000;
+    const uint32_t icao = 0xBEE000;
 
     // TC=0 (no position information) with barometric altitude 850ft.
-    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8DADF0000009A00000000084E8CD");
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8DBEE0000009A000000000837D28");
     ASSERT_TRUE(packet.is_valid);
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
     ModeSAircraft* aircraft =
@@ -774,7 +781,7 @@ TEST(AircraftDictionary, IngestValidADSBPacketsWithNothingToApply) {
     EXPECT_FALSE(aircraft->CanDecodePosition());  // The all-zero position subfields are not a CPR frame.
 
     // TC=0 without altitude keeps the last altitude.
-    packet = DecodedModeSPacket((char*)"8DADF000000000000000003CE4A2");
+    packet = DecodedModeSPacket((char*)"8DBEE000000000000000003B7147");
     ASSERT_TRUE(packet.is_valid);
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
     EXPECT_TRUE(aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid));
@@ -782,7 +789,7 @@ TEST(AircraftDictionary, IngestValidADSBPacketsWithNothingToApply) {
 
     // TC=19 with reserved subtypes 0 and 5, then TC=30 (reserved).
     for (const char* hex :
-         {"8DADF00098000000000000D86905", "8DADF0009D0000000000008A103C", "8DADF000F0000000000000ABF05A"}) {
+         {"8DBEE00098000000000000DFFCE0", "8DBEE0009D0000000000008D85D9", "8DBEE000F0000000000000AC65BF"}) {
         packet = DecodedModeSPacket(hex);
         ASSERT_TRUE(packet.is_valid);
         EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
@@ -1856,4 +1863,130 @@ TEST(AircraftDictionary, SingleCorruptCPRPacketCannotConfirmItself) {
         EXPECT_NEAR(aircraft.longitude_deg, lon0, 0.05);
         EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
     }
+}
+
+// Ingests the even/odd pair from FilterCPRLocations, which decodes to 48.5977 N, 18.70521 E.
+static ModeSAircraft* IngestPositionPair(AircraftDictionary& dictionary) {
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8D48922358C387D91DF354DCCCB8");  // even
+    inc_time_since_boot_ms(1000);
+    packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    packet = DecodedModeSPacket((char*)"8D48922358C38066020D8401D571");  // odd
+    inc_time_since_boot_ms(1000);
+    packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    return dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(packet.icao_address, Aircraft::kAircraftTypeModeS),
+                                                    false);
+}
+
+TEST(AircraftDictionary, DistanceAndBearingFromReceiver) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    ModeSAircraft* aircraft = IngestPositionPair(dictionary);
+    ASSERT_TRUE(aircraft);
+    // WGS-84 geodesic from 48 N 18 E: 84585 m at 37.95 deg.
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 37.95f, 0.2f);
+
+    // Distance filter: 0 is off, aircraft beyond the limit are left out.
+    EXPECT_FALSE(aircraft->IsBeyondDistance(0));
+    EXPECT_FALSE(aircraft->IsBeyondDistance(100000));
+    EXPECT_TRUE(aircraft->IsBeyondDistance(50000));
+
+    // Moving the receiver by less than kReferenceMoveThresholdMeters keeps the distances; moving it farther makes
+    // Update() recompute them.
+    dictionary.SetReferencePosition(48.0005f, 18.0f);  // 56 m.
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+    dictionary.SetReferencePosition(48.5f, 18.6f);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 13356, 10);  // Geodesic: 13355.6 m at 35.52 deg.
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 35.52f, 0.2f);
+
+    // Without a receiver position the distance is unknown and the filter keeps the aircraft.
+    dictionary.ClearReferencePosition();
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_EQ(aircraft->distance_m, Aircraft::kDistanceUnknown);
+    EXPECT_FALSE(aircraft->IsBeyondDistance(1));
+}
+
+// AT+FILTER_DISTANCE_NM gates aircraft reports only. An aircraft 45.7 nm out with the filter at 35 nm is left out of
+// the report UID snapshot (CSBee, MAVLink, GDL90, aircraft JSON), while its packets still make the same Raw and Beast
+// frames, which take no filter at all.
+TEST(AircraftDictionary, DistanceFilterGatesAircraftReportsNotRawPackets) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    ModeSAircraft* far = IngestPositionPair(dictionary);  // 84.6 km = 45.7 nm.
+    ASSERT_TRUE(far);
+    ModeSAircraft* near = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xBEE001));
+    near->distance_m = 20000;
+    ModeSAircraft* unknown = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xBEE002));  // No position.
+
+    SettingsManager::Settings settings;
+    settings.filter_distance_deci_nm = 350;
+    uint32_t uids[10];
+    for (bool enabled : {false, true}) {
+        settings.filter_distance_enabled = enabled;
+        uint16_t n = dictionary.GetReportUIDs(uids, 10, settings.FilterDistanceMeters());
+        std::vector<uint32_t> reported(uids, uids + n);
+        auto has = [&](const ModeSAircraft* a) {
+            return std::find(reported.begin(), reported.end(), a->GetUID()) != reported.end();
+        };
+        EXPECT_TRUE(has(near));
+        EXPECT_TRUE(has(unknown));  // Unknown distance: always kept.
+        EXPECT_EQ(has(far), !enabled);
+    }
+    EXPECT_EQ(dictionary.GetReportUIDs(uids, 1, 0), 1u);  // Capacity respected.
+
+    // The far aircraft's packet still encodes to the full Raw and Beast frames with the filter on.
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8D48922358C387D91DF354DCCCB8");
+    ASSERT_TRUE(far->IsBeyondDistance(settings.FilterDistanceMeters()));
+    char raw_frame[kRawModeSFrameMaxNumChars];
+    EXPECT_GT(BuildRawModeSFrame(packet.raw, raw_frame), 0);
+    EXPECT_NE(strstr(raw_frame, "8D48922358C387D91DF354DCCCB8"), nullptr);
+    uint8_t beast_frame[BeastReporter::kModeSBeastFrameMaxLenBytes];
+    EXPECT_GT(BeastReporter::BuildModeSBeastFrame(beast_frame, packet), 0);
+}
+
+TEST(AircraftDictionary, DistanceUnknownWithoutReceiverPosition) {
+    AircraftDictionary dictionary;
+    ModeSAircraft* aircraft = IngestPositionPair(dictionary);
+    ASSERT_TRUE(aircraft);
+    EXPECT_TRUE(aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid));
+    EXPECT_EQ(aircraft->distance_m, Aircraft::kDistanceUnknown);
+
+    // Once the receiver position arrives, the next Update() fills in the distance.
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+}
+
+TEST(AircraftDictionary, DistanceFollowsMovesOnUpdate) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    auto ingest = [&](const char* hex) {
+        DecodedModeSPacket packet = DecodedModeSPacket((char*)hex);
+        inc_time_since_boot_ms(500);
+        packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+        EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    };
+    // 48.3 N 18.2 E: the first position gets its distance right away (geodesic 36527 m at 23.97 deg).
+    ingest("8DBEE001589B803335F17E3806C1");
+    ingest("8DBEE001589B87A9D1D79C757A00");
+    ModeSAircraft* aircraft =
+        dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(0xBEE001, Aircraft::kAircraftTypeModeS), false);
+    ASSERT_TRUE(aircraft);
+    EXPECT_NEAR(aircraft->distance_m, 36527, 15);
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 23.97f, 0.2f);
+
+    // Moved to 48.4 N: the distance is refreshed by the next Update(), not per position message.
+    for (int i = 0; i < 2; i++) {  // A pair mixing the old and new positions doesn't count; the next ones do.
+        ingest("8DBEE001589B804445F17E39A3D0");
+        ingest("8DBEE001589B87BA99D79C52EE84");
+    }
+    EXPECT_NEAR(aircraft->latitude_deg, 48.4f, 0.001f);
+    EXPECT_NEAR(aircraft->distance_m, 36527, 15);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 46897, 15);  // Geodesic: 46897 m at 18.41 deg.
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 18.41f, 0.2f);
 }

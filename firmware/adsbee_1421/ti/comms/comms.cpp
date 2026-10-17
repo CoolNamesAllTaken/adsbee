@@ -5,18 +5,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "adsbee.hh"  // For the MLAT epoch.
 #include "beast_utils.hh"
 #include "gdl90_utils.hh"
 #include "hal.hh"
+#include "object_dictionary.hh"
 #include "raw_utils.hh"
 #include "uplink_tx_budget.hh"
 
 /* clang-format off */
 #include <ti/devices/DeviceFamily.h>
+#include DeviceFamily_constructPath(inc/hw_types.h)
 #include DeviceFamily_constructPath(inc/hw_memmap.h)
 #include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
 #include DeviceFamily_constructPath(driverlib/uart.h)
 #include DeviceFamily_constructPath(driverlib/cpu.h)
+#include DeviceFamily_constructPath(inc/hw_fcfg1.h)
 #include <ti/drivers/GPIO.h>
 #include <ti/drivers/dpl/HwiP.h>
 /* clang-format on */
@@ -71,6 +75,14 @@ void CommsManager::uart_write_callback(UART2_Handle handle, void* buf, size_t co
     // HWI context. Retire the bytes the driver actually consumed (count can be short if the write was canceled),
     // then chain the next contiguous ring segment straight from here so the wire never idles between segments. The
     // UART2CC26X2 driver clears its writeInUse flag before invoking this callback, so a nested UART2_write is accepted.
+    // When nothing more is queued, the UART2 driver enables the end-of-transmission (EOT) interrupt right after this
+    // callback without clearing the EOT flag latched by an earlier transmission. That stale flag fires at once, and the
+    // driver's handler spins in interrupt context until the TX FIFO drains (up to ~320 us at 1 Mbaud), delaying the
+    // UAT receive callback past its CMD_PROP_SET_LEN deadline. Clear it while bytes are still shifting out; the real
+    // EOT follows when the line goes idle.
+    if (HWREG(UART0_BASE + UART_O_FR) & UART_FR_BUSY) {
+        HWREG(UART0_BASE + UART_O_ICR) = UART_INT_EOT;
+    }
     CommsManager* self = static_cast<CommsManager*>(userArg);
     self->uart_tx_head_ = static_cast<uint16_t>((self->uart_tx_head_ + count) & (kUartTxRingBytes - 1));
     self->uart_tx_in_progress_ = false;
@@ -297,6 +309,7 @@ bool CommsManager::ReportsRawPackets() const {
             case SettingsManager::kBeast:
             case SettingsManager::kBeastNoUAT:
             case SettingsManager::kBeastNoUATUplink:
+            case SettingsManager::kMLAT:
             case SettingsManager::kGDL90:  // Passes UAT uplinks through.
                 return true;
             default:
@@ -307,14 +320,20 @@ bool CommsManager::ReportsRawPackets() const {
 }
 
 void CommsManager::ReportQueuedRawPackets() {
+    const uint64_t start_us = get_time_since_boot_us();
+    while (ReportQueuedRawPacketsChunk() && get_time_since_boot_us() - start_us < kRawReportBudgetUs) {
+    }
+}
+
+bool CommsManager::ReportQueuedRawPacketsChunk() {
     if (mode_s_packet_reporting_queue.Length() == 0 && uat_adsb_packet_reporting_queue.Length() == 0 &&
         uat_uplink_packet_reporting_queue.Length() == 0) {
-        return;
+        return false;
     }
     if (ReportsRawPackets() && TxRingFreeBytes() < kRawReportChunkMaxTxBytes) {
         // The link is behind. Leave packets queued instead of waiting for ring space: full queues drop reports
         // (report_q_ovf, uat_report_q_ovf) but never stall the receiver.
-        return;
+        return false;
     }
 
     uint16_t max_uat_uplink_packets = kRawReportMaxUATUplinkPacketsPerUpdate;
@@ -324,11 +343,10 @@ void CommsManager::ReportQueuedRawPackets() {
         // Uplink lines yield to aircraft lines: uplinks stay queued and a full queue drops new ones (uat_report_q_ovf).
         max_uat_uplink_packets = 0;
         if (mode_s_packet_reporting_queue.Length() == 0 && uat_adsb_packet_reporting_queue.Length() == 0) {
-            return;
+            return false;
         }
     }
 
-    // Format at most one chunk per main loop iteration. The rest stays queued for the following iterations.
     alignas(4) uint8_t chunk_buf[kRawReportChunkBufBytes];
     CompositeArray::RawPackets chunk = CompositeArray::PackRawPacketsBuffer(
         chunk_buf, sizeof(chunk_buf), &mode_s_packet_reporting_queue, &uat_adsb_packet_reporting_queue,
@@ -337,6 +355,7 @@ void CommsManager::ReportQueuedRawPackets() {
                                    max_uat_uplink_packets));
     UpdateReporting(kReportingSinks, settings_manager.settings.reporting_protocols, kNumReportingSinks, &chunk,
                     false);
+    return true;
 }
 
 int CommsManager::console_printf(const char* format, ...) {
@@ -506,4 +525,32 @@ bool CommsManager::iface_getc(SettingsManager::SerialInterface iface, char& c) {
 
 bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char* buf, bool blocking) {
     return iface_write(iface, buf, strlen(buf), blocking);
+}
+
+bool GetReceiverPosition(ReceiverPosition& position) {
+    // No GNSS receiver: the FIXED position, or none.
+    RxPositionDetails details = settings_manager.settings.rx_position_details;  // Copy: Settings is packed.
+    position = details.ForMLAT(adsbee.rx_position, nullptr);
+    return position.IsValid();
+}
+
+bool CommsManager::GetMLATReceiverInfo(ReportSink sink, BeastReporter::ReceiverInfo& info) {
+    (void)sink;
+    // Receiver ID: the CC1314R10 IEEE 802.15.4 EUI-64 from FCFG1, as AT+DEVICE_INFO prints it.
+    uint32_t unique_id_hi = HWREG(FCFG1_BASE + FCFG1_O_MAC_15_4_1);
+    uint32_t unique_id_lo = HWREG(FCFG1_BASE + FCFG1_O_MAC_15_4_0);
+    snprintf(info.id, sizeof(info.id), "%08lx%08lx", static_cast<unsigned long>(unique_id_hi),
+             static_cast<unsigned long>(unique_id_lo));
+    if (adsbee.mlat_epoch == 0) {
+        // The LR2021 never came up to supply a random epoch; anything that differs between boots will do.
+        adsbee.mlat_epoch = unique_id_lo ^ static_cast<uint32_t>(get_time_since_boot_us()) ^ 0x1421;
+    }
+    info.epoch = adsbee.mlat_epoch;
+    GetReceiverPosition(info.position);
+    BeastReporter::FormatFirmwareVersion(info.firmware_version, sizeof(info.firmware_version), "adsbee_1421",
+                                         ObjectDictionary::kFirmwareVersionMajor,
+                                         ObjectDictionary::kFirmwareVersionMinor,
+                                         ObjectDictionary::kFirmwareVersionPatch,
+                                         ObjectDictionary::kFirmwareVersionReleaseCandidate);
+    return true;
 }

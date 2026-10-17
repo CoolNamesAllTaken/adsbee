@@ -25,6 +25,7 @@
 #include <string.h>  // for strcat
 
 #include "comms.hh"           // For debug prints.
+#include "cpu_utils.hh"
 #include "gnss_interface.hh"  // For the gnss receiver instance.
 
 // Uncomment to measure the demodulation time in DemodulateCaptures() and print avg/max once per second.
@@ -70,6 +71,10 @@ ADSBee* isr_access = nullptr;
 void __time_critical_func(on_systick_exception)() { isr_access->OnSysTickWrap(); }
 
 void __time_critical_func(on_demod_pin_change)(uint gpio, uint32_t event_mask) {
+    if (gpio == isr_access->pps_irq_pin()) {
+        if (event_mask & GPIO_IRQ_EDGE_RISE) isr_access->OnPPSEdge();
+        return;
+    }
     switch (event_mask) {
         case GPIO_IRQ_EDGE_RISE:
             isr_access->OnDemodBegin(gpio);
@@ -110,6 +115,7 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
 }
 
 bool ADSBee::Init() {
+    mlat_epoch = get_rand_32();
     gpio_init(config_.r1090_led_pin);
     gpio_set_dir(config_.r1090_led_pin, GPIO_OUT);
     gpio_put(config_.r1090_led_pin, 0);
@@ -182,6 +188,12 @@ bool ADSBee::Init() {
 }
 
 bool ADSBee::InitISRs() {
+    // Claimed before PIOInit() enables the capture interrupts, whose RearmSampler() uses them; kept on DeInitISRs().
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        if (mlat_jitter_dma_channel_[sm_index] < 0) {
+            mlat_jitter_dma_channel_[sm_index] = dma_claim_unused_channel(true);
+        }
+    }
     PIOInit();
     MLATCounterInit();
     PIOEnable();
@@ -195,11 +207,11 @@ bool ADSBee::DeInitISRs() {
         pio_sm_set_enabled(config_.pulse_sampler_pio, pulse_sampler_sm_[sm_index], false);
     }
 
-    // Stop and unclaim DMA channels used for MLAT jitter counters
+    // Stop the MLAT jitter DMA channels but keep them claimed (see mlat_jitter_dma_channel_): unclaimed, core 0 could
+    // claim one (e.g. for the OTA CRC) while the restarted core 1 still aborts and restarts it from RearmSampler().
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        dma_channel_abort(mlat_jitter_dma_channel_[sm_index]);
-        if (dma_channel_is_claimed(mlat_jitter_dma_channel_[sm_index])) {
-            dma_channel_unclaim(mlat_jitter_dma_channel_[sm_index]);
+        if (mlat_jitter_dma_channel_[sm_index] >= 0) {
+            dma_channel_abort(mlat_jitter_dma_channel_[sm_index]);
         }
     }
 
@@ -219,6 +231,10 @@ bool ADSBee::DeInitISRs() {
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         gpio_set_irq_enabled(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, false);
     }
+    if (pps_irq_pin_ != UINT16_MAX) {
+        gpio_set_irq_enabled(pps_irq_pin_, GPIO_IRQ_EDGE_RISE, false);
+        pps_irq_pin_ = UINT16_MAX;  // Re-enabled by SyncPPSCaptureIRQEnable() once the ISRs run again.
+    }
 
     return true;
 }
@@ -229,6 +245,7 @@ bool ADSBee::Update() {
     PruneAircraftDictionary();
 
     UpdateRxPosition();
+    UpdateReceiverPosition();
 
     IngestAndForwardPackets();
 
@@ -437,6 +454,70 @@ void ADSBee::UpdateRxPosition() {
     }
 }
 
+void ADSBee::UpdateReceiverPosition() {
+    // Capture PPS while a GNSS receiver is running.
+    uint16_t pps_pin = gnss != nullptr && gnss->IsActive() ? gnss->pps_pin() : UINT16_MAX;
+    if (pps_pin != pps_capture_pin_ || (pps_pin != UINT16_MAX) != pps_capture_enabled_) {
+        SetPPSCapture(pps_pin, pps_pin != UINT16_MAX);
+    }
+
+    ReceiverPosition gnss_position;
+    bool have_gnss = gnss != nullptr && gnss->GetReceiverPosition(gnss_position);
+    receiver_position =
+        settings_manager.settings.rx_position_details.ForMLAT(rx_position, have_gnss ? &gnss_position : nullptr);
+
+    // Read the latest PPS edge; retry if the interrupt updated it in between.
+    uint32_t edge_count, edge_timestamp_ms;
+    uint64_t edge_mlat_48mhz_counts;
+    do {
+        edge_count = pps_edge_count_;
+        edge_mlat_48mhz_counts = pps_edge_mlat_48mhz_counts_;
+        edge_timestamp_ms = pps_edge_timestamp_ms_;
+    } while (edge_count != pps_edge_count_);
+
+    uint32_t unix_time_s;
+    if (gnss != nullptr && edge_count != pps_labeled_edge_count_ &&
+        NMEAParser::PPSEdgeUnixTime(gnss->fix(), edge_timestamp_ms, unix_time_s)) {
+        receiver_pps = {.valid = true, .mlat_48mhz_counts = edge_mlat_48mhz_counts, .unix_time_s = unix_time_s};
+        pps_labeled_edge_count_ = edge_count;
+    }
+    // Stop reporting the reference once pulses or their labels stop.
+    if (receiver_pps.valid && get_time_since_boot_ms() - edge_timestamp_ms > kPPSStaleTimeoutMs) {
+        receiver_pps.valid = false;
+    }
+}
+
+void ADSBee::SetPPSCapture(uint16_t pin, bool enabled) {
+    if (enabled && pin != UINT16_MAX) {
+        gpio_init(pin);
+        gpio_set_dir(pin, GPIO_IN);
+        gpio_pull_down(pin);  // Keeps an unpopulated GNSS footprint from triggering interrupts.
+    }
+    pps_capture_pin_ = pin;
+    pps_capture_enabled_ = enabled && pin != UINT16_MAX;
+#ifndef ISRS_ON_CORE1
+    SyncPPSCaptureIRQEnable();
+#endif
+}
+
+void ADSBee::SyncPPSCaptureIRQEnable() {
+    uint16_t pin = pps_capture_enabled_ ? pps_capture_pin_ : UINT16_MAX;
+    if (pps_irq_pin_ != UINT16_MAX && pps_irq_pin_ != pin) {
+        gpio_set_irq_enabled(pps_irq_pin_, GPIO_IRQ_EDGE_RISE, false);
+    }
+    if (pin != UINT16_MAX) {
+        // Shares the bank callback installed for the demod pins (on_demod_pin_change).
+        gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE, true);
+    }
+    pps_irq_pin_ = pin;
+}
+
+void __time_critical_func(ADSBee::OnPPSEdge)() {
+    pps_edge_mlat_48mhz_counts_ = GetMLAT48MHzCounts();
+    pps_edge_timestamp_ms_ = get_time_since_boot_ms();
+    pps_edge_count_ = pps_edge_count_ + 1;
+}
+
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
 void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
@@ -629,8 +710,10 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
     }
 }
 
-void __time_critical_func(ADSBee::DemodulateCaptures)() {
+bool __time_critical_func(ADSBee::DemodulateCaptures)() {
+    bool demodulated = false;
     while (const Capture* capture_slot = capture_queue_.Front()) {
+        demodulated = true;
         const Capture& capture = *capture_slot;
         uint16_t sm_index = capture.source;
         aircraft_dictionary.Record1090Demod(sm_index);
@@ -670,6 +753,7 @@ void __time_critical_func(ADSBee::DemodulateCaptures)() {
         }
         capture_queue_.Pop();
     }
+    return demodulated;
 }
 
 void __time_critical_func(ADSBee::OnSysTickWrap)() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
@@ -736,6 +820,11 @@ void ADSBee::IngestAndForwardPackets() {
     // Explicitly count the number of packets to process so that we don't get stuck in this loop if the decoder
     // keeps outputting packets.
     uint16_t num_decoded_mode_s_packets = decoder.decoded_mode_s_packet_out_queue.Length();
+    if (num_decoded_mode_s_packets == 0 && raw_uat_adsb_packet_queue.Length() == 0 &&
+        raw_uat_uplink_packet_queue.Length() == 0 && raw_remote_id_packet_queue.Length() == 0) {
+        return;
+    }
+    CPUMonitor::WorkScope work;
     for (uint16_t i = 0;
          i < num_decoded_mode_s_packets && decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet); i++) {
         // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\tdf=%d icao_address=0x%06x",
@@ -749,7 +838,8 @@ void ADSBee::IngestAndForwardPackets() {
             //              aircraft_dictionary.GetNumAircraft());
         }
         // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
-        // dictionary didn't know what to do with them.
+        // dictionary didn't know what to do with them. Raw packets are never distance filtered: Raw, Beast, MLAT and
+        // the ESP32's feeds carry every packet. AT+FILTER_DISTANCE_NM only gates aircraft reports.
         if (decoded_packet.is_valid) {
             if (comms_manager.mode_s_packet_reporting_queue.IsFull()) {
                 comms_manager.ForceFlushRawPackets();
@@ -849,8 +939,6 @@ void ADSBee::MLATCounterInit() {
     // Enable a DMA DREQ for each pulse sampler PIO TX FIFO. This is used to capture the IRQ jitter offset counter
     // when a decode interval begins (32 bits into a message).
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        mlat_jitter_dma_channel_[sm_index] =
-            dma_claim_unused_channel(true);  // Claim a DMA channel for each state machine.
         dma_channel_config config = dma_channel_get_default_config(mlat_jitter_dma_channel_[sm_index]);
         channel_config_set_read_increment(&config, false);            // Don't increment the read address.
         channel_config_set_write_increment(&config, false);           // Don't increment the write address.
@@ -963,6 +1051,7 @@ void ADSBee::PruneAircraftDictionary() {
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
+        CPUMonitor::WorkScope work;
         aircraft_dictionary.Update(timestamp_ms);
         if (esp32.IsEnabled()) {
             // Send fresh aircraft dictionary stats to ESPS32.
@@ -1032,6 +1121,7 @@ void ADSBee::UpdateNoiseFloor() {
         return;
     }
 
+    CPUMonitor::WorkScope work;
     int32_t sample_mv = ReadSignalStrengthMilliVoltsBlocking();
 
     // Discard the sample if a demodulation began during the conversion: the RSSI line was rising and the ISR's
@@ -1073,6 +1163,7 @@ void ADSBee::UpdateTLLearning() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (tl_learning_temperature_mv_ > 0 &&
         timestamp_ms - tl_learning_cycle_start_timestamp_ms_ > kTLLearningIntervalMs) {
+        CPUMonitor::WorkScope work;
         // Trigger level learning is active and due for an update.
         // Is this neighbor (current value for tl_mv) worth traversing to?
         float valid_packet_ratio = (tl_learning_num_valid_packets_ - tl_learning_prev_num_valid_packets_) /

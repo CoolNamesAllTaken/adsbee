@@ -8,6 +8,7 @@
 
 #include "adsb_types.hh"
 #include "aircraft_dictionary_config.hh"
+#include "geo_utils.hh"
 // Can't include comms.hh or we will get a circular dependency.
 #include "hal.hh"
 #include "json_utils.hh"
@@ -103,6 +104,7 @@ class Aircraft {
     // Local time (get_time_since_boot_ms()) of the last accepted position, comparable across aircraft types. The
     // protocol-specific last_track_update_timestamp_ms holds packet MLAT time for Mode S.
     uint32_t last_position_update_ms = 0;
+    uint32_t last_velocity_update_ms = 0;  // Local time of the last velocity, 0 until one arrives.
 
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
@@ -115,6 +117,23 @@ class Aircraft {
 
     int32_t baro_vertical_rate_fpm = 0;
     int32_t gnss_vertical_rate_fpm = 0;
+
+    // Distance and bearing from the receiver, kept up to date by the AircraftDictionary (at most 1 s behind the
+    // position). kDistanceUnknown while the aircraft's or the receiver's position is unknown.
+    static constexpr uint32_t kDistanceUnknown = UINT32_MAX;
+    uint32_t distance_m = kDistanceUnknown;
+    uint16_t bearing_bam16 = 0;              // Clockwise from north, in 1/65536 turns. See Bam16ToDeg().
+    uint16_t distance_reference_epoch = 0;  // AircraftDictionary reference epoch distance_m was computed in.
+
+    /**
+     * Whether the distance filter (AT+FILTER_DISTANCE_NM) leaves this aircraft out of aircraft reports. Raw packets are
+     * never filtered. Aircraft at an unknown distance are kept.
+     * @param[in] max_distance_m Largest distance from the receiver to keep, in meters. 0 turns the filter off.
+     * @retval True if the aircraft is known to be farther than max_distance_m.
+     */
+    inline bool IsBeyondDistance(uint32_t max_distance_m) const {
+        return max_distance_m != 0 && distance_m != kDistanceUnknown && distance_m > max_distance_m;
+    }
 };
 
 /**
@@ -788,8 +807,7 @@ class AircraftDictionary {
     static constexpr uint16_t kMaxNumSources = 4;  // One per 1090 demodulator state machine.
 
 #ifdef FILTER_CPR_POSITIONS
-    // Table-based inverse haversine isn't super accurate at small distances, and aircraft velocity may be super
-    // accurate, so we always allow a position jump of less than or equal to this distance.
+    // Reported velocities can be inaccurate, so a position jump of up to this distance is always allowed.
     static constexpr uint32_t kPositionFilterDeadbandMeters = 20e3;
 #endif
 
@@ -1202,6 +1220,29 @@ class AircraftDictionary {
     bool IsPreferredReportForAddress(uint32_t uid, uint32_t timestamp_ms) const;
 
     /**
+     * Lists the aircraft that aircraft reports (CSBee, MAVLink, GDL90, aircraft JSON) cover in a reporting round: every
+     * tracked aircraft except those the distance filter (AT+FILTER_DISTANCE_NM) leaves out. Raw packets don't go
+     * through here and are never filtered. Aircraft at an unknown distance are kept.
+     * @param[out] uids Filled with up to max_uids aircraft UIDs.
+     * @param[in] max_uids Capacity of uids.
+     * @param[in] filter_distance_m Settings::FilterDistanceMeters(): largest distance to report, 0 for no filter.
+     * @retval Number of UIDs written.
+     */
+    uint16_t GetReportUIDs(uint32_t uids[], uint16_t max_uids, uint32_t filter_distance_m) const {
+        uint16_t count = 0;
+        for (const auto& itr : dict) {
+            if (count >= max_uids) {
+                break;
+            }
+            if (!std::visit([filter_distance_m](const Aircraft& a) { return a.IsBeyondDistance(filter_distance_m); },
+                            itr.second)) {
+                uids[count++] = itr.first;
+            }
+        }
+        return count;
+    }
+
+    /**
      * Used to enable or disable the CPR position filter.
      * @param[in] enabled True to enable the filter, false to disable it.
      */
@@ -1220,7 +1261,7 @@ class AircraftDictionary {
      * are ingested (air/ground state, movement, heading) but their CPR position decode is skipped, since surface
      * CPR decoded against a bogus reference silently yields a wrong position.
      */
-    inline void ClearReferencePosition() { reference_position_valid_ = false; }
+    void ClearReferencePosition();
 
     /**
      * Check whether a valid reference position has been set.
@@ -1344,6 +1385,49 @@ class AircraftDictionary {
     uint32_t reference_latitude_awb32_ = 0;
     uint32_t reference_longitude_awb32_ = 0;
     bool reference_position_valid_ = false;  // Set by SetReferencePosition, cleared by ClearReferencePosition.
+    // Receiver position for aircraft distance and bearing. Moving it more than kReferenceMoveThresholdMeters or
+    // clearing it bumps reference_epoch_, and Update() recomputes every aircraft computed in an older epoch or marked
+    // stale by a move.
+    static constexpr uint32_t kReferenceMoveThresholdMeters = 500;
+    // Epoch value that marks an aircraft's distance as stale; reference_epoch_ never takes it.
+    static constexpr uint16_t kDistanceEpochStale = UINT16_MAX;
+    GeoReference distance_reference_;
+    uint16_t reference_epoch_ = 0;
+
+    // Position and validity of an aircraft before a packet is applied, to tell whether its distance needs updating.
+    struct PositionSnapshot {
+        float latitude_deg;
+        float longitude_deg;
+        bool valid;
+        template <typename T>
+        static PositionSnapshot Of(const T &aircraft) {
+            return {aircraft.latitude_deg, aircraft.longitude_deg, aircraft.HasBitFlag(T::kBitFlagPositionValid)};
+        }
+    };
+
+    /**
+     * After a packet: an aircraft's first position (or a lost one) updates its distance at once, so the distance filter
+     * applies to new aircraft right away. Later moves only mark the distance stale, and Update() recomputes it once a
+     * second: the cost follows the number of aircraft, not the position message rate.
+     */
+    template <typename T>
+    void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before) {
+        PositionSnapshot after = PositionSnapshot::Of(aircraft);
+        if (after.valid != before.valid || (after.valid && aircraft.distance_m == Aircraft::kDistanceUnknown)) {
+            UpdateDistanceAndBearing(aircraft, after.valid);
+        } else if (after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg) {
+            aircraft.distance_reference_epoch = kDistanceEpochStale;
+        }
+    }
+
+    void BumpReferenceEpoch();
+
+    /**
+     * Recomputes an aircraft's distance and bearing from the receiver.
+     * @param[in,out] aircraft Aircraft to update.
+     * @param[in] position_valid Whether the aircraft's latitude_deg and longitude_deg hold a position.
+     */
+    void UpdateDistanceAndBearing(Aircraft &aircraft, bool position_valid);
 
     FixedPoolResource pool_;  // Free-list pool + monotonic bucket region; must outlive dict.
 };

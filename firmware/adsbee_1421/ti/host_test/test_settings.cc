@@ -37,18 +37,18 @@ TEST(Settings, R1090PreambleModeNamesSelectTheirModes) {
 }
 
 TEST(Settings, VersionNumberingModesIsCurrent) {
-    // Version 5 numbers R1090PreambleMode as above.
-    EXPECT_EQ(kSettingsVersion, 5u);
+    // Version 5 numbers R1090PreambleMode as above; version 6 keeps that numbering.
+    EXPECT_EQ(kSettingsVersion, 6u);
     SM::Settings settings;
     settings.Stamp();
     EXPECT_TRUE(settings.IsValid());
 }
 
 TEST(Settings, BlobFromAnOlderVersionIsRejected) {
-    // A valid version 4 blob (0.3.11-rc4) fails the check, so Load() resets to factory defaults.
+    // Load() migrates or resets a blob of another version.
     SM::Settings settings;
     settings.Stamp();
-    settings.settings_version = 4;
+    settings.settings_version = 5;
     settings.crc = settings.ComputeCRC();
     EXPECT_FALSE(settings.IsValid());
 }
@@ -58,4 +58,52 @@ TEST(Settings, TornOrChangedBlobIsRejected) {
     settings.Stamp();
     settings.r1090_preamble_mode = SM::kR1090PreambleModeDF17;  // Changed after stamping: stale CRC.
     EXPECT_FALSE(settings.IsValid());
+}
+
+TEST(Settings, Version5BlobMigratesWithDistanceFilterOff) {
+    // A version 5 blob is today's struct up to rx_position, then its CRC.
+    SM::Settings current;
+    current.mavlink_system_id = 42;
+    current.r1090_preamble_mode = SM::kR1090PreambleModeDF17;
+    current.rx_position.icao_address = 0xBEE001;
+    uint8_t blob[sizeof(SM::Settings)];
+    memset(blob, 0xFF, sizeof(blob));  // Erased flash past the version 5 struct.
+    memcpy(blob, static_cast<const void*>(&current), SM::kVersion5SettingsSize - sizeof(uint32_t));
+    uint32_t version = 5;
+    memcpy(blob + offsetof(SM::Settings, settings_version), &version, sizeof(version));
+    uint32_t crc = crc32_ieee_802_3(blob, SM::kVersion5SettingsSize - sizeof(uint32_t));
+    memcpy(blob + SM::kVersion5SettingsSize - sizeof(uint32_t), &crc, sizeof(crc));
+
+    SM::Settings out;
+    out.filter_distance_enabled = true;
+    out.filter_distance_deci_nm = 777;
+    out.asterix_sac = 9;
+    out.rx_position_details.moving = true;
+    ASSERT_TRUE(SM::MigrateFromVersion5(blob, out));
+    EXPECT_TRUE(out.IsValid());
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_EQ(out.mavlink_system_id, 42);
+    EXPECT_EQ(out.r1090_preamble_mode, SM::kR1090PreambleModeDF17);
+    EXPECT_EQ(out.rx_position.icao_address, 0xBEE001u);
+    EXPECT_FALSE(out.filter_distance_enabled);
+    EXPECT_EQ(out.filter_distance_deci_nm, SM::Settings::kDefaultFilterDistanceDeciNm);
+    EXPECT_EQ(out.FilterDistanceMeters(), 0u);
+    EXPECT_EQ(out.asterix_sac, 0);
+    EXPECT_TRUE(out.rx_position_details == RxPositionDetails());
+
+    // A torn version 5 blob, or a blob of another version, is left to the reset path.
+    blob[10] ^= 1;
+    SM::Settings untouched;
+    EXPECT_FALSE(SM::MigrateFromVersion5(blob, untouched));
+    blob[10] ^= 1;
+    version = 4;
+    memcpy(blob + offsetof(SM::Settings, settings_version), &version, sizeof(version));
+    EXPECT_FALSE(SM::MigrateFromVersion5(blob, untouched));
+}
+
+TEST(Settings, ASTERIXDataSourceDefaultsToZero) {
+    SM::Settings settings;
+    EXPECT_EQ(settings.asterix_sac, 0);
+    EXPECT_EQ(settings.asterix_sic, 0);
+    EXPECT_EQ(sizeof(SM::Settings), 83u);
 }

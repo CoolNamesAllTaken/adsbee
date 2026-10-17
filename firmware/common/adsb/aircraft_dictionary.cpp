@@ -120,8 +120,8 @@ bool ModeSAircraft::DecodePosition(bool is_airborne, uint32_t ref_lat_awb32, uin
         uint32_t ms_since_last_track_update = most_recent_received_timestamp_ms - last_track_update_timestamp_ms;
         uint32_t max_distance_meters =
             kCPRPositionFilterVelocityMps * ms_since_last_track_update / 1000;  // mps to meters
-        uint32_t distance_meters =
-            CalculateGeoidalDistanceMetersAWB(lat_awb32_, lon_awb32_, result.lat_awb, result.lon_awb);
+        // Compare against the position before this update.
+        uint32_t prev_lat_awb32 = lat_awb32_, prev_lon_awb32 = lon_awb32_;
 
         if (most_recent_received_timestamp_ms <= last_filter_received_timestamp_ms_) {
             // Don't allow calling DecodePosition() twice without a new packet to override the filter.
@@ -145,11 +145,14 @@ bool ModeSAircraft::DecodePosition(bool is_airborne, uint32_t ref_lat_awb32, uin
         // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
         // the first packet.
         if (HasBitFlag(BitFlag::kBitFlagPositionValid) &&
-            distance_meters > MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters)) {
+            IsDistanceGreaterThan(prev_lat_awb32, prev_lon_awb32, result.lat_awb, result.lon_awb,
+                                  MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters))) {
 #ifdef ADSB_VERBOSE_PACKET_WARNINGS
-            CONSOLE_WARNING("ModeSAircraft::DecodePosition",
-                            "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.",
-                            icao_address, distance_meters, max_distance_meters);
+            CONSOLE_WARNING(
+                "ModeSAircraft::DecodePosition",
+                "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.", icao_address,
+                CalculateGeoidalDistanceMetersAWB(prev_lat_awb32, prev_lon_awb32, result.lat_awb, result.lon_awb),
+                max_distance_meters);
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
             // Remember which packets produced this candidate so that they can't be used to confirm it.
             candidate_even_received_timestamp_ms_ = last_even_packet_.received_timestamp_ms;
@@ -789,6 +792,7 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
     // Non-latching bit flags.
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection, true);
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalSpeed, true);
+    last_velocity_update_ms = get_time_since_boot_ms();
 
     // Decode vertical rate.
     int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
@@ -1114,8 +1118,7 @@ bool UATAircraft::DecodePosition(const DecodedUATADSBPacket::UATStateVector& sta
 
         uint32_t candidate_lat_awb32 = UATLatAWBToAWB32(state_vector.latitude_awb);
         uint32_t candidate_lon_awb32 = UATLonAWBToAWB32(state_vector.longitude_awb);
-        uint32_t distance_meters =
-            CalculateGeoidalDistanceMetersAWB(lat_awb32_, lon_awb32_, candidate_lat_awb32, candidate_lon_awb32);
+        uint32_t prev_lat_awb32 = lat_awb32_, prev_lon_awb32 = lon_awb32_;
 
         if (last_message_timestamp_ms <= last_filter_received_timestamp_ms_) {
             // Don't allow calling DecodePosition() twice without a new packet to override the filter.
@@ -1139,11 +1142,14 @@ bool UATAircraft::DecodePosition(const DecodedUATADSBPacket::UATStateVector& sta
         // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
         // the first packet.
         if (HasBitFlag(BitFlag::kBitFlagPositionValid) &&
-            distance_meters > MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters)) {
+            IsDistanceGreaterThan(prev_lat_awb32, prev_lon_awb32, candidate_lat_awb32, candidate_lon_awb32,
+                                  MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters))) {
 #ifdef ADSB_VERBOSE_PACKET_WARNINGS
             CONSOLE_WARNING("UATAircraft::DecodePosition",
                             "Filtered position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.", icao_address,
-                            distance_meters, max_distance_meters);
+                            CalculateGeoidalDistanceMetersAWB(prev_lat_awb32, prev_lon_awb32, candidate_lat_awb32,
+                                                              candidate_lon_awb32),
+                            max_distance_meters);
 #endif                     // ADSB_VERBOSE_PACKET_WARNINGS
             return false;  // Filter out CPR positions that are too far from the last known position.
         }
@@ -1211,6 +1217,7 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
         state_vector.horizontal_velocity, state_vector.air_ground_state, direction_deg, speed_kts);
     WriteBitFlag(BitFlag::kBitFlagUpdatedDirection, true);
     WriteBitFlag(BitFlag::kBitFlagUpdatedHorizontalSpeed, true);
+    last_velocity_update_ms = last_message_timestamp_ms;  // Local time for UAT.
 
     // Parse direction type and use it to set flags.
     bool direction_valid = false;
@@ -1453,11 +1460,14 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
                 // This should never happen.
                 CONSOLE_ERROR("AircraftDictionary::Update", "Encountered aircraft entry with unknown type.");
             }
-            // Call UpdateMetrics on the underlying aircraft type.
+            // Call UpdateMetrics on the underlying aircraft type, and catch up distances after the receiver moved.
             std::visit(
-                [](Aircraft& aircraft) {
-                    // Update the metrics for the aircraft.
+                [this](auto& aircraft) {
                     aircraft.UpdateMetrics();
+                    if (aircraft.distance_reference_epoch != reference_epoch_) {
+                        using T = std::remove_reference_t<decltype(aircraft)>;
+                        UpdateDistanceAndBearing(aircraft, aircraft.HasBitFlag(T::kBitFlagPositionValid));
+                    }
                 },
                 it->second);
 
@@ -1970,6 +1980,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
 
     bool ret = false;
     uint16_t type_code = packet.type_code;
+    PositionSnapshot position_before = PositionSnapshot::Of(*aircraft_ptr);
     switch (type_code) {
         case ModeSADSBPacket::kTypeCodeNoPosition:  // TC = 0 (No Position Information)
             ret = aircraft_ptr->ApplyNoPositionMessage(packet);
@@ -1988,6 +1999,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
                                                             reference_longitude_awb32_,
                                                             config_.enable_cpr_position_filter,
                                                             reference_position_valid_);
+            UpdateDistanceAndBearingIfMoved(*aircraft_ptr, position_before);
             break;
         case ModeSADSBPacket::kTypeCodeAirbornePositionBaroAlt:      // TC = 9 (Airborne Position w/ Baro Altitude)
         case ModeSADSBPacket::kTypeCodeAirbornePositionBaroAlt + 1:  // TC = 10 (Airborne Position w/ Baro Altitude)
@@ -2003,6 +2015,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
         case ModeSADSBPacket::kTypeCodeAirbornePositionGNSSAlt + 1:  // TC = 21 (Airborne Position w/ GNSS Altitude)
         case ModeSADSBPacket::kTypeCodeAirbornePositionGNSSAlt + 2:  // TC = 22 (Airborne Position w/ GNSS Altitude)
             ret = aircraft_ptr->ApplyAirbornePositionMessage(packet, config_.enable_cpr_position_filter);
+            UpdateDistanceAndBearingIfMoved(*aircraft_ptr, position_before);
             break;
         case ModeSADSBPacket::kTypeCodeAirborneVelocities:  // TC = 19 (Airborne Velocities)
             ret = aircraft_ptr->ApplyAirborneVelocitiesMessage(packet);
@@ -2071,7 +2084,9 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket& 
     bool ingest_ret = true;
     if (packet.has_state_vector) {
         // Apply UAT state vector to aircraft.
+        PositionSnapshot position_before = PositionSnapshot::Of(*aircraft_ptr);
         ingest_ret &= aircraft_ptr->ApplyUATADSBStateVector(packet.state_vector);
+        UpdateDistanceAndBearingIfMoved(*aircraft_ptr, position_before);
 
         switch (aircraft_ptr->GetAddressQualifier()) {
             case UATAircraft::kTISBTargetWithICAO24BitAddress:
@@ -2160,6 +2175,7 @@ bool AircraftDictionary::IngestRawRemoteIDPacket(const RawRemoteIDPacket& packet
     }
 
     // Location / Vector: UA position, altitude, track, speed.
+    PositionSnapshot position_before = PositionSnapshot::Of(*aircraft);
     if (uas_data.LocationValid) {
         const ODID_Location_data& loc = uas_data.Location;
         aircraft->operational_status = static_cast<uint8_t>(loc.Status);
@@ -2196,6 +2212,7 @@ bool AircraftDictionary::IngestRawRemoteIDPacket(const RawRemoteIDPacket& packet
             aircraft->WriteBitFlag(RemoteIDAircraft::kBitFlagHeightValid, true);
         }
     }
+    UpdateDistanceAndBearingIfMoved(*aircraft, position_before);
 
     // System: operator (pilot) location + operator geometric altitude.
     if (uas_data.SystemValid) {
@@ -2256,13 +2273,44 @@ bool AircraftDictionary::RemoveOldestAircraft() {
 }
 
 void AircraftDictionary::SetReferencePosition(float latitude_deg, float longitude_deg) {
-    reference_position_valid_ = true;
     reference_latitude_awb32_ = lat2awb(latitude_deg);
     // Remap longitudes from (-180,180) to (0, 360)
     if (longitude_deg < 0.0f) {
         longitude_deg += 360.0f;
     }
     reference_longitude_awb32_ = lon2awb(longitude_deg);
+    if (!reference_position_valid_ ||
+        IsDistanceGreaterThan(distance_reference_.lat_awb, distance_reference_.lon_awb, reference_latitude_awb32_,
+                              reference_longitude_awb32_, kReferenceMoveThresholdMeters)) {
+        distance_reference_.Set(reference_latitude_awb32_, reference_longitude_awb32_);
+        BumpReferenceEpoch();
+    }
+    reference_position_valid_ = true;
+}
+
+void AircraftDictionary::BumpReferenceEpoch() {
+    reference_epoch_++;
+    if (reference_epoch_ == kDistanceEpochStale) {
+        reference_epoch_ = 0;
+    }
+}
+
+void AircraftDictionary::ClearReferencePosition() {
+    if (reference_position_valid_) {
+        BumpReferenceEpoch();
+    }
+    reference_position_valid_ = false;
+}
+
+void AircraftDictionary::UpdateDistanceAndBearing(Aircraft &aircraft, bool position_valid) {
+    aircraft.distance_reference_epoch = reference_epoch_;
+    if (!position_valid || !reference_position_valid_) {
+        aircraft.distance_m = Aircraft::kDistanceUnknown;
+        return;
+    }
+    CalculateDistanceAndBearing(distance_reference_, safe_cast_float_to_uint32(INV_RESOLUTION * aircraft.latitude_deg),
+                                safe_cast_float_to_uint32(INV_RESOLUTION * aircraft.longitude_deg), aircraft.distance_m,
+                                aircraft.bearing_bam16);
 }
 
 bool ModeSAircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms) {

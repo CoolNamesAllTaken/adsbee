@@ -15,8 +15,8 @@ TEST(SettingsHash, SameSettingsSameHash) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Changes only with the Settings struct or its defaults.
     SM::Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x7215D7D8u);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x7215D7D8u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x324B5CCBu);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0xDE86BFE9u);
 }
 
 TEST(SettingsHash, MagicAndStoredCRCDoNotCount) {
@@ -55,13 +55,33 @@ TEST(SettingsHash, EverySettingChangesBothHashes) {
     ExpectChangesBoth("mavlink_component_id", [](SM::Settings& s) { s.mavlink_component_id++; });
     ExpectChangesBoth("rx_position.source",
                       [](SM::Settings& s) { s.rx_position.source = SM::RxPosition::kPositionSourceGNSS; });
+    ExpectChangesBoth("filter_distance_enabled", [](SM::Settings& s) { s.filter_distance_enabled = true; });
+    ExpectChangesBoth("rx_position_details.moving", [](SM::Settings& s) { s.rx_position_details.moving = true; });
+    ExpectChangesBoth("asterix_sac", [](SM::Settings& s) { s.asterix_sac = 25; });
+}
+
+TEST(SettingsHash, ASTERIXSICCountsOnlyInTheFullHash) {
+    SM::Settings a, b;
+    b.asterix_sic = 7;
+    EXPECT_EQ(SettingsHash::Compute(a, kScopeFleet), SettingsHash::Compute(b, kScopeFleet));
+    EXPECT_NE(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
+}
+
+TEST(SettingsHash, RxPositionDetailsCountOnlyInTheFullHashForAFixedPosition) {
+    SM::Settings a, b;
+    b.rx_position_details.ellipsoid_height_set = true;
+    b.rx_position_details.ellipsoid_height_m = 31.5f;
+    EXPECT_EQ(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
+    a.rx_position.source = b.rx_position.source = SM::RxPosition::kPositionSourceFixed;
+    EXPECT_EQ(SettingsHash::Compute(a, kScopeFleet), SettingsHash::Compute(b, kScopeFleet));
+    EXPECT_NE(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 }
 
 TEST(SettingsHash, ReceiverPositionCountsOnlyWhenItIsASetting) {
     // Followed aircraft and GNSS overwrite the position while running.
     SM::Settings a, b;
     b.rx_position.latitude_deg = 47.5f;
-    b.rx_position.icao_address = 0xADF001;
+    b.rx_position.icao_address = 0xBEE001;
     EXPECT_EQ(SettingsHash::Compute(a, kScopeFull), SettingsHash::Compute(b, kScopeFull));
 
     a.rx_position.source = b.rx_position.source = SM::RxPosition::kPositionSourceFixed;
