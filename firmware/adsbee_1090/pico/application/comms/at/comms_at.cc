@@ -11,6 +11,7 @@
 #include "esp32.hh"  // Access to ESP32 low level SPICoprocessorSlaveInterface.
 #include "esp32_firmware_check.hh"
 #include "esp32_flasher.hh"
+#include "remote_id_guard.hh"
 #include "firmware_update.hh"
 #include "flash_utils.hh"
 #include "main.hh"
@@ -537,6 +538,9 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 } else {
                     CPP_AT_PRINTF("ESP32 PSRAM: NONE\r\n");
                 }
+                CPP_AT_PRINTF("ESP32 Heap: %lu KB free, %lu KB largest block\r\n",
+                              (unsigned long)(esp32_ll.heap_free_bytes / 1024),
+                              (unsigned long)(esp32_ll.heap_largest_free_block_bytes / 1024));
             } else {
                 CPP_AT_PRINTF("ESP32 Disabled\r\n");
             }
@@ -685,6 +689,62 @@ CPP_AT_CALLBACK(CommsManager::ATESP32TriggerAbortCallback) {
 }
 #endif
 
+// The ESP32 image runs on modules with and without PSRAM (ESP32-S3-MINI-1U-N4R2 vs -N8) and reports which one it is in
+// ESP32DeviceStatus::hardware_capabilities. Returns true only once the ESP32 has positively reported "no PSRAM"; while
+// the capability is unknown (ESP32 disabled, not read yet, or older ESP32 firmware) settings are accepted and the ESP32's
+// own runtime gating (RemoteIDManager) remains the backstop.
+static bool ESP32KnownToLackPSRAM() {
+    return (esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapReported) &&
+           !(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapPSRAM);
+}
+
+// Remote ID transports this hardware can run with the enabled network interfaces (all while PSRAM is unknown).
+static uint8_t RemoteIDAllowedTransports() {
+    const SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
+    return RemoteIDGuard::AllowedTransports(!ESP32KnownToLackPSRAM(), cns.wifi_ap_enabled, cns.wifi_sta_enabled,
+                                            cns.ethernet_enabled);
+}
+
+// Why this hardware can't run the given Remote ID transports with the enabled network interfaces, or nullptr if it can.
+static const char* RemoteIDTransportsError(const char* command, uint8_t transports) {
+    static char error[300];
+    char names[RemoteIDGuard::kTransportsStrMaxLen];
+    const uint8_t allowed = RemoteIDAllowedTransports();
+    if ((transports & ~allowed) == 0) return nullptr;
+    if (allowed == 0) {
+        return "Remote ID can't run while WiFi AP or WiFi Station is enabled on this hardware: its ESP32 has no PSRAM, "
+               "so there isn't enough RAM for the web server and Remote ID at the same time. Disable WiFi and use "
+               "Ethernet or USB, or use hardware with PSRAM.";
+    }
+    snprintf(error, sizeof(error),
+             "Only the Bluetooth transports can run while Ethernet is enabled on this hardware: its ESP32 has no "
+             "PSRAM, so there isn't enough RAM for the web server, Bluetooth and the WiFi beacon receiver at the same "
+             "time. Use AT+%s=1,%s, disable Ethernet, or use hardware with PSRAM.",
+             command, RemoteIDGuard::TransportsStr(allowed, names, sizeof(names)));
+    return error;
+}
+
+// Warns when a network interface is being enabled while Remote ID uses transports it rules out on hardware without
+// PSRAM. Networking wins (it is how users reach the device), so the setting is accepted and those transports pause.
+static void WarnIfNetworkPausesRemoteID() {
+    const SettingsManager::Settings& s = settings_manager.settings;
+    const uint8_t allowed = RemoteIDAllowedTransports();
+    if (!(s.remote_id_rx_enabled && (s.remote_id_transports & ~allowed)) &&
+        !(s.remote_id_tx_enabled && (s.remote_id_tx_transports & ~allowed))) {
+        return;
+    }
+    CPP_AT_PRINTF(
+        "WARNING: this hardware's ESP32 has no PSRAM, so Remote ID will be paused while WiFi is enabled, and only its "
+        "Bluetooth transports run while Ethernet is enabled.\r\n");
+}
+
+// Explains why requested Remote ID isn't running, from the ESP32's live status.
+static void PrintRemoteIDBlockedReason(bool requested, uint16_t status_mask) {
+    if (!requested) return;
+    const char* reason = RemoteIDGuard::BlockedReason(esp32_ll.remote_id_status & status_mask);
+    if (reason != nullptr) CPP_AT_PRINTF("Remote ID %s.\r\n", reason);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
     switch (op) {
         case '?':
@@ -699,69 +759,55 @@ CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
             CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.core_network_settings.ethernet_enabled);
             CPP_AT_CMD_PRINTF(": ethernet_enabled: %d\r\n",
                               settings_manager.settings.core_network_settings.ethernet_enabled);
+            if (settings_manager.settings.core_network_settings.ethernet_enabled) WarnIfNetworkPausesRemoteID();
             CPP_AT_SUCCESS();
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-// The ESP32 image runs on modules with and without PSRAM (ESP32-S3-MINI-1U-N4R2 vs -N8) and reports which one it is in
-// ESP32DeviceStatus::hardware_capabilities. Returns true only once the ESP32 has positively reported "no PSRAM"; while
-// the capability is unknown (ESP32 disabled, not read yet, or older ESP32 firmware) settings are accepted and the ESP32's
-// own runtime gating (RemoteIDManager) remains the backstop.
-static bool ESP32KnownToLackPSRAM() {
-    return (esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapReported) &&
-           !(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapPSRAM);
-}
-
-static bool WiFiAPOrSTAEnabled() {
-    const SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
-    return cns.wifi_ap_enabled || cns.wifi_sta_enabled;
-}
-
-static const char kRemoteIDNeedsPSRAMError[] =
-    "Remote ID can't run while WiFi AP or WiFi Station is enabled on this hardware: its ESP32 has no PSRAM, so there "
-    "isn't enough RAM for WiFi networking and Remote ID at the same time. Disable both (AT+WIFI_AP=0 and "
-    "AT+WIFI_STA=0) and use Ethernet, or use hardware with PSRAM.";
-
-// Warns when WiFi AP/STA is being enabled while Remote ID is on, on hardware without PSRAM. WiFi networking wins (it is
-// how most users reach the device), so the setting is accepted and Remote ID pauses; this makes that visible.
-static void WarnIfWiFiPausesRemoteID() {
-    const SettingsManager::Settings& s = settings_manager.settings;
-    if (!ESP32KnownToLackPSRAM() || !WiFiAPOrSTAEnabled()) return;
-    if (!s.remote_id_rx_enabled && !s.remote_id_tx_enabled) return;
-    CPP_AT_PRINTF(
-        "WARNING: Remote ID is enabled but will be paused while WiFi AP or WiFi Station is enabled: this hardware's "
-        "ESP32 has no PSRAM, so it can't run WiFi networking and Remote ID at the same time.\r\n");
-}
-
 CPP_AT_CALLBACK(CommsManager::ATRemoteIDCallback) {
     switch (op) {
-        case '?':
-            // Report the requested settings plus the ESP32's resolved live status bitfield (why RID may not be running).
+        case '?': {
+            // Report the requested settings plus the ESP32's resolved live status (why RID may not be running).
             // remote_id_status is cached on the low-level ESP32 slave interface (esp32_ll) by ESP32::Update(); the
             // high-level SPICoprocessor `esp32` only inherits the base interface, which does not carry it.
-            CPP_AT_CMD_PRINTF("=%d,0x%02X(TRANSPORTS),0x%02X(ESP32_STATUS)",
-                              settings_manager.settings.remote_id_rx_enabled,
-                              settings_manager.settings.remote_id_transports, esp32_ll.remote_id_status);
+            char transports[RemoteIDGuard::kTransportsStrMaxLen], status[RemoteIDGuard::kStatusStrMaxLen],
+                allowed[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(
+                "=%d,%s(TRANSPORTS),%s(ESP32_STATUS),%s(ALLOWED_TRANSPORTS)",
+                settings_manager.settings.remote_id_rx_enabled,
+                RemoteIDGuard::TransportsStr(settings_manager.settings.remote_id_transports, transports,
+                                             sizeof(transports)),
+                RemoteIDGuard::StatusStr(esp32_ll.remote_id_status & 0x00FF, status, sizeof(status)),
+                RemoteIDGuard::TransportsStr(RemoteIDAllowedTransports(), allowed, sizeof(allowed)));
+            PrintRemoteIDBlockedReason(settings_manager.settings.remote_id_rx_enabled, 0x00FF);
             CPP_AT_SILENT_SUCCESS();
             break;
+        }
         case '=':
             if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID=<enabled>[,<transport_mask>]");
+                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID=<enabled>[,<transports>]");
             }
             bool rx_enabled;
             CPP_AT_TRY_ARG2NUM(0, rx_enabled);
-            if (rx_enabled && ESP32KnownToLackPSRAM() && WiFiAPOrSTAEnabled()) {
-                CPP_AT_ERROR("%s", kRemoteIDNeedsPSRAMError);
+            uint8_t transports = settings_manager.settings.remote_id_transports;
+            if (CPP_AT_HAS_ARG(1) && !RemoteIDGuard::ParseTransports(args[1], transports)) {
+                CPP_AT_ERROR(
+                    "Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with + (e.g. BT4+BT5_LR), ALL or "
+                    "NONE. Numeric masks are no longer accepted.",
+                    static_cast<int>(args[1].length()), args[1].data());
+            }
+            const char* transports_error = RemoteIDTransportsError("REMOTE_ID", transports);
+            if (rx_enabled && transports_error != nullptr) {
+                CPP_AT_ERROR("%s", transports_error);
             }
             settings_manager.settings.remote_id_rx_enabled = rx_enabled;
-            if (CPP_AT_HAS_ARG(1)) {
-                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.remote_id_transports);
-            }
-            CPP_AT_CMD_PRINTF(": remote_id_rx_enabled: %d, transports: 0x%02X\r\n",
+            settings_manager.settings.remote_id_transports = transports;
+            char names[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(": remote_id_rx_enabled: %d, transports: %s\r\n",
                               settings_manager.settings.remote_id_rx_enabled,
-                              settings_manager.settings.remote_id_transports);
+                              RemoteIDGuard::TransportsStr(transports, names, sizeof(names)));
             CPP_AT_SUCCESS();
             break;
     }
@@ -788,10 +834,10 @@ void ATRemoteIDTxHelpCallback() {
     CPP_AT_PRINTF(
         "\t[EXPERIMENTAL] Remote ID is not yet a stable part of the system; its settings and behavior may change in "
         "future firmware.\r\n"
-        "\tAT+REMOTE_ID_TX=<enabled>[,<transport_mask>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
+        "\tAT+REMOTE_ID_TX=<enabled>[,<transports>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
         "\tTransmit Broadcast Remote ID (drone ID) from this device, for use as a Remote ID test transmitter or as a "
         "combined ADS-B receiver / Remote ID transmitter on a drone. No WiFi AP/STA is required.\r\n"
-        "\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7 = all methods).\r\n"
+        "\ttransports = BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE (default ALL), e.g. BT4+BT5_LR.\r\n"
         "\tuas_id = UAS serial / registration, up to %d chars ('-' to clear and use this device's serial).\r\n"
         "\tid_type = [1 SERIAL, 2 CAA_REGISTRATION, 3 UTM_UUID, 4 SESSION_ID].\r\n"
         "\tua_type = [1 AEROPLANE, 2 HELICOPTER_MULTIROTOR, ... 15 OTHER].\r\n"
@@ -800,18 +846,24 @@ void ATRemoteIDTxHelpCallback() {
         "\tdescribe this device. The aircraft-derived sources (LOWEST, ICAO) carry a received aircraft's position;\r\n"
         "\tbroadcasting those would place a fabricated drone on a real aircraft, so an unknown position is sent\r\n"
         "\tinstead.\r\n"
-        "\tAT+REMOTE_ID_TX?\r\n\tQuery transmit settings and the ESP32's live status bitfield.",
+        "\tAT+REMOTE_ID_TX?\r\n\tQuery transmit settings, the ESP32's live status and the allowed transports.\r\n"
+        "\tTransmit status words: TX_BT4, TX_BT5_LR, TX_WIFI_BEACON, TX_NO_POSITION, TX_BLOCKED,\r\n"
+        "\tTX_POSITION_SOURCE_NOT_ALLOWED, plus the receive words of AT+REMOTE_ID?.",
         SettingsManager::Settings::kRemoteIDIDMaxLen, SettingsManager::Settings::kRemoteIDIDMaxLen);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
     switch (op) {
-        case '?':
-            // Report the requested settings plus the ESP32's resolved live status bitfield (the high byte carries the
-            // transmit state; see RemoteIDManager::Status).
-            CPP_AT_CMD_PRINTF("=%d,0x%02X(TRANSPORTS),%s(UAS_ID),%d(ID_TYPE),%d(UA_TYPE),%s(OPERATOR_ID),0x%04X(ESP32_STATUS)",
+        case '?': {
+            // Report the requested settings plus the ESP32's resolved live status (the high byte carries the transmit
+            // state; see RemoteIDGuard::Status).
+            char transports[RemoteIDGuard::kTransportsStrMaxLen], status[RemoteIDGuard::kStatusStrMaxLen],
+                allowed[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF("=%d,%s(TRANSPORTS),%s(UAS_ID),%d(ID_TYPE),%d(UA_TYPE),%s(OPERATOR_ID),%s(ESP32_STATUS),"
+                              "%s(ALLOWED_TRANSPORTS)",
                               settings_manager.settings.remote_id_tx_enabled,
-                              settings_manager.settings.remote_id_tx_transports,
+                              RemoteIDGuard::TransportsStr(settings_manager.settings.remote_id_tx_transports,
+                                                           transports, sizeof(transports)),
                               settings_manager.settings.remote_id_tx_uas_id[0] == '\0'
                                   ? "(device serial)"
                                   : settings_manager.settings.remote_id_tx_uas_id,
@@ -820,22 +872,31 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
                               settings_manager.settings.remote_id_tx_operator_id[0] == '\0'
                                   ? "(none)"
                                   : settings_manager.settings.remote_id_tx_operator_id,
-                              esp32_ll.remote_id_status);
+                              RemoteIDGuard::StatusStr(esp32_ll.remote_id_status, status, sizeof(status)),
+                              RemoteIDGuard::TransportsStr(RemoteIDAllowedTransports(), allowed, sizeof(allowed)));
+            PrintRemoteIDBlockedReason(settings_manager.settings.remote_id_tx_enabled, 0xFFFF);
             CPP_AT_SILENT_SUCCESS();
             break;
+        }
         case '=': {
             if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID_TX=<enabled>[,<transport_mask>]");
+                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID_TX=<enabled>[,<transports>]");
             }
             bool tx_enabled;
             CPP_AT_TRY_ARG2NUM(0, tx_enabled);
-            if (tx_enabled && ESP32KnownToLackPSRAM() && WiFiAPOrSTAEnabled()) {
-                CPP_AT_ERROR("%s", kRemoteIDNeedsPSRAMError);
+            uint8_t tx_transports = settings_manager.settings.remote_id_tx_transports;
+            if (CPP_AT_HAS_ARG(1) && !RemoteIDGuard::ParseTransports(args[1], tx_transports)) {
+                CPP_AT_ERROR(
+                    "Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with + (e.g. BT4+BT5_LR), ALL or "
+                    "NONE. Numeric masks are no longer accepted.",
+                    static_cast<int>(args[1].length()), args[1].data());
+            }
+            const char* transports_error = RemoteIDTransportsError("REMOTE_ID_TX", tx_transports);
+            if (tx_enabled && transports_error != nullptr) {
+                CPP_AT_ERROR("%s", transports_error);
             }
             settings_manager.settings.remote_id_tx_enabled = tx_enabled;
-            if (CPP_AT_HAS_ARG(1)) {
-                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.remote_id_tx_transports);
-            }
+            settings_manager.settings.remote_id_tx_transports = tx_transports;
             if (CPP_AT_HAS_ARG(2)) {
                 // "-" clears the UAS ID, which makes the transmitter fall back to this device's own serial number.
                 if (args[2].compare("-") == 0) {
@@ -873,9 +934,10 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
             }
             // Push the new transmit configuration to the ESP32, which owns the radios.
             settings_manager.SyncToCoprocessors();
-            CPP_AT_CMD_PRINTF(": remote_id_tx_enabled: %d, transports: 0x%02X\r\n",
+            char names[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(": remote_id_tx_enabled: %d, transports: %s\r\n",
                               settings_manager.settings.remote_id_tx_enabled,
-                              settings_manager.settings.remote_id_tx_transports);
+                              RemoteIDGuard::TransportsStr(tx_transports, names, sizeof(names)));
             WarnIfRemoteIDTxPositionSourceNotTransmittable();
             CPP_AT_SUCCESS();
             break;
@@ -1799,12 +1861,13 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"PROTOCOL_OUT\":[\"%s\",\"%s\"],",
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kConsole]],
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kCommsUART]]);
-    CPP_AT_PRINTF("\"REMOTE_ID\":[%d,%u,\"0x%02X\"],", s.remote_id_rx_enabled, s.remote_id_transports,
-                  esp32_ll.remote_id_status);
+    CPP_AT_PRINTF("\"REMOTE_ID\":[%d,%u,\"0x%02X\",%d],", s.remote_id_rx_enabled, s.remote_id_transports,
+                  esp32_ll.remote_id_status, RemoteIDAllowedTransports());
     CPP_AT_PRINTF("\"REMOTE_ID_TX\":[%d,%u,\"%s\",", s.remote_id_tx_enabled, s.remote_id_tx_transports,
                   JSONEscapeStr(s.remote_id_tx_uas_id, esc, sizeof(esc)));
-    CPP_AT_PRINTF("%d,%d,\"%s\",\"0x%04X\"],", s.remote_id_tx_uas_id_type, s.remote_id_tx_ua_type,
-                  JSONEscapeStr(s.remote_id_tx_operator_id, esc, sizeof(esc)), esp32_ll.remote_id_status);
+    CPP_AT_PRINTF("%d,%d,\"%s\",\"0x%04X\",%d],", s.remote_id_tx_uas_id_type, s.remote_id_tx_ua_type,
+                  JSONEscapeStr(s.remote_id_tx_operator_id, esc, sizeof(esc)), esp32_ll.remote_id_status,
+                  RemoteIDAllowedTransports());
     CPP_AT_PRINTF("\"RX_ENABLE\":[%d,%d],", adsbee.Receiver1090IsEnabled(), s.subg_rx_enabled);
     CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\"],",
                   SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
@@ -2042,7 +2105,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
             if (CPP_AT_HAS_ARG(0)) {
                 CPP_AT_TRY_ARG2NUM(0, cns.wifi_ap_enabled);
                 CPP_AT_CMD_PRINTF(": wifi_ap_enabled=%d\r\n", cns.wifi_ap_enabled);
-                if (cns.wifi_ap_enabled) WarnIfWiFiPausesRemoteID();
+                if (cns.wifi_ap_enabled) WarnIfNetworkPausesRemoteID();
             }
             if (CPP_AT_HAS_ARG(1)) {
                 strncpy(cns.wifi_ap_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
@@ -2091,7 +2154,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
             if (CPP_AT_HAS_ARG(0)) {
                 CPP_AT_TRY_ARG2NUM(0, cns.wifi_sta_enabled);
                 CPP_AT_CMD_PRINTF(": wifi_sta_enabled=%d\r\n", cns.wifi_sta_enabled);
-                if (cns.wifi_sta_enabled) WarnIfWiFiPausesRemoteID();
+                if (cns.wifi_sta_enabled) WarnIfNetworkPausesRemoteID();
             }
             if (CPP_AT_HAS_ARG(1)) {
                 strncpy(cns.wifi_sta_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
@@ -2370,12 +2433,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string =
          "[EXPERIMENTAL] Remote ID is not yet a stable part of the system; its settings and behavior may change in "
          "future firmware.\r\n\t"
-         "AT+REMOTE_ID=<enabled>[,<transport_mask>]\r\n\tEnable/disable Broadcast Remote ID (drone) reception on the "
-         "ESP32.\r\n\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7).\r\n\tOn "
-         "hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID only runs when WiFi AP/STA are disabled "
-         "and Ethernet is up; with PSRAM it runs alongside WiFi (the WiFi beacon receiver then listens on the WiFi "
-         "channel only).\r\n\t"
-         "AT+REMOTE_ID?\r\n\tQuery Remote ID settings and the ESP32's live status bitfield.",
+         "AT+REMOTE_ID=<enabled>[,<transports [BT4 BT5_LR WIFI_BEACON] joined with +, ALL or NONE>]\r\n\t"
+         "Enable/disable Broadcast Remote ID (drone) reception on the ESP32, e.g. AT+REMOTE_ID=1,BT4+BT5_LR.\r\n\t"
+         "BT4 = Bluetooth 4 legacy, BT5_LR = Bluetooth 5 Long Range, WIFI_BEACON = WiFi beacon (default ALL).\r\n\t"
+         "On hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID can't run with WiFi AP or WiFi Station "
+         "enabled, and with Ethernet enabled only its Bluetooth transports run; with PSRAM it runs alongside them (the "
+         "WiFi beacon receiver then listens on the WiFi channel only). Remote ID pauses while ESP32 free memory is below what the web server needs.\r\n\t"
+         "AT+REMOTE_ID?\r\n\tQuery Remote ID settings, the ESP32's live receive status and the transports this "
+         "hardware can run with the enabled network interfaces, e.g.\r\n\t"
+         "REMOTE_ID=1,BT4+BT5_LR(TRANSPORTS),BT_SCANNING+BT5_LR_SCANNING(ESP32_STATUS),BT4+BT5_LR(ALLOWED_TRANSPORTS)"
+         "\r\n\tStatus words: BT_SCANNING, BT5_LR_SCANNING, WIFI_BEACON_SCANNING, BLOCKED_NETWORK (no PSRAM and WiFi "
+         "or Ethernet on), BLOCKED_RAM, NOT_IN_BUILD, PAUSED_LOW_HEAP, or NONE.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRemoteIDCallback, comms_manager)},
     {.command = "REMOTE_ID_TX",
      .min_args = 0,

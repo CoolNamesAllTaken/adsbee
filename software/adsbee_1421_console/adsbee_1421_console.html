@@ -4697,7 +4697,10 @@
 //   display  read-only informational value populated by parse(); never written
 // Fields may declare visibleIf(values) to show/hide based on sibling values,
 // note: '...' for a hint line under the input, and validate(value) returning an error
-// message (or '') for checks beyond the type's own.
+// message (or '') for checks beyond the type's own. lockOffIf(deviceValues) (bool) and
+// lockOffBits(deviceValues) (bitmask) stop the user from turning a setting or option on
+// while still allowing it to be turned off; entries may declare notice(deviceValues),
+// a line under the help text explaining such a lock.
 //
 // To expose a new AT command in the GUI, add one entry to the product's schema array.
 
@@ -4810,6 +4813,13 @@ class SettingsEngine {
             el.appendChild(help);
         }
 
+        if (entry.notice) {
+            const notice = document.createElement('div');
+            notice.className = 'settings-note';
+            notice.id = `settings-notice-${entry.cmd}`;
+            el.appendChild(notice);
+        }
+
         for (const field of entry.fields) {
             el.appendChild(this._renderField(entry, field));
         }
@@ -4908,7 +4918,28 @@ class SettingsEngine {
 
     _onFieldChanged(entry) {
         this._updateVisibility(entry);
+        this._applyLocks(entry);
         this._updateDirtyUI();
+    }
+
+    // Disables options the device says can't be turned on (see lockOffIf / lockOffBits);
+    // ones that are on stay enabled so they can be turned off.
+    _applyLocks(entry) {
+        const device = this.deviceValues[entry.cmd];
+        if (!device || !this.readOk[entry.cmd]) return;
+        for (const field of entry.fields) {
+            const input = this._input(entry, field);
+            if (field.type === 'bool' && field.lockOffIf) {
+                input.disabled = !input.checked && !!field.lockOffIf(device);
+            } else if (field.type === 'bitmask' && field.lockOffBits) {
+                const bits = field.lockOffBits(device);
+                for (const cb of input.querySelectorAll('input[type="checkbox"]')) {
+                    cb.disabled = !cb.checked && (bits & parseInt(cb.dataset.bit, 10)) !== 0;
+                }
+            }
+        }
+        const notice = document.getElementById(`settings-notice-${entry.cmd}`);
+        if (notice) notice.textContent = (entry.notice && entry.notice(device)) || '';
     }
 
     // ── Values ──
@@ -5249,6 +5280,7 @@ class SettingsEngine {
         }
         this.readOk[entry.cmd] = true;
         this._setEntryEnabled(entry, true);
+        this._applyLocks(entry);
         this._updateVisibility(entry);
         this._entryStatus(entry, '');
         this._validateEntry(entry, new Set());  // clear stale inline errors
