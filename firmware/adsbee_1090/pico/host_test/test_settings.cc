@@ -1,6 +1,7 @@
 #include <cstring>
 
 #include "gtest/gtest.h"
+#include "feed_ram_budget.hh"
 #include "settings.hh"
 #include "settings_migration.hh"
 #include "settings_versions.hh"
@@ -50,7 +51,7 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(SettingsManager::Settings), 1344u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1652u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -343,7 +344,7 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
 }
 
-TEST(SettingsMigration, V18ToV19KeepsAutoUpdateAndLeavesDistanceFilterOff) {
+TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesDistanceFilterOff) {
     settings_v15::Settings v15;
     PopulateV15(v15);
     settings_v18::Settings v18;
@@ -399,6 +400,204 @@ TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
     EXPECT_TRUE(manager.Sanitize());
 }
 
+TEST(SettingsMigration, V18ToCurrentKeepsFeedsOnTCP) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv4;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Hangar");
+    v18.auto_update_enabled = true;
+    uint8_t blob[sizeof(settings_v18::Settings)];
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
+    strcpy(out.mqtt_broker.username, "stale");
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv4);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Hangar");
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.feed_protocols[0], v15.feed_protocols[0]);
+    EXPECT_EQ(out.feed_ports[0], v15.feed_ports[0]);
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        EXPECT_EQ(out.feed_transports[i], SettingsManager::kFeedTransportTCP);
+    }
+    EXPECT_STREQ(out.mqtt_broker.host, "");
+    EXPECT_EQ(out.mqtt_broker.port, SettingsManager::kDefaultMQTTPort);
+    EXPECT_STREQ(out.mqtt_broker.username, "");
+    EXPECT_STREQ(out.mqtt_broker.password, "");
+    EXPECT_STREQ(out.mqtt_broker.topic_prefix, "");
+    EXPECT_STREQ(out.mqtt_broker.websocket_path, "");
+    EXPECT_FALSE(out.mqtt_broker.tls);
+    EXPECT_EQ(out.mqtt_broker.qos, 0);
+    EXPECT_EQ(out.mqtt_broker.transport, SettingsManager::kMQTTTransportTCP);
+}
+
+TEST(Settings, FeedTransportStrings) {
+    SettingsManager::FeedTransport transport = SettingsManager::kFeedTransportTCP;
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("udp", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportUDP);
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("MQTT", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportMQTT);
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("TCP", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportTCP);
+    EXPECT_FALSE(SettingsManager::FeedTransportFromStr("WS", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportTCP);
+    for (uint16_t i = 0; i < SettingsManager::kNumFeedTransports; i++) {
+        EXPECT_TRUE(SettingsManager::FeedTransportFromStr(SettingsManager::kFeedTransportStrs[i], transport));
+        EXPECT_EQ(transport, i);
+    }
+}
+
+TEST(Settings, DefaultFeedTransports) {
+    typedef SettingsManager S;
+    for (S::ReportingProtocol p : {S::kNoReports, S::kRaw, S::kBeast, S::kBeastNoUAT, S::kBeastNoUATUplink, S::kCSBee}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportTCP) << S::kReportingProtocolStrs[p];
+    }
+    for (S::ReportingProtocol p : {S::kGDL90, S::kGDL90NoUATUplink, S::kMAVLINK1, S::kMAVLINK2, S::kASTERIX}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportUDP) << S::kReportingProtocolStrs[p];
+    }
+    for (S::ReportingProtocol p : {S::kAircraftJSON, S::kAircraftJSONUATUplink}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportMQTT) << S::kReportingProtocolStrs[p];
+    }
+}
+
+TEST(Settings, FeedTransportAndMQTTDumpReplaysOnOlderFirmware) {
+    SettingsManager manager;
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        EXPECT_EQ(manager.settings.feed_transports[i], SettingsManager::kFeedTransportTCP);
+    }
+    manager.settings.feed_transports[2] = SettingsManager::kFeedTransportUDP;
+    manager.settings.feed_transports[3] = SettingsManager::kFeedTransportMQTT;
+    SettingsManager::Settings::MQTTBroker& mqtt = manager.settings.mqtt_broker;
+    strcpy(mqtt.host, "broker.lan");
+    mqtt.port = 443;
+    strcpy(mqtt.topic_prefix, "home/adsb");
+    strcpy(mqtt.username, "bee");
+    strcpy(mqtt.password, "pollen");
+    mqtt.tls = true;
+    mqtt.qos = 1;
+    mqtt.transport = SettingsManager::kMQTTTransportWebSocket;
+
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    // The five-argument AT+FEED lines stay where older firmware expects them; the new commands come last, and every
+    // feed's transport is replayed because a five-argument AT+FEED keeps it.
+    EXPECT_NE(dump.find("AT+FEED=2,,0,0,NONE\r\n"), std::string::npos);
+    size_t filter = dump.find("AT+FILTER_DISTANCE_NM=");
+    size_t broker = dump.find("AT+MQTT=broker.lan,443,bee,pollen,1,1,home/adsb,WS,-\r\n");
+    size_t tcp = dump.find("AT+FEED=0,,,,,TCP\r\n");
+    size_t udp = dump.find("AT+FEED=2,,,,,UDP\r\n");
+    size_t mqtt_transport = dump.find("AT+FEED=3,,,,,MQTT\r\n");
+    ASSERT_NE(filter, std::string::npos);
+    ASSERT_NE(broker, std::string::npos);
+    ASSERT_NE(tcp, std::string::npos);
+    ASSERT_NE(udp, std::string::npos);
+    ASSERT_NE(mqtt_transport, std::string::npos);
+    EXPECT_LT(filter, broker);
+    EXPECT_LT(broker, tcp);
+
+    // Out-of-range values from a corrupted blob.
+    manager.settings.feed_transports[4] = static_cast<SettingsManager::FeedTransport>(7);
+    mqtt.qos = 9;
+    mqtt.transport = static_cast<SettingsManager::MQTTTransport>(5);
+    memset(mqtt.password, 'x', sizeof(mqtt.password));
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.feed_transports[4], SettingsManager::kFeedTransportTCP);
+    EXPECT_EQ(mqtt.qos, SettingsManager::Settings::kMQTTMaxQoS);
+    EXPECT_EQ(mqtt.transport, SettingsManager::kMQTTTransportTCP);
+    EXPECT_EQ(strlen(mqtt.password), SettingsManager::Settings::kMQTTPasswordMaxLen);
+    EXPECT_FALSE(manager.Sanitize());
+}
+
+TEST(SettingsMigration, V18ToCurrentKeepsEverythingAndDefaultsASTERIXAndNTP) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    // 0xFF past the v18 struct, as Load() reads erased EEPROM there.
+    uint8_t blob[sizeof(SettingsManager::Settings)];
+    memset(blob, 0xFF, sizeof(blob));
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv6;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
+    v18.auto_update_enabled = true;
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.asterix_sac = 0x55;
+    out.asterix_sic = 0x66;
+    strcpy(out.ntp_server, "stale.example.com");
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_EQ(out.asterix_sac, 0);
+    EXPECT_EQ(out.asterix_sic, 0);
+    EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
+}
+
+TEST(FeedRAMBudget, CountsActiveFeedsAndTheSharedMQTTClientOnce) {
+    SettingsManager::Settings s;
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        s.feed_is_active[i] = false;
+    }
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), 0u);
+    s.feed_is_active[0] = true;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::kTCPFeedBytes);
+    s.feed_is_active[1] = true;
+    s.feed_transports[1] = SettingsManager::kFeedTransportUDP;
+    const uint32_t tcp_udp = FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp);
+    for (uint16_t i = 2; i < 4; i++) {
+        s.feed_is_active[i] = true;
+        s.feed_transports[i] = SettingsManager::kFeedTransportMQTT;
+    }
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp + FeedRAMBudget::kMQTTClientBytes);
+    s.mqtt_broker.tls = true;
+    s.mqtt_broker.transport = SettingsManager::kMQTTTransportWebSocket;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp + FeedRAMBudget::kMQTTClientBytes + FeedRAMBudget::kMQTTTLSBytes +
+                                              FeedRAMBudget::kMQTTWebSocketBytes);
+    s.feeds_enabled = false;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), 0u);
+}
+
+TEST(FeedRAMBudget, BudgetDependsOnWiFiAndPSRAM) {
+    SettingsManager::Settings s;
+    s.core_network_settings.wifi_ap_enabled = false;
+    s.core_network_settings.wifi_sta_enabled = false;
+    const uint32_t ethernet = FeedRAMBudget::BudgetBytes(s, false);
+    s.core_network_settings.wifi_sta_enabled = true;
+    const uint32_t wifi = FeedRAMBudget::BudgetBytes(s, false);
+    EXPECT_LT(wifi, ethernet);
+    EXPECT_GT(FeedRAMBudget::BudgetBytes(s, true), wifi);
+}
+
+TEST(FeedRAMBudget, DefaultFeedsFitOnWiFiWithoutPSRAM) {
+    SettingsManager::Settings s;  // Four aggregator feeds over TCP.
+    s.core_network_settings.wifi_ap_enabled = true;
+    s.core_network_settings.wifi_sta_enabled = true;
+    EXPECT_LE(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::BudgetBytes(s, false));
+    // Three of them and a Home Assistant MQTT feed fit too.
+    s.feed_is_active[SettingsManager::Settings::kMaxNumFeeds - 1] = false;
+    s.feed_is_active[0] = true;
+    s.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
+    EXPECT_LE(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::BudgetBytes(s, false));
+}
+
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     SettingsManager manager;
     EXPECT_FALSE(manager.settings.auto_update_enabled);
@@ -422,7 +621,15 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     EXPECT_LT(wifi, ip_mode);
     EXPECT_LT(ip_mode, auto_update);
     EXPECT_LT(auto_update, filter_distance);
-    EXPECT_EQ(dump.find("AT+", filter_distance + 1), std::string::npos);
+    // Then the MQTT broker and the feed transports (see FeedTransportAndMQTTDumpReplaysOnOlderFirmware), then ASTERIX.
+    EXPECT_EQ(dump.find("AT+", filter_distance + 1), dump.find("AT+MQTT="));
+    size_t asterix = dump.find("AT+ASTERIX_SAC_SIC=0,0");
+    ASSERT_NE(asterix, std::string::npos);
+    EXPECT_LT(dump.rfind("AT+FEED="), asterix);
+    size_t ntp = dump.find("AT+NTP_SERVER=pool.ntp.org");
+    ASSERT_NE(ntp, std::string::npos);
+    EXPECT_LT(asterix, ntp);
+    EXPECT_EQ(dump.find("AT+", ntp + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);
@@ -955,4 +1162,30 @@ TEST(SettingsManager, SanitizeDisablesGNSSWithoutReceiverType) {
     s.gnss_receiver_type = SettingsManager::kGNSSReceiverUBXMIA;
     EXPECT_FALSE(settings_manager.Sanitize());
     EXPECT_TRUE(s.gnss_enabled);
+}
+
+TEST(Settings, ProtocolInUseCountsSerialOutputsAndActiveFeeds) {
+    SettingsManager::Settings s;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+
+    s.reporting_protocols[SettingsManager::kCommsUART] = SettingsManager::kASTERIX;
+    EXPECT_TRUE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.reporting_protocols[SettingsManager::kCommsUART] = SettingsManager::kNoReports;
+
+    s.feed_protocols[2] = SettingsManager::kASTERIX;
+    s.feed_is_active[2] = false;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.feed_is_active[2] = true;
+    s.feeds_enabled = true;
+    EXPECT_TRUE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.feeds_enabled = false;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+}
+
+TEST(Settings, NTPServerDefaultsToPoolAndIsSanitized) {
+    SettingsManager manager;
+    EXPECT_STREQ(manager.settings.ntp_server, "pool.ntp.org");
+    memset(manager.settings.ntp_server, 'a', sizeof(manager.settings.ntp_server));
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(strlen(manager.settings.ntp_server), SettingsManager::Settings::kNTPServerMaxLen);
 }

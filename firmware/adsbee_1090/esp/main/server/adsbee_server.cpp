@@ -8,7 +8,10 @@
 #include "comms.hh"
 #include "aircraftjson_utils.hh"
 #include "auto_update_manager.hh"
+#include "feed_ram_budget.hh"
+#include "network_time.hh"
 #include "gdl90/gdl90_utils.hh"
+#include "hardware_capabilities.hh"
 #include "heap_diagnostics.hh"
 #include "json_utils.hh"
 #include "pico.hh"
@@ -235,6 +238,7 @@ bool ADSBeeServer::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
     auto_update_manager.Update();
+    network_time.Update();
 
     // Ingest any Broadcast Remote ID advertisements received on the BLE/WiFi radios into the local aircraft dictionary
     // (and forward rate-limited copies up to the RP2040), then service the WiFi channel hopper. Done on this task so all
@@ -798,12 +802,27 @@ static esp_err_t feed_api_get_handler(httpd_req_t* req) {
     json_escape(escaped_uri, sizeof(escaped_uri), settings_manager.settings.feed_uris[index]);
     char receiver_id[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
     SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id);
-    char json[512];
+    // The shared MQTT broker, without its password.
+    const SettingsManager::Settings::MQTTBroker& mqtt = settings_manager.settings.mqtt_broker;
+    char escaped_host[sizeof(mqtt.host) * 2];
+    json_escape(escaped_host, sizeof(escaped_host), mqtt.host);
+    char escaped_username[sizeof(mqtt.username) * 2];
+    json_escape(escaped_username, sizeof(escaped_username), mqtt.username);
+    char escaped_prefix[sizeof(mqtt.topic_prefix) * 2];
+    json_escape(escaped_prefix, sizeof(escaped_prefix), mqtt.topic_prefix);
+    char escaped_path[sizeof(mqtt.websocket_path) * 2];
+    json_escape(escaped_path, sizeof(escaped_path), mqtt.websocket_path);
+    char json[1152];
     snprintf(json, sizeof(json),
-             "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\",\"receiver_id\":\"%s\"}",
+             "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\",\"receiver_id\":\"%s\","
+             "\"transport\":\"%s\",\"mqtt\":{\"host\":\"%s\",\"port\":%u,\"username\":\"%s\",\"has_password\":%s,"
+             "\"tls\":%s,\"qos\":%u,\"topic_prefix\":\"%s\",\"transport\":\"%s\",\"path\":\"%s\"}}",
              index, escaped_uri, settings_manager.settings.feed_ports[index],
              (int)settings_manager.settings.feed_is_active[index],
-             SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]], receiver_id);
+             SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]], receiver_id,
+             SettingsManager::kFeedTransportStrs[settings_manager.settings.feed_transports[index]], escaped_host,
+             mqtt.port, escaped_username, mqtt.password[0] ? "true" : "false", mqtt.tls ? "true" : "false", mqtt.qos,
+             escaped_prefix, SettingsManager::kMQTTTransportStrs[mqtt.transport], escaped_path);
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     send_response(req, "application/json", json, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
@@ -921,7 +940,21 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
                 settings_manager.settings.feed_uris, "\"%s\"", true);
     ArrayToJSON(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
                 kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "feed_mps",
-                comms_manager.feed_mps, "%u", false);  // Mo trailing comma.
+                comms_manager.feed_mps, "%u", true);
+    // Transport of each feed and the RAM the active feeds take out of this unit's budget.
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             "\"feed_transport\": [");
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+                 kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "%s\"%s\"",
+                 i ? "," : "", SettingsManager::kFeedTransportStrs[settings_manager.settings.feed_transports[i]]);
+    }
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             "], \"feed_ram_bytes\": %lu, \"feed_ram_budget_bytes\": %lu",
+             (unsigned long)FeedRAMBudget::UsedBytes(settings_manager.settings),
+             (unsigned long)FeedRAMBudget::BudgetBytes(settings_manager.settings, HardwareCapabilities::HasPSRAM()));
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              "}, \"device_status\": { ");
@@ -974,6 +1007,13 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              ", \"auto_update\": { \"enabled\": %s, \"state\": \"%s\", \"version\": \"%s\", \"progress\": %u }",
              auto_update.enabled ? "true" : "false", auto_update.state, auto_update.version,
              auto_update.progress_percent);
+    NetworkTime::Status sntp;
+    network_time.GetStatus(sntp);
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"sntp\": { \"enabled\": %s, \"server\": \"%s\", \"synced\": %s, \"last_sync_age_s\": %lu }",
+             sntp.enabled ? "true" : "false", sntp.server, sntp.synced ? "true" : "false",
+             static_cast<unsigned long>(sntp.last_sync_age_s));
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
 
