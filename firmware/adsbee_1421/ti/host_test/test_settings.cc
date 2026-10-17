@@ -60,7 +60,7 @@ TEST(Settings, TornOrChangedBlobIsRejected) {
     EXPECT_FALSE(settings.IsValid());
 }
 
-TEST(Settings, Version5BlobMigratesWithDistanceFilterOff) {
+TEST(Settings, Version5BlobMigratesWithReportFiltersOff) {
     // A version 5 blob is today's struct up to rx_position, then its CRC.
     SM::Settings current;
     current.mavlink_system_id = 42;
@@ -77,6 +77,9 @@ TEST(Settings, Version5BlobMigratesWithDistanceFilterOff) {
     SM::Settings out;
     out.filter_distance_enabled = true;
     out.filter_distance_deci_nm = 777;
+    out.filter_altitude_mode = kAltitudeFilterNearRx;
+    out.filter_altitude_a_ft = 300;
+    out.filter_altitude_b_ft = 400;
     out.asterix_sac = 9;
     out.rx_position_details.moving = true;
     ASSERT_TRUE(SM::MigrateFromVersion5(blob, out));
@@ -88,6 +91,9 @@ TEST(Settings, Version5BlobMigratesWithDistanceFilterOff) {
     EXPECT_FALSE(out.filter_distance_enabled);
     EXPECT_EQ(out.filter_distance_deci_nm, SM::Settings::kDefaultFilterDistanceDeciNm);
     EXPECT_EQ(out.FilterDistanceMeters(), 0u);
+    EXPECT_EQ(out.filter_altitude_mode, kAltitudeFilterOff);
+    EXPECT_EQ(out.filter_altitude_a_ft, 0);
+    EXPECT_EQ(out.filter_altitude_b_ft, 10000);
     EXPECT_EQ(out.asterix_sac, 0);
     EXPECT_TRUE(out.rx_position_details == RxPositionDetails());
 
@@ -101,9 +107,21 @@ TEST(Settings, Version5BlobMigratesWithDistanceFilterOff) {
     EXPECT_FALSE(SM::MigrateFromVersion5(blob, untouched));
 }
 
+TEST(Settings, AltitudeFilterModeStrings) {
+    uint8_t mode = kAltitudeFilterOff;
+    EXPECT_TRUE(ParseAltitudeFilterMode("near_rx", 7, mode));
+    EXPECT_EQ(mode, kAltitudeFilterNearRx);
+    EXPECT_STREQ(AltitudeFilterModeStr(mode), "NEAR_RX");
+    EXPECT_TRUE(ParseAltitudeFilterMode("Between", 7, mode));
+    EXPECT_EQ(mode, kAltitudeFilterBetween);
+    EXPECT_FALSE(ParseAltitudeFilterMode("3", 1, mode));
+    EXPECT_FALSE(ParseAltitudeFilterMode("RANGE", 5, mode));
+    EXPECT_EQ(mode, kAltitudeFilterBetween);
+}
+
 TEST(Settings, ASTERIXDataSourceDefaultsToZero) {
     SM::Settings settings;
     EXPECT_EQ(settings.asterix_sac, 0);
     EXPECT_EQ(settings.asterix_sic, 0);
-    EXPECT_EQ(sizeof(SM::Settings), 83u);
+    EXPECT_EQ(sizeof(SM::Settings), 92u);
 }

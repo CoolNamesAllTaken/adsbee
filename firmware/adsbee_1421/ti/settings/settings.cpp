@@ -72,6 +72,12 @@ bool SettingsManager::Apply() {
     if (settings.rx_position.source >= RxPosition::kNumPositionSources) {
         settings.rx_position.source = RxPosition::kPositionSourceLowestAircraft;
     }
+    if (!AltitudeFilterIsValid(settings.filter_altitude_mode, settings.filter_altitude_a_ft,
+                               settings.filter_altitude_b_ft)) {
+        settings.filter_altitude_mode = kAltitudeFilterOff;
+        settings.filter_altitude_a_ft = Settings::kDefaultFilterAltitudeAFt;
+        settings.filter_altitude_b_ft = Settings::kDefaultFilterAltitudeBFt;
+    }
     RxPositionDetails rx_position_details = settings.rx_position_details;  // Copy: Settings is packed.
     if (rx_position_details.Sanitize()) {
         settings.rx_position_details = rx_position_details;
@@ -256,6 +262,8 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
                    (unsigned long)(settings.filter_distance_deci_nm / 10),
                    (unsigned long)(settings.filter_distance_deci_nm % 10));
+    CONSOLE_PRINTF("\tAltitude Filter: %s, %ld, %ld ft\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
     // ASTERIX settings
     CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
@@ -292,6 +300,10 @@ void SettingsManager::PrintAT() {
     CONSOLE_PRINTF("AT+FILTER_DISTANCE_NM=%d,%lu.%lu\r\n", settings.filter_distance_enabled,
                    (unsigned long)(settings.filter_distance_deci_nm / 10),
                    (unsigned long)(settings.filter_distance_deci_nm % 10));
+
+    // AT+FILTER_ALTITUDE_FT
+    CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%s,%ld,%ld\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);

@@ -15,7 +15,7 @@ enum Scope : uint8_t {
 // Left out of kScopeFleet: hostname, WiFi access point SSID and channel (defaults come from the part code and a random
 // number), feed receiver IDs, the Remote ID UAS ID, the receiver position values and the ASTERIX SIC.
 inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) {
-    static_assert(kSettingsVersion == 19 && sizeof(SettingsManager::Settings) == 1664,
+    static_assert(kSettingsVersion == 19 && sizeof(SettingsManager::Settings) == 1676,
                   "Settings changed: add the new fields below, then update this check.");
     typedef SettingsManager::Settings Settings;
     const bool full = scope == kScopeFull;
@@ -105,6 +105,9 @@ inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) 
     hasher.AddU8(settings.asterix_sac);
     if (full) hasher.AddU8(settings.asterix_sic);
     hasher.AddString(settings.ntp_server, sizeof(settings.ntp_server));
+    hasher.AddU8(settings.filter_altitude_mode);
+    hasher.AddI32(settings.filter_altitude_a_ft);
+    hasher.AddI32(settings.filter_altitude_b_ft);
     hasher.AddRxPositionDetails(settings.rx_position_details,
                                 full && settings.rx_position.source == SettingsManager::RxPosition::kPositionSourceFixed);
 

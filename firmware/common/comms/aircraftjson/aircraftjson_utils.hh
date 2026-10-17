@@ -561,24 +561,24 @@ inline int16_t WriteAircraftJSONRemoteIDAircraftStr(char buf[], const RemoteIDAi
 
 /**
  * Lists the aircraft the Live Map websocket reports: the preferred entry per ICAO address (one target per aircraft),
- * minus those the distance filter (AT+FILTER_DISTANCE_NM) leaves out. Aircraft at an unknown distance are kept.
+ * minus those the report filter (AT+FILTER_DISTANCE_NM, AT+FILTER_ALTITUDE_FT) leaves out.
  * @param[in] dictionary Aircraft dictionary to list.
  * @param[in] timestamp_ms Current local time (get_time_since_boot_ms()), for preference.
  * @param[out] uids UIDs of the aircraft to report.
  * @param[in] max_uids Length of uids.
- * @param[in] filter_distance_m Settings::FilterDistanceMeters(): largest distance to report, 0 for no filter.
+ * @param[in] filter AircraftDictionary::GetReportFilter(): aircraft to leave out. The default keeps all.
  * @retval Number of UIDs written.
  */
 inline uint16_t ListAircraftJSONLiveMapUIDs(const AircraftDictionary& dictionary, uint32_t timestamp_ms,
-                                            uint32_t uids[], uint16_t max_uids, uint32_t filter_distance_m = 0) {
+                                            uint32_t uids[], uint16_t max_uids,
+                                            const AircraftReportFilter& filter = AircraftReportFilter()) {
     uint16_t num_uids = 0;
     for (const auto& itr : dictionary.dict) {
         if (num_uids >= max_uids) {
             break;
         }
         if (dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms) &&
-            !std::visit([filter_distance_m](const Aircraft& a) { return a.IsBeyondDistance(filter_distance_m); },
-                        itr.second)) {
+            !std::visit([&filter](const auto& a) { return filter.Excludes(a); }, itr.second)) {
             uids[num_uids++] = itr.first;
         }
     }

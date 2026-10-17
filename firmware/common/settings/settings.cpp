@@ -153,6 +153,17 @@ bool SettingsManager::Sanitize() {
         changed = true;
     }
 
+    if (!AltitudeFilterIsValid(settings.filter_altitude_mode, settings.filter_altitude_a_ft,
+                               settings.filter_altitude_b_ft)) {
+        CONSOLE_ERROR("SettingsManager::Sanitize", "filter_altitude %u,%ld,%ld invalid, resetting to off.",
+                      settings.filter_altitude_mode, (long)settings.filter_altitude_a_ft,
+                      (long)settings.filter_altitude_b_ft);
+        settings.filter_altitude_mode = kAltitudeFilterOff;
+        settings.filter_altitude_a_ft = Settings::kDefaultFilterAltitudeAFt;
+        settings.filter_altitude_b_ft = Settings::kDefaultFilterAltitudeBFt;
+        changed = true;
+    }
+
     if (settings.log_level >= LogLevel::kNumLogLevels) {
         CONSOLE_ERROR("SettingsManager::Sanitize", "log_level %u out of range, resetting to kWarnings.",
                       settings.log_level);
@@ -275,6 +286,8 @@ void SettingsManager::Print() {
     char details_args[64];
     settings.rx_position_details.PrintATArgs(details_args, sizeof(details_args));
     CONSOLE_PRINTF("\tReceiver Position Details (ellipsoid height, accuracy, moving): %s\r\n", details_args);
+    CONSOLE_PRINTF("\tAltitude Filter: %s, %ld, %ld ft\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
 #ifdef ON_PICO
     // Only print serial reporting protocols on master, where we aren't constrained by log message size.
@@ -478,6 +491,9 @@ void SettingsManager::PrintAT() {
     // AT+NTP_SERVER
     CONSOLE_PRINTF("AT+NTP_SERVER=%s\r\n", settings.ntp_server);
 
+    // AT+FILTER_ALTITUDE_FT
+    CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%s,%ld,%ld\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
     // AT+RX_POSITION MLAT arguments, if set: last, since older firmware rejects the longer line. The empty source
     // keeps the receiver position as it is.
     if (settings.rx_position_details != RxPositionDetails()) {

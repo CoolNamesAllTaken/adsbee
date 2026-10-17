@@ -8,6 +8,7 @@
 
 #include "adsb_types.hh"
 #include "aircraft_dictionary_config.hh"
+#include "altitude_filter.hh"
 #include "geo_utils.hh"
 // Can't include comms.hh or we will get a circular dependency.
 #include "hal.hh"
@@ -874,6 +875,47 @@ class RemoteIDAircraft : public Aircraft {
     Metrics metrics_counter_;
 };
 
+/**
+ * Which aircraft go into aircraft reports, resolved once per reporting round by AircraftDictionary::GetReportFilter():
+ * the distance filter (AT+FILTER_DISTANCE_NM) and the altitude filter (AT+FILTER_ALTITUDE_FT). An aircraft is reported
+ * only if it passes both. Raw packets are never filtered.
+ */
+struct AircraftReportFilter {
+    uint32_t max_distance_m = 0;  // 0: no distance filter.
+    AltitudeFilterBounds altitude;
+
+    // Altitude the altitude filter compares: barometric, else GNSS. False if neither is known.
+    template <typename T>
+    static bool ReportAltitudeFt(const T &aircraft, int32_t &altitude_ft) {
+        if (aircraft.HasBitFlag(T::kBitFlagBaroAltitudeValid)) {
+            altitude_ft = aircraft.baro_altitude_ft;
+            return true;
+        }
+        if (aircraft.HasBitFlag(T::kBitFlagGNSSAltitudeValid)) {
+            altitude_ft = aircraft.gnss_altitude_ft;
+            return true;
+        }
+        return false;
+    }
+    static bool ReportAltitudeFt(const RemoteIDAircraft &aircraft, int32_t &altitude_ft) {
+        altitude_ft = aircraft.gnss_altitude_ft;
+        return aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagGNSSAltitudeValid);
+    }
+
+    /**
+     * Whether an aircraft is left out of aircraft reports. Aircraft with an unknown distance or altitude pass that
+     * filter.
+     */
+    template <typename T>
+    bool Excludes(const T &aircraft) const {
+        if (aircraft.IsBeyondDistance(max_distance_m)) return true;
+        if (!altitude.enabled) return false;
+        int32_t altitude_ft = 0;
+        bool known = ReportAltitudeFt(aircraft, altitude_ft);
+        return altitude.Excludes(known, altitude_ft);
+    }
+};
+
 class AircraftDictionary {
    public:
     static constexpr uint16_t kMaxNumAircraft = kAircraftDictionaryMaxNumAircraft;
@@ -1294,22 +1336,46 @@ class AircraftDictionary {
     bool IsPreferredReportForAddress(uint32_t uid, uint32_t timestamp_ms) const;
 
     /**
+     * Resolves the aircraft report filters for a reporting round. kAltitudeFilterNearRx uses the receiver
+     * altitude from SetReferenceAltitudeFt(); without one it filters nothing.
+     * @param[in] max_distance_m Settings::FilterDistanceMeters(): largest distance to report, 0 for no filter.
+     * @param[in] altitude_mode AltitudeFilterMode (Settings::filter_altitude_mode).
+     * @param[in] altitude_a_ft First altitude argument, in feet.
+     * @param[in] altitude_b_ft Second altitude argument, in feet.
+     */
+    AircraftReportFilter GetReportFilter(uint32_t max_distance_m, uint8_t altitude_mode, int32_t altitude_a_ft,
+                                         int32_t altitude_b_ft) const {
+        AircraftReportFilter filter;
+        filter.max_distance_m = max_distance_m;
+        filter.altitude = AltitudeFilterBounds::Of(altitude_mode, altitude_a_ft, altitude_b_ft,
+                                                   reference_position_valid_ && reference_altitude_valid_,
+                                                   reference_altitude_ft_);
+        return filter;
+    }
+
+    // GetReportFilter() for a SettingsManager::Settings (either product's).
+    template <typename SettingsT>
+    AircraftReportFilter GetReportFilter(const SettingsT &settings) const {
+        return GetReportFilter(settings.FilterDistanceMeters(), settings.filter_altitude_mode,
+                               settings.filter_altitude_a_ft, settings.filter_altitude_b_ft);
+    }
+
+    /**
      * Lists the aircraft that aircraft reports (CSBee, MAVLink, GDL90, aircraft JSON) cover in a reporting round: every
-     * tracked aircraft except those the distance filter (AT+FILTER_DISTANCE_NM) leaves out. Raw packets don't go
-     * through here and are never filtered. Aircraft at an unknown distance are kept.
+     * tracked aircraft except those the report filter leaves out. Raw packets don't go through here and are never
+     * filtered.
      * @param[out] uids Filled with up to max_uids aircraft UIDs.
      * @param[in] max_uids Capacity of uids.
-     * @param[in] filter_distance_m Settings::FilterDistanceMeters(): largest distance to report, 0 for no filter.
+     * @param[in] filter From GetReportFilter().
      * @retval Number of UIDs written.
      */
-    uint16_t GetReportUIDs(uint32_t uids[], uint16_t max_uids, uint32_t filter_distance_m) const {
+    uint16_t GetReportUIDs(uint32_t uids[], uint16_t max_uids, const AircraftReportFilter &filter) const {
         uint16_t count = 0;
-        for (const auto& itr : dict) {
+        for (const auto &itr : dict) {
             if (count >= max_uids) {
                 break;
             }
-            if (!std::visit([filter_distance_m](const Aircraft& a) { return a.IsBeyondDistance(filter_distance_m); },
-                            itr.second)) {
+            if (!std::visit([&filter](const auto &a) { return filter.Excludes(a); }, itr.second)) {
                 uids[count++] = itr.first;
             }
         }
@@ -1336,6 +1402,19 @@ class AircraftDictionary {
      * CPR decoded against a bogus reference silently yields a wrong position.
      */
     void ClearReferencePosition();
+
+    /**
+     * Sets the receiver altitude that AT+FILTER_ALTITUDE_FT's near-receiver mode compares against. It counts only
+     * while the reference position is valid, and ClearReferencePosition() clears it.
+     * @param[in] altitude_ft Receiver altitude, in feet.
+     */
+    inline void SetReferenceAltitudeFt(int32_t altitude_ft) {
+        reference_altitude_ft_ = altitude_ft;
+        reference_altitude_valid_ = true;
+    }
+
+    // Marks the receiver altitude as unknown: the near-receiver altitude filter then filters nothing.
+    inline void ClearReferenceAltitude() { reference_altitude_valid_ = false; }
 
     /**
      * Check whether a valid reference position has been set.
@@ -1459,6 +1538,8 @@ class AircraftDictionary {
     uint32_t reference_latitude_awb32_ = 0;
     uint32_t reference_longitude_awb32_ = 0;
     bool reference_position_valid_ = false;  // Set by SetReferencePosition, cleared by ClearReferencePosition.
+    int32_t reference_altitude_ft_ = 0;
+    bool reference_altitude_valid_ = false;  // Set by SetReferenceAltitudeFt, cleared by ClearReferencePosition.
     // Receiver position for aircraft distance and bearing. Moving it more than kReferenceMoveThresholdMeters or
     // clearing it bumps reference_epoch_, and Update() recomputes every aircraft computed in an older epoch or marked
     // stale by a move.

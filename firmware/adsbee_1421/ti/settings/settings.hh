@@ -8,6 +8,7 @@
 #include "crc.hh"
 #include "macros.hh"
 #include "receiver_position.hh"
+#include "altitude_filter.hh"
 #include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
@@ -112,6 +113,18 @@ class SettingsManager {
         uint32_t icao_address =
             0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
                 // lowest plane being tracked when source is kPositionSourceLowestAircraft.
+
+        /**
+         * Receiver altitude for AT+FILTER_ALTITUDE_FT's near-receiver mode: the GNSS altitude for a GNSS fix (it has no
+         * barometric altitude), otherwise the barometric altitude, falling back to the GNSS altitude when that is 0
+         * (not entered, or not known for the aircraft the position comes from).
+         */
+        int32_t FilterAltitudeFt() const {
+            if (source == kPositionSourceGNSS || baro_altitude_ft == 0) {
+                return gnss_altitude_ft;
+            }
+            return baro_altitude_ft;
+        }
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
@@ -128,6 +141,9 @@ class SettingsManager {
         static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
         static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
         static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
+        // AT+FILTER_ALTITUDE_FT defaults: off, with 0 to 10,000 ft ready for range mode.
+        static constexpr int32_t kDefaultFilterAltitudeAFt = 0;
+        static constexpr int32_t kDefaultFilterAltitudeBFt = 10000;
         // NOTE: Lengths do not include null terminator.
         // Single source of truth for the console boot baud rate: CommsManagerConfig defaults to this,
         // and Apply() falls back to it if the stored rate isn't whitelisted.
@@ -191,6 +207,12 @@ class SettingsManager {
         uint8_t asterix_sac = 0;
         uint8_t asterix_sic = 0;
 
+        // Altitude filter (AT+FILTER_ALTITUDE_FT=<mode>,<a>,<b>), added in version 6: an AltitudeFilterMode with its
+        // arguments in feet. Leaves aircraft outside the selected altitudes out of the same aircraft reports as the
+        // distance filter. Aircraft with no known altitude are always kept.
+        uint8_t filter_altitude_mode = kAltitudeFilterOff;
+        int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
+        int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
         // Optional AT+RX_POSITION arguments for MLAT, added in version 6: ellipsoid height and accuracy of a FIXED
         // position, and whether the receiver may move.
         RxPositionDetails rx_position_details;
@@ -246,11 +268,12 @@ class SettingsManager {
                   "Settings::crc must be the last member, with no trailing padding.");
 
     // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled,
-    // filter_distance_deci_nm, asterix_sac, asterix_sic and rx_position_details.
+    // filter_distance_deci_nm, asterix_sac, asterix_sic, the altitude filter (filter_altitude_*) and
+    // rx_position_details.
     static constexpr uint16_t kVersion5SettingsSize = 62;
     static_assert(kSettingsVersion == 6 &&
                       offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
-                      sizeof(Settings) == kVersion5SettingsSize + 7 + sizeof(RxPositionDetails),
+                      sizeof(Settings) == kVersion5SettingsSize + 16 + sizeof(RxPositionDetails),
                   "Settings changed: update MigrateFromVersion5 or add a migration from version 6.");
 
     /**
