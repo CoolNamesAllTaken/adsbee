@@ -137,12 +137,12 @@ bool ConfigureAdvInstance(uint8_t instance, bool legacy) {
     return true;
 }
 
-// Stops an instance, loads new ODID data and restarts it. Returns whether it is advertising afterwards.
+// Loads new ODID data into an instance and starts it if it isn't running. Data changes while advertising (one HCI
+// command per tick), so the scan and the other set aren't disturbed. Returns whether it is advertising afterwards.
 bool ReloadAdvInstance(uint8_t instance, const uint8_t* odid, uint16_t odid_len,
                        RawRemoteIDPacket::Transport transport) {
-    // The instance must be stopped to change its data.
-    ble_gap_ext_adv_stop(instance);
     if (!SetAdvODIDPayload(instance, odid, odid_len, transport)) return false;
+    if (ble_gap_ext_adv_active(instance)) return true;
     int rc = ble_gap_ext_adv_start(instance, /*duration=*/0, /*max_events=*/0);
     if (rc != 0) {
         CONSOLE_ERROR("remote_id_ble", "ble_gap_ext_adv_start(%u) failed, rc=%d.", instance, rc);
@@ -276,10 +276,20 @@ void StartExtDiscovery() {
     }
 }
 
+void OnHostReset(int reason) {
+    CONSOLE_WARNING("remote_id_ble", "Bluetooth host reset, reason=%d.", reason);
+}
+
 void OnHostSync() {
     // Controller/host are in sync; safe to start scanning and/or advertising. Either may have been requested before the
-    // host finished syncing, so both are (re)applied here.
+    // host finished syncing, so both are (re)applied here. After a host reset the controller has lost its scan and
+    // advertising sets (NimBLE still marks the sets configured), so everything is set up again.
     s_tx_host_ready = true;
+    s_scanning = false;
+    s_tx_legacy_configured = false;
+    s_tx_coded_configured = false;
+    s_tx_legacy_advertising = false;
+    s_tx_coded_advertising = false;
     if (s_scan_want) StartExtDiscovery();
     StartRequestedAdvertising();
 }
@@ -303,6 +313,7 @@ bool EnsureHostInitialized() {
         return false;
     }
     ble_hs_cfg.sync_cb = OnHostSync;
+    ble_hs_cfg.reset_cb = OnHostReset;
     nimble_port_freertos_init(HostTask);
     s_ble_initialized = true;
     return true;

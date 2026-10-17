@@ -45,7 +45,8 @@ The ESP32 firmware in `combined.uf2` runs on both modules used on ADSBee 1090 ha
 * **Heap reserve:** Remote ID pauses while ESP32 free heap is below `RemoteIDGuard::kReserveFreeBytes`
   (`firmware/common/coprocessor/remote_id_guard.hh`) and retries after a growing hold-off.
 * **Bluetooth RAM:** NimBLE is an observer + broadcaster with trimmed pools (8 HCI event buffers, 1 ACL buffer, 3
-  MSYS_2 blocks, no periodic advertising/sync, 3 controller activities, 3.5 KB host stack). Bluetooth costs about
+  MSYS_2 blocks, no periodic advertising/sync, 3 controller activities (enough for receive and both transmit sets), 3.5 KB host
+  stack). Bluetooth costs about
   31 KB in the controller and 13 KB in the host while running and frees it all when stopped. Measure before raising
   any of these.
 * **Bluetooth controller in flash:** `CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY` links the controller from flash instead of
