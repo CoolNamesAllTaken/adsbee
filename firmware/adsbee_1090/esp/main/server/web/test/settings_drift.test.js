@@ -38,7 +38,8 @@ for (const name of ['adsbee_1421_console', 'adsbee_1090_console']) {
 
 test('adsbee_1090_console carries the same 1090 schema and transport', () => {
     const html = consoleHtml('adsbee_1090_console');
-    for (const [begin, end] of [['const SETTINGS_SCHEMA_1090 = [', '\n];'], ['class Settings1090Transport {', '\n}\n']]) {
+    for (const [begin, end] of [['const SETTINGS_RID_TRANSPORTS = [', 'const SETTINGS_SCHEMA_1090 = ['],
+        ['const SETTINGS_SCHEMA_1090 = [', '\n];'], ['class Settings1090Transport {', '\n}\n']]) {
         const grab = (text) => text.slice(text.indexOf(begin), text.indexOf(end, text.indexOf(begin)));
         assert.ok(html.includes(begin), `${begin} not found in adsbee_1090_console.html`);
         assert.strictEqual(grab(html), grab(SETTINGS_SRC),

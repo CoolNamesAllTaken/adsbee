@@ -62,6 +62,35 @@ class SettingsManager {
     static constexpr uint16_t kFeedTransportStrMaxLen = 5;
     static const char kFeedTransportStrs[kNumFeedTransports][kFeedTransportStrMaxLen];
 
+    /**
+     * Transport a new feed of a protocol uses when none is given: TCP for aggregator protocols, UDP for protocols that
+     * local devices listen for, MQTT for aircraft JSON.
+     */
+    static constexpr FeedTransport DefaultFeedTransport(ReportingProtocol protocol) {
+        switch (protocol) {
+            case kMAVLINK1:
+            case kMAVLINK2:
+            case kGDL90:
+            case kGDL90NoUATUplink:
+                return kFeedTransportUDP;
+            case kAircraftJSON:
+            case kAircraftJSONUATUplink:
+                return kFeedTransportMQTT;
+            default:
+                return kFeedTransportTCP;
+        }
+    }
+
+    // How the MQTT client reaches the broker. Values are flash-persisted: only append.
+    enum MQTTTransport : uint8_t {
+        kMQTTTransportTCP = 0,    // MQTT on its own port (1883, or 8883 with TLS).
+        kMQTTTransportWebSocket,  // MQTT inside a WebSocket (port 80, or 443 with TLS), for brokers behind web proxies.
+        kNumMQTTTransports
+    };
+    static constexpr uint16_t kMQTTTransportStrMaxLen = 4;
+    static const char kMQTTTransportStrs[kNumMQTTTransports][kMQTTTransportStrMaxLen];
+    static constexpr uint16_t kDefaultMQTTPort = 1883;
+
     static constexpr uint8_t kWiFiAPChannelMax = 11;  // Operation in channels 12-14 avoided in USA.
 
     enum EnableState : int8_t {
@@ -172,10 +201,11 @@ class SettingsManager {
         static constexpr uint16_t kMaxNumFeeds = 10;
         static constexpr uint16_t kFeedURIMaxNumChars = 63;
         static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
-        static constexpr uint16_t kFeedMQTTTopicPrefixMaxLen = 31;
-        static constexpr uint16_t kFeedMQTTUsernameMaxLen = 31;
-        static constexpr uint16_t kFeedMQTTPasswordMaxLen = 63;
-        static constexpr uint8_t kFeedMQTTMaxQoS = 2;
+        static constexpr uint16_t kMQTTUsernameMaxLen = 31;
+        static constexpr uint16_t kMQTTPasswordMaxLen = 63;
+        static constexpr uint16_t kMQTTTopicPrefixMaxLen = 31;
+        static constexpr uint16_t kMQTTWebSocketPathMaxLen = 31;
+        static constexpr uint8_t kMQTTMaxQoS = 2;
         static constexpr uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
@@ -244,13 +274,17 @@ class SettingsManager {
             char password[kWiFiPasswordMaxLen + 2];
         };
 
-        // Broker options of a feed that uses kFeedTransportMQTT.
-        struct FeedMQTT {
-            char topic_prefix[kFeedMQTTTopicPrefixMaxLen + 1];  // Empty means "adsbee".
-            char username[kFeedMQTTUsernameMaxLen + 1];         // Empty connects without credentials.
-            char password[kFeedMQTTPasswordMaxLen + 1];
+        // The one MQTT broker that every feed with kFeedTransportMQTT publishes to (AT+MQTT).
+        struct MQTTBroker {
+            char host[kFeedURIMaxNumChars + 1];  // Empty: MQTT feeds stay disconnected.
+            uint16_t port;
             bool tls;     // Encrypt, and check the broker's certificate against the built-in CA bundle.
             uint8_t qos;  // MQTT quality of service of published messages, 0-2.
+            MQTTTransport transport;
+            char username[kMQTTUsernameMaxLen + 1];  // Empty connects without credentials.
+            char password[kMQTTPasswordMaxLen + 1];
+            char topic_prefix[kMQTTTopicPrefixMaxLen + 1];        // Empty means "adsbee".
+            char websocket_path[kMQTTWebSocketPathMaxLen + 1];  // Empty means "/mqtt".
         };
 
         uint32_t settings_version = kSettingsVersion;
@@ -360,9 +394,9 @@ class SettingsManager {
         inline uint32_t FilterDistanceMeters() const {
             return filter_distance_enabled ? DeciNmToMeters(filter_distance_deci_nm) : 0;
         }
-        // Feed settings added after the first feed fields: transport, and broker options of MQTT feeds.
+        // Feed settings added after the first feed fields.
         FeedTransport feed_transports[kMaxNumFeeds];
-        FeedMQTT feed_mqtt[kMaxNumFeeds];
+        MQTTBroker mqtt_broker;
         // ASTERIX data source identifier (I021/010, I023/010): System Area Code and System Identification Code.
         uint8_t asterix_sac = 0;
         uint8_t asterix_sic = 0;
@@ -380,7 +414,8 @@ class SettingsManager {
             memset(remote_id_tx_uas_id, '\0', sizeof(remote_id_tx_uas_id));
             memset(remote_id_tx_operator_id, '\0', sizeof(remote_id_tx_operator_id));
             memset(wifi_sta_extra_networks, '\0', sizeof(wifi_sta_extra_networks));
-            memset(feed_mqtt, '\0', sizeof(feed_mqtt));
+            memset(&mqtt_broker, '\0', sizeof(mqtt_broker));
+            mqtt_broker.port = kDefaultMQTTPort;
             memset(ntp_server, '\0', sizeof(ntp_server));
             strncpy(ntp_server, "pool.ntp.org", kNTPServerMaxLen);
 
@@ -811,7 +846,7 @@ extern SettingsManager settings_manager;
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
 static_assert(kSettingsVersion == 19,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 2720,
+static_assert(sizeof(SettingsManager::Settings) == 1652,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -835,11 +870,11 @@ static_assert(offsetof(SettingsManager::Settings, wifi_sta_extra_networks) == 11
 static_assert(offsetof(SettingsManager::Settings, auto_update_enabled) == 1338, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_distance_enabled) == 1339, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_distance_deci_nm) == 1340, "Settings layout changed. See above.");
-static_assert(sizeof(SettingsManager::Settings::FeedMQTT) == 130, "Settings layout changed. See above.");
+static_assert(sizeof(SettingsManager::Settings::MQTTBroker) == 230, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, feed_transports) == 1344, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, feed_mqtt) == 1354, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, asterix_sac) == 2654, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, asterix_sic) == 2655, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, ntp_server) == 2656, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, mqtt_broker) == 1354, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, asterix_sac) == 1584, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, asterix_sic) == 1585, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, ntp_server) == 1586, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */
