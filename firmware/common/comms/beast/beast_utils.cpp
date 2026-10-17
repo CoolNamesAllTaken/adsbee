@@ -183,7 +183,10 @@ struct InfoPayloadWriter {
 
 }  // namespace
 
-uint16_t BeastReporter::BuildReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, const ReceiverInfo &info) {
+namespace {
+
+uint16_t BuildInfoFrame(uint8_t *buf, uint16_t buf_len, const BeastReporter::ReceiverInfo &info, bool short_frame) {
+    using namespace BeastReporter;
     if (info.id[0] == '\0' || buf_len < 3) {
         return 0;
     }
@@ -196,6 +199,14 @@ uint16_t BeastReporter::BuildReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, c
     w.Append("v=1;");
     w.AppendText("id", info.id, kReceiverInfoIDMaxLen, true);
     w.Append("clk=%lu;ep=%lx;", static_cast<unsigned long>(info.clock_hz), static_cast<unsigned long>(info.epoch));
+    if (short_frame) {
+        if (!w.ok) {
+            return 0;
+        }
+        w.len--;  // Drop the trailing ';'.
+        buf[2 + w.len] = '\n';
+        return 2 + w.len + 1;
+    }
     const ReceiverPosition &position = info.position;
     if (position.IsValid()) {
         w.AppendFixedPoint("lat", position.latitude_deg, 7);
@@ -220,6 +231,16 @@ uint16_t BeastReporter::BuildReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, c
     w.len--;  // Drop the trailing ';'.
     buf[2 + w.len] = '\n';
     return 2 + w.len + 1;
+}
+
+}  // namespace
+
+uint16_t BeastReporter::BuildReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, const ReceiverInfo &info) {
+    return BuildInfoFrame(buf, buf_len, info, false);
+}
+
+uint16_t BeastReporter::BuildShortReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, const ReceiverInfo &info) {
+    return BuildInfoFrame(buf, buf_len, info, true);
 }
 
 uint16_t BeastReporter::BuildModeSIngestBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet,

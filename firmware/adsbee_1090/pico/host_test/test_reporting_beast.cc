@@ -290,6 +290,18 @@ TEST(BeastUtils, BuildReceiverInfoFrame) {
     }
 }
 
+TEST(BeastUtils, BuildShortReceiverInfoFrame) {
+    BeastReporter::ReceiverInfo info;
+    strcpy(info.id, "bee00038172d18c1");
+    info.epoch = 0x5a3c91e2;
+    info.position.source = ReceiverPosition::kSourceFixed;  // Left out of the short frame, like name and fw.
+    strcpy(info.name, "Hilltop");
+    uint8_t buf[64];
+    uint16_t len = BeastReporter::BuildShortReceiverInfoFrame(buf, sizeof(buf), info);
+    EXPECT_EQ(std::string(reinterpret_cast<char*>(buf), len), "\x1a\xe9v=1;id=bee00038172d18c1;clk=48000000;ep=5a3c91e2\n");
+    EXPECT_EQ(BeastReporter::BuildShortReceiverInfoFrame(buf, 40, info), 0);  // Doesn't fit.
+}
+
 TEST(BeastUtils, ReceiverInfoFrameEscapesAndOmissions) {
     BeastReporter::ReceiverInfo info;
     strcpy(info.id, "bad id;=\x1a");

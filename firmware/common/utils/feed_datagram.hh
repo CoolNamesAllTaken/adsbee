@@ -82,4 +82,37 @@ inline uint16_t NextLen(SettingsManager::ReportingProtocol protocol, const uint8
     return datagram_len;
 }
 
+/**
+ * Splits buf into datagrams and passes each to send(const uint8_t* datagram, uint16_t len), which returns false to
+ * stop. A datagram that doesn't start with a receiver info frame (0x1A 0xE9) gets prefix in front, if prefix_len is
+ * not 0: MLAT datagrams start with a short receiver info frame (software/adsbee_mlat/PROTOCOL.md).
+ * @param[in] scratch kMaxPayloadBytes of space for a datagram with the prefix.
+ * @retval False if send returned false.
+ */
+template <typename Send>
+bool SendAll(SettingsManager::ReportingProtocol protocol, const uint8_t* buf, uint16_t len, const uint8_t* prefix,
+             uint16_t prefix_len, uint8_t* scratch, Send&& send) {
+    uint16_t offset = 0;
+    while (offset < len) {
+        const uint8_t* rest = buf + offset;
+        uint16_t rest_len = len - offset;
+        bool starts_with_info = rest_len >= 2 && rest[0] == 0x1A && rest[1] == 0xE9;
+        uint16_t room = prefix_len > 0 && !starts_with_info && prefix_len < kMaxPayloadBytes
+                            ? kMaxPayloadBytes - prefix_len
+                            : kMaxPayloadBytes;
+        uint16_t datagram_len = NextLen(protocol, rest, rest_len, room);
+        if (room < kMaxPayloadBytes && datagram_len <= room) {
+            memcpy(scratch, prefix, prefix_len);
+            memcpy(scratch + prefix_len, rest, datagram_len);
+            if (!send(static_cast<const uint8_t*>(scratch), static_cast<uint16_t>(prefix_len + datagram_len))) {
+                return false;
+            }
+        } else if (!send(rest, datagram_len)) {  // No prefix, or one frame too long for it.
+            return false;
+        }
+        offset += datagram_len;
+    }
+    return true;
+}
+
 }  // namespace FeedDatagram

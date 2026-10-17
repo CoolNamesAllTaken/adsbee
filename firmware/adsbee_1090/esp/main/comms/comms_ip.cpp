@@ -564,23 +564,39 @@ bool CommsManager::SendFeedDatagrams(uint16_t feed_index, const char* buf, uint1
         return true;
     }
     SettingsManager::ReportingProtocol protocol = settings_manager.settings.feed_protocols[feed_index];
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(buf);
-    uint16_t offset = 0;
-    while (offset < buf_len) {
-        uint16_t datagram_len = FeedDatagram::NextLen(protocol, bytes + offset, buf_len - offset);
-        if (send(feed_sock_[feed_index], bytes + offset, datagram_len, MSG_DONTWAIT) < 0) {
+    // MLAT datagrams each start with a short receiver info frame (v, id, clk, ep), since any of them may be lost.
+    uint8_t info_frame[80];  // v, an ID of up to 32 characters, clk and the epoch.
+    uint16_t info_frame_len = 0;
+    BeastReporter::ReceiverInfo info;
+    if (protocol == SettingsManager::kMLAT && GetMLATReceiverInfo(feed_index, info)) {
+        info_frame_len = BeastReporter::BuildShortReceiverInfoFrame(info_frame, sizeof(info_frame), info);
+    }
+    static uint8_t datagram_buf[FeedDatagram::kMaxPayloadBytes];  // Reporting sends from one task.
+    bool socket_ok = true, dropped = false;
+    FeedDatagram::SendAll(
+        protocol, reinterpret_cast<const uint8_t*>(buf), buf_len, info_frame, info_frame_len, datagram_buf,
+        [&](const uint8_t* datagram, uint16_t datagram_len) {
+            if (send(feed_sock_[feed_index], datagram, datagram_len, MSG_DONTWAIT) >= 0) {
+                return true;
+            }
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOMEM) {
                 // lwIP is briefly out of buffers: the rest of the batch is lost, like a dropped datagram.
-                feed_num_dropped_msgs_[feed_index] += num_msgs;
-                return true;
+                dropped = true;
+                return false;
             }
             CONSOLE_ERROR("CommsManager::SendBuf", "Closing UDP feed %d (%s:%d): errno %d (%s).", feed_index,
                           settings_manager.settings.feed_uris[feed_index],
                           settings_manager.settings.feed_ports[feed_index], errno, strerror(errno));
-            CloseFeedSocket(feed_index);
+            socket_ok = false;
             return false;
-        }
-        offset += datagram_len;
+        });
+    if (!socket_ok) {
+        CloseFeedSocket(feed_index);
+        return false;
+    }
+    if (dropped) {
+        feed_num_dropped_msgs_[feed_index] += num_msgs;
+        return true;
     }
     feed_mps_counter_[feed_index] += num_msgs;
     return true;

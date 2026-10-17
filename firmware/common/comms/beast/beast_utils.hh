@@ -131,6 +131,13 @@ inline void FormatFirmwareVersion(char *buf, uint16_t buf_len, const char *produ
 uint16_t BuildReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, const ReceiverInfo &info);
 
 /**
+ * Writes the short receiver info frame that starts every MLAT UDP datagram: v, id, clk and ep. clk is there so that
+ * a server that first hears of the receiver from it doesn't assume another clock rate.
+ * @retval Number of bytes written, or 0 if the frame didn't fit or info.id is empty.
+ */
+uint16_t BuildShortReceiverInfoFrame(uint8_t *buf, uint16_t buf_len, const ReceiverInfo &info);
+
+/**
  * When an MLAT feed sink sends its next receiver info frame: first on each connection, then every 10 seconds, every
  * second while the receiver may move, and right away when the clock epoch, the moving flag or the position source
  * changes.

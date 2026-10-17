@@ -1,3 +1,4 @@
+#include <string>
 #include <vector>
 
 #include "feed_datagram.hh"
@@ -103,4 +104,51 @@ TEST(FeedDatagram, ASTERIXSplitsBetweenDataBlocks) {
     EXPECT_EQ(Split(SettingsManager::kASTERIX, bad, 4).size(), 1u);
     bad = {21, 0, 1, 1, 2, 3, 4, 5};
     EXPECT_EQ(Split(SettingsManager::kASTERIX, bad, 4).size(), 1u);
+}
+
+TEST(FeedDatagram, MLATDatagramsStartWithAReceiverInfoFrame) {
+    // A full receiver info frame, then 200 long Mode S frames, one with an escaped 0x1A in its timestamp.
+    const std::string info = "\x1a\xe9v=1;id=bee00038172d18c1;clk=48000000;ep=5a3c91e2;mov=0\n";
+    std::vector<uint8_t> buf(info.begin(), info.end());
+    for (int i = 0; i < 200; i++) {
+        buf.insert(buf.end(), {0x1A, 0x33, 0x00, 0x00, 0x01, 0x02, 0x03, static_cast<uint8_t>(i)});
+        if (i == 7) buf.insert(buf.end(), {0x1A, 0x1A});
+        buf.push_back(0xC0);
+        for (int j = 0; j < 14; j++) buf.push_back(0x8D + j);
+    }
+    const std::string prefix = "\x1a\xe9v=1;id=bee00038172d18c1;clk=48000000;ep=5a3c91e2\n";
+    uint8_t scratch[FeedDatagram::kMaxPayloadBytes];
+    std::vector<std::vector<uint8_t>> datagrams;
+    ASSERT_TRUE(FeedDatagram::SendAll(SettingsManager::kMLAT, buf.data(), buf.size(),
+                                      reinterpret_cast<const uint8_t*>(prefix.data()), prefix.size(), scratch,
+                                      [&](const uint8_t* d, uint16_t len) {
+                                          datagrams.emplace_back(d, d + len);
+                                          return true;
+                                      }));
+    ASSERT_GE(datagrams.size(), 4u);
+    std::vector<uint8_t> frames;
+    for (size_t i = 0; i < datagrams.size(); i++) {
+        const auto& d = datagrams[i];
+        EXPECT_LE(d.size(), FeedDatagram::kMaxPayloadBytes) << i;
+        ASSERT_GE(d.size(), 2u);
+        EXPECT_EQ(d[0], 0x1A) << i;
+        EXPECT_EQ(d[1], 0xE9) << i;
+        // The first datagram starts with the batch's full info frame; the others get the short one.
+        size_t skip = i == 0 ? 0 : prefix.size();
+        if (i > 0) EXPECT_EQ(std::string(d.begin(), d.begin() + skip), prefix) << i;
+        frames.insert(frames.end(), d.begin() + skip, d.end());
+        // Every frame after the info frame is whole: the next byte after it starts a Mode S frame.
+        size_t info_end = std::string(d.begin(), d.end()).find('\n') + 1;
+        if (info_end < d.size()) EXPECT_EQ(d[info_end], 0x1A) << i;
+    }
+    EXPECT_EQ(frames, buf);  // Nothing lost, duplicated or split inside a frame.
+
+    // Without a prefix the batch splits as before.
+    datagrams.clear();
+    FeedDatagram::SendAll(SettingsManager::kMLAT, buf.data(), buf.size(), nullptr, 0, scratch,
+                          [&](const uint8_t* d, uint16_t len) {
+                              datagrams.emplace_back(d, d + len);
+                              return true;
+                          });
+    EXPECT_EQ(datagrams, Split(SettingsManager::kMLAT, buf, FeedDatagram::kMaxPayloadBytes));
 }
