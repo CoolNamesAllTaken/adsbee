@@ -15,8 +15,8 @@ TEST(SettingsHash, SameSettingsSameHash) {
 TEST(SettingsHash, DefaultSettingsHashIsPinned) {
     // Changes only with the Settings struct or its defaults.
     SM::Settings settings;
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x87C6AC74u);
-    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x85ED9C04u);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFleet), 0x77C7FD9Fu);
+    EXPECT_EQ(SettingsHash::Compute(settings, kScopeFull), 0x82DBA15Au);
 }
 
 TEST(SettingsHash, MagicAndStoredCRCDoNotCount) {

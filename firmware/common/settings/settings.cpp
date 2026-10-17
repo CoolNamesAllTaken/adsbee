@@ -153,6 +153,17 @@ bool SettingsManager::Sanitize() {
         changed = true;
     }
 
+    if (!AltitudeFilterIsValid(settings.filter_altitude_mode, settings.filter_altitude_a_ft,
+                               settings.filter_altitude_b_ft)) {
+        CONSOLE_ERROR("SettingsManager::Sanitize", "filter_altitude %u,%ld,%ld invalid, resetting to off.",
+                      settings.filter_altitude_mode, (long)settings.filter_altitude_a_ft,
+                      (long)settings.filter_altitude_b_ft);
+        settings.filter_altitude_mode = kAltitudeFilterOff;
+        settings.filter_altitude_a_ft = Settings::kDefaultFilterAltitudeAFt;
+        settings.filter_altitude_b_ft = Settings::kDefaultFilterAltitudeBFt;
+        changed = true;
+    }
+
     if (settings.log_level >= LogLevel::kNumLogLevels) {
         CONSOLE_ERROR("SettingsManager::Sanitize", "log_level %u out of range, resetting to kWarnings.",
                       settings.log_level);
@@ -267,6 +278,8 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
                    static_cast<unsigned long>(settings.filter_distance_deci_nm / 10),
                    static_cast<unsigned long>(settings.filter_distance_deci_nm % 10));
+    CONSOLE_PRINTF("\tAltitude Filter: %s, %ld, %ld ft\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
 #ifdef ON_PICO
     // Only print serial reporting protocols on master, where we aren't constrained by log message size.
@@ -469,4 +482,8 @@ void SettingsManager::PrintAT() {
 
     // AT+NTP_SERVER
     CONSOLE_PRINTF("AT+NTP_SERVER=%s\r\n", settings.ntp_server);
+
+    // AT+FILTER_ALTITUDE_FT
+    CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%s,%ld,%ld\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 }

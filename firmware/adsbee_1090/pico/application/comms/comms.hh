@@ -108,6 +108,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATASTERIXSACSICCallback);
     CPP_AT_CALLBACK(ATMAVLINKIDCallback);
+    CPP_AT_CALLBACK(ATFilterAltitudeFtCallback);
     CPP_AT_CALLBACK(ATFilterDistanceNMCallback);
     CPP_AT_CALLBACK(ATNTPServerCallback);
     CPP_AT_CALLBACK(ATNetworkInfoCallback);

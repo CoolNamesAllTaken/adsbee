@@ -51,7 +51,7 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(SettingsManager::Settings), 1652u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1660u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -344,7 +344,7 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
 }
 
-TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesDistanceFilterOff) {
+TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesReportFiltersOff) {
     settings_v15::Settings v15;
     PopulateV15(v15);
     settings_v18::Settings v18;
@@ -358,11 +358,17 @@ TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesDistanceFilterOff) {
     SettingsManager::Settings out;
     out.filter_distance_enabled = true;
     out.filter_distance_deci_nm = 12345;
+    out.filter_altitude_mode = kAltitudeFilterBetween;
+    out.filter_altitude_a_ft = 500;
+    out.filter_altitude_b_ft = 600;
     ASSERT_TRUE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_FALSE(out.filter_distance_enabled);
     EXPECT_EQ(out.filter_distance_deci_nm, SettingsManager::Settings::kDefaultFilterDistanceDeciNm);
     EXPECT_EQ(out.FilterDistanceMeters(), 0u);
+    EXPECT_EQ(out.filter_altitude_mode, kAltitudeFilterOff);
+    EXPECT_EQ(out.filter_altitude_a_ft, 0);
+    EXPECT_EQ(out.filter_altitude_b_ft, 10000);
     EXPECT_TRUE(out.auto_update_enabled);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
@@ -398,6 +404,39 @@ TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.filter_distance_enabled, &raw, 1);
     EXPECT_TRUE(manager.Sanitize());
+}
+
+TEST(Settings, AltitudeFilterDefaultsOffAndRoundTrips) {
+    SettingsManager manager;
+    EXPECT_EQ(manager.settings.filter_altitude_mode, kAltitudeFilterOff);
+    EXPECT_EQ(manager.settings.filter_altitude_a_ft, 0);
+    EXPECT_EQ(manager.settings.filter_altitude_b_ft, 10000);
+    manager.settings.filter_altitude_mode = kAltitudeFilterBetween;
+    manager.settings.filter_altitude_a_ft = -1500;
+    manager.settings.filter_altitude_b_ft = 18000;
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    EXPECT_NE(dump.find("AT+FILTER_ALTITUDE_FT=BETWEEN,-1500,18000\r\n"), std::string::npos);
+    EXPECT_FALSE(manager.Sanitize());
+
+    // Invalid combinations from flash turn the filter off.
+    struct {
+        uint8_t mode;
+        int32_t a_ft, b_ft;
+    } invalid[] = {{5, 0, 10000},           {255, 0, 10000},     {kAltitudeFilterAbove, -2001, 0},
+                   {kAltitudeFilterBelow, 100001, 0}, {kAltitudeFilterBetween, 6000, 5000},
+                   {kAltitudeFilterBetween, 0, 100001}, {kAltitudeFilterNearRx, 0, 0},
+                   {kAltitudeFilterNearRx, -100, 0}, {kAltitudeFilterOff, 0, INT32_MIN}};
+    for (const auto& c : invalid) {
+        manager.settings.filter_altitude_mode = c.mode;
+        manager.settings.filter_altitude_a_ft = c.a_ft;
+        manager.settings.filter_altitude_b_ft = c.b_ft;
+        EXPECT_TRUE(manager.Sanitize()) << int(c.mode) << "," << c.a_ft << "," << c.b_ft;
+        EXPECT_EQ(manager.settings.filter_altitude_mode, kAltitudeFilterOff);
+        EXPECT_EQ(manager.settings.filter_altitude_a_ft, 0);
+        EXPECT_EQ(manager.settings.filter_altitude_b_ft, 10000);
+    }
 }
 
 TEST(SettingsMigration, V18ToCurrentKeepsFeedsOnTCP) {
@@ -517,7 +556,7 @@ TEST(Settings, FeedTransportAndMQTTDumpReplaysOnOlderFirmware) {
     EXPECT_FALSE(manager.Sanitize());
 }
 
-TEST(SettingsMigration, V18ToCurrentKeepsEverythingAndDefaultsASTERIXAndNTP) {
+TEST(SettingsMigration, V18ToCurrentKeepsEverythingAndDefaultsASTERIXNTPAndAltitudeFilter) {
     settings_v15::Settings v15;
     PopulateV15(v15);
     // 0xFF past the v18 struct, as Load() reads erased EEPROM there.
@@ -536,11 +575,17 @@ TEST(SettingsMigration, V18ToCurrentKeepsEverythingAndDefaultsASTERIXAndNTP) {
     out.asterix_sac = 0x55;
     out.asterix_sic = 0x66;
     strcpy(out.ntp_server, "stale.example.com");
+    out.filter_altitude_mode = kAltitudeFilterNearRx;
+    out.filter_altitude_a_ft = 300;
+    out.filter_altitude_b_ft = 400;
     ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_EQ(out.asterix_sac, 0);
     EXPECT_EQ(out.asterix_sic, 0);
     EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
+    EXPECT_EQ(out.filter_altitude_mode, kAltitudeFilterOff);
+    EXPECT_EQ(out.filter_altitude_a_ft, 0);
+    EXPECT_EQ(out.filter_altitude_b_ft, 10000);
     EXPECT_TRUE(out.auto_update_enabled);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
@@ -614,7 +659,9 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t ip_mode = dump.find("AT+IP_MODE=");
     size_t auto_update = dump.find("AT+AUTO_UPDATE=1");
     size_t filter_distance = dump.find("AT+FILTER_DISTANCE_NM=");
+    size_t filter_altitude = dump.find("AT+FILTER_ALTITUDE_FT=");
     ASSERT_NE(wifi, std::string::npos);
+    ASSERT_NE(filter_altitude, std::string::npos);
     ASSERT_NE(ip_mode, std::string::npos);
     ASSERT_NE(auto_update, std::string::npos);
     ASSERT_NE(filter_distance, std::string::npos);
@@ -629,7 +676,9 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t ntp = dump.find("AT+NTP_SERVER=pool.ntp.org");
     ASSERT_NE(ntp, std::string::npos);
     EXPECT_LT(asterix, ntp);
-    EXPECT_EQ(dump.find("AT+", ntp + 1), std::string::npos);
+    // The altitude filter comes last.
+    EXPECT_LT(ntp, filter_altitude);
+    EXPECT_EQ(dump.find("AT+", filter_altitude + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);

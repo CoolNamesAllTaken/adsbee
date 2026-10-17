@@ -286,10 +286,11 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         aircraftjson_overrun_reported_ = false;
         asterix_overrun_reported_ = false;
 
-        // Snapshot current aircraft UIDs, minus those beyond the distance filter (AT+FILTER_DISTANCE_NM): it gates these
-        // aircraft reports only, never the raw packets above. All protocols walk this same array.
-        report_uids_count_ = aircraft_dictionary.GetReportUIDs(report_uids_, kMaxReportUIDs,
-                                                               settings_manager.settings.FilterDistanceMeters());
+        // Snapshot current aircraft UIDs, minus those the distance and altitude filters (AT+FILTER_DISTANCE_NM,
+        // AT+FILTER_ALTITUDE_FT) leave out: they gate these aircraft reports only, never the raw packets above. All
+        // protocols walk this same array.
+        report_uids_count_ = aircraft_dictionary.GetReportUIDs(
+            report_uids_, kMaxReportUIDs, aircraft_dictionary.GetReportFilter(settings_manager.settings));
         csbee_report_uid_index_ = 0;
         mavlink1_report_uid_index_ = 0;
         mavlink2_report_uid_index_ = 0;

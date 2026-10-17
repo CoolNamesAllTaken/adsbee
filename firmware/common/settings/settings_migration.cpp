@@ -201,9 +201,9 @@ void SettingsMigrator::MigrateV17ToV18(const settings_v17::Settings& in, setting
 }
 
 void SettingsMigrator::MigrateV18ToV19(const settings_v18::Settings& in, SettingsManager::Settings& out) {
-    // Start from a fresh, fully-defaulted current struct: the distance filter (new in v19) stays off, feeds keep the
-    // TCP transport, no MQTT broker is set, and the ASTERIX SAC/SIC (0, 0) and NTP server (pool.ntp.org) take their
-    // defaults.
+    // Start from a fresh, fully-defaulted current struct: the distance and altitude filters (new in v19) stay off,
+    // feeds keep the TCP transport, no MQTT broker is set, and the ASTERIX SAC/SIC (0, 0) and NTP server (pool.ntp.org)
+    // take their defaults.
     out = SettingsManager::Settings();
 
     out.settings_version = kSettingsVersion;
