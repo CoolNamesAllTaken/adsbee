@@ -5465,8 +5465,8 @@ function makeMavlinkIdEntry() {
 function makeFilterDistanceEntry() {
     return {
         cmd: 'FILTER_DISTANCE_NM', label: 'Distance Filter', group: 'Reporting',
-        help: 'Leave aircraft farther than this from the receiver out of aircraft reports: the aircraft list and map, aircraft JSON, GDL90, MAVLink and CSBee. Raw, Beast and MLAT output and feeds of them always carry every packet.',
-        tip: 'Needs a receiver position (Position settings). Aircraft without a known position are always reported.',
+        help: 'Hide far aircraft from aircraft reports. Raw packets are unfiltered.',
+        tip: 'Filtered: aircraft list and map, aircraft JSON, GDL90, MAVLink, CSBee. Unfiltered: Raw, Beast, MLAT and their feeds. Needs a receiver position; aircraft without a position are kept.',
         fields: [
             { id: 'en', label: 'Enabled', type: 'bool' },
             { id: 'nm', label: 'Distance (nm)', type: 'float', min: 0.1, max: 10000, step: 0.1 },
@@ -5478,8 +5478,8 @@ function makeFilterDistanceEntry() {
 function makeFilterAltitudeEntry() {
     return {
         cmd: 'FILTER_ALTITUDE_FT', label: 'Altitude Filter', group: 'Reporting',
-        help: 'Leave aircraft outside an altitude band out of aircraft reports: the aircraft list and map, aircraft JSON, GDL90, MAVLink and CSBee. Raw, Beast and MLAT output and feeds of them always carry every packet.',
-        tip: 'Aircraft altitude is barometric, else GNSS. Aircraft without a known altitude are always reported. Within A of the receiver needs a receiver position (Position settings).',
+        help: 'Hide aircraft outside an altitude band from aircraft reports. Raw packets are unfiltered.',
+        tip: 'Filtered: aircraft list and map, aircraft JSON, GDL90, MAVLink, CSBee. Unfiltered: Raw, Beast, MLAT and their feeds. Uses barometric altitude, else GNSS; aircraft without altitude are kept. Within A of the receiver needs a receiver position.',
         fields: [
             {
                 id: 'mode', label: 'Mode', type: 'enum',
