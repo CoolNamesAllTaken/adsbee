@@ -1576,6 +1576,10 @@
 <td>Set the receiver position (FIXED, GNSS, LOWEST, ICAO, or NONE), used for things like distance to aircraft.</td>
 </tr>
 <tr>
+<td><code>AT+FILTER_ALTITUDE_FT=&lt;mode&gt;,&lt;a&gt;,&lt;b&gt;</code></td>
+<td>Leave aircraft outside an altitude band out of aircraft reports. <code>&lt;mode&gt;</code> (any case): <code>OFF</code> (default, <code>OFF,0,10000</code>), <code>ABOVE</code> (at or above <code>&lt;a&gt;</code> ft), <code>BELOW</code> (at or below <code>&lt;a&gt;</code> ft), <code>BETWEEN</code> (<code>&lt;a&gt;</code> to <code>&lt;b&gt;</code> ft) or <code>NEAR_RX</code> (within <code>&lt;a&gt;</code> ft above or below the receiver altitude from <code>AT+RX_POSITION</code>). Altitudes are -2000 to 100000 ft, e.g. <code>AT+FILTER_ALTITUDE_FT=BETWEEN,1000,18000</code>. Aircraft altitude is barometric, else GNSS; aircraft without a known altitude are always reported, and <code>NEAR_RX</code> filters nothing without a receiver altitude. Combined with <code>AT+FILTER_DISTANCE_NM</code>, an aircraft must pass both. Raw, Beast and MLAT output are never filtered.</td>
+</tr>
+<tr>
 <td><code>AT+FILTER_DISTANCE_NM=&lt;enabled&gt;,&lt;nm&gt;</code></td>
 <td>Leave aircraft farther than <code>&lt;nm&gt;</code> nautical miles (0.1 nm steps) from the receiver position out of aircraft reports, e.g. <code>AT+FILTER_DISTANCE_NM=1,50</code>. Off by default (<code>0,100.0</code>). Raw, Beast and MLAT output are never filtered, and aircraft without a known distance are always reported.</td>
 </tr>
