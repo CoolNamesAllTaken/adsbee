@@ -7,6 +7,7 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "altitude_filter.hh"
 #include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
@@ -56,6 +57,7 @@ class SettingsManager {
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
+        kASTERIX,                // EUROCONTROL ASTERIX CAT021 target reports and CAT023 status.
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -109,6 +111,18 @@ class SettingsManager {
         uint32_t icao_address =
             0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
                 // lowest plane being tracked when source is kPositionSourceLowestAircraft.
+
+        /**
+         * Receiver altitude for AT+FILTER_ALTITUDE_FT's near-receiver mode: the GNSS altitude for a GNSS fix (it has no
+         * barometric altitude), otherwise the barometric altitude, falling back to the GNSS altitude when that is 0
+         * (not entered, or not known for the aircraft the position comes from).
+         */
+        int32_t FilterAltitudeFt() const {
+            if (source == kPositionSourceGNSS || baro_altitude_ft == 0) {
+                return gnss_altitude_ft;
+            }
+            return baro_altitude_ft;
+        }
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
@@ -125,6 +139,9 @@ class SettingsManager {
         static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
         static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
         static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
+        // AT+FILTER_ALTITUDE_FT defaults: off, with 0 to 10,000 ft ready for range mode.
+        static constexpr int32_t kDefaultFilterAltitudeAFt = 0;
+        static constexpr int32_t kDefaultFilterAltitudeBFt = 10000;
         // NOTE: Lengths do not include null terminator.
         // Single source of truth for the console boot baud rate: CommsManagerConfig defaults to this,
         // and Apply() falls back to it if the stored rate isn't whitelisted.
@@ -183,6 +200,18 @@ class SettingsManager {
         bool filter_distance_enabled = false;
         uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
 
+        // ASTERIX data source identifier (I021/010, I023/010), added in version 6: System Area Code and System
+        // Identification Code.
+        uint8_t asterix_sac = 0;
+        uint8_t asterix_sic = 0;
+
+        // Altitude filter (AT+FILTER_ALTITUDE_FT=<mode>,<a>,<b>), added in version 6: an AltitudeFilterMode with its
+        // arguments in feet. Leaves aircraft outside the selected altitudes out of the same aircraft reports as the
+        // distance filter. Aircraft with no known altitude are always kept.
+        uint8_t filter_altitude_mode = kAltitudeFilterOff;
+        int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
+        int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
+
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
         uint32_t crc = 0;
 
@@ -233,12 +262,12 @@ class SettingsManager {
     static_assert(offsetof(Settings, crc) == sizeof(Settings) - sizeof(uint32_t),
                   "Settings::crc must be the last member, with no trailing padding.");
 
-    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled and
-    // filter_distance_deci_nm.
+    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled,
+    // filter_distance_deci_nm, asterix_sac, asterix_sic and the altitude filter (filter_altitude_*).
     static constexpr uint16_t kVersion5SettingsSize = 62;
     static_assert(kSettingsVersion == 6 &&
                       offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
-                      sizeof(Settings) == kVersion5SettingsSize + 5,
+                      sizeof(Settings) == kVersion5SettingsSize + 16,
                   "Settings changed: update MigrateFromVersion5 or add a migration from version 6.");
 
     /**
@@ -256,10 +285,8 @@ class SettingsManager {
         if (magic != kSettingsMagic || version != 5 || crc != crc32_ieee_802_3(blob, kFieldBytes)) {
             return false;
         }
-        out = Settings();
+        out = Settings();  // The fields added in version 6 take their defaults.
         memcpy(static_cast<void *>(&out), blob, kFieldBytes);
-        out.filter_distance_enabled = false;
-        out.filter_distance_deci_nm = Settings::kDefaultFilterDistanceDeciNm;
         out.Stamp();
         return true;
     }

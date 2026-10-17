@@ -275,7 +275,22 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
 
     // NOTE: Traffic Alert Status currently not used.
     data.participant_address = aircraft.icao_address;
-    data.address_type = GDL90TargetReportData::kAddressTypeADSBWithICAOAddress;
+    switch (aircraft.GetAddressType()) {
+        case ModeSAircraft::kAddressTypeADSBOther:
+        case ModeSAircraft::kAddressTypeADSROther:
+            data.address_type = GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
+            break;
+        case ModeSAircraft::kAddressTypeTISBICAO:
+            data.address_type = GDL90TargetReportData::kAddressTypeTISBWithICAOAddress;
+            break;
+        case ModeSAircraft::kAddressTypeTISBTrackFile:
+        case ModeSAircraft::kAddressTypeTISBOther:
+            data.address_type = GDL90TargetReportData::kAddressTypeTISBWithTrackFileID;
+            break;
+        default:  // ADS-R carries ADS-B from an ICAO-addressed aircraft.
+            data.address_type = GDL90TargetReportData::kAddressTypeADSBWithICAOAddress;
+            break;
+    }
 
     data.latitude_deg = aircraft.latitude_deg;
     data.longitude_deg = aircraft.longitude_deg;
@@ -351,6 +366,9 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
             break;
         case UATAircraft::kTISBTargetWithTrackFileIdentifier:
             data.address_type = GDL90TargetReportData::kAddressTypeTISBWithTrackFileID;
+            break;
+        case UATAircraft::kADSRTargetWithNonICAOAddress:
+            data.address_type = GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
             break;
         case UATAircraft::kSurfaceVehicle:
             data.address_type = GDL90TargetReportData::kAddressTypeSurfaceVehicle;

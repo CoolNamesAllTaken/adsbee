@@ -142,7 +142,7 @@ class ObjectDictionary {
         float gnss_heading_deg = 0.0f;
         int32_t gnss_speed_kts = 0;
         uint8_t gnss_num_satellites = 0;
-        bool gnss_utc_time_valid = false;
+        bool gnss_utc_time_valid = false;  // The gnss_utc_* fields hold UTC at timestamp_ms.
         uint8_t gnss_utc_hour = 0;
         uint8_t gnss_utc_minute = 0;
         uint8_t gnss_utc_second = 0;
@@ -184,6 +184,10 @@ class ObjectDictionary {
         uint16_t psram_total_kb = 0;  // PSRAM heap size (0 if no PSRAM).
         uint16_t psram_free_kb = 0;   // Free PSRAM heap (0 if no PSRAM).
         uint8_t num_network_console_clients = 0;  // Connected /console WebSocket clients.
+
+        // UTC from SNTP, valid while an output uses ASTERIX and the ESP32 has synced. Holds UTC at timestamp_ms.
+        bool network_utc_time_valid = false;
+        uint32_t network_utc_ms_of_day = 0;
     };
 
     enum ESP32HardwareCapability : uint8_t {

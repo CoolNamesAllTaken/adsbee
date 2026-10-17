@@ -714,7 +714,7 @@ class SettingsEngine {
 // Constants and schema-entry factories for AT commands shared by both products.
 
 const SETTINGS_PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK', 'CSBEE',
-    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK'];
+    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX'];
 const SETTINGS_LOG_LEVELS = ['SILENT', 'ERRORS', 'WARNINGS', 'INFO'];
 
 // RX_POSITION is identical on both products; the entry is built by a factory so each
@@ -798,11 +798,47 @@ function makeMavlinkIdEntry() {
 function makeFilterDistanceEntry() {
     return {
         cmd: 'FILTER_DISTANCE_NM', label: 'Distance Filter', group: 'Reporting',
-        help: 'Leave aircraft farther than this from the receiver out of aircraft reports: the aircraft list and map, aircraft JSON, GDL90, MAVLink and CSBee. Raw, Beast and MLAT output and feeds of them always carry every packet.',
-        tip: 'Needs a receiver position (Position settings). Aircraft without a known position are always reported.',
+        help: 'Hide far aircraft from aircraft reports. Raw packets are unfiltered.',
+        tip: 'Filtered: aircraft list and map, aircraft JSON, GDL90, MAVLink, CSBee. Unfiltered: Raw, Beast, MLAT and their feeds. Needs a receiver position; aircraft without a position are kept.',
         fields: [
             { id: 'en', label: 'Enabled', type: 'bool' },
             { id: 'nm', label: 'Distance (nm)', type: 'float', min: 0.1, max: 10000, step: 0.1 },
+        ],
+    };
+}
+
+// FILTER_ALTITUDE_FT is identical on both products.
+function makeFilterAltitudeEntry() {
+    return {
+        cmd: 'FILTER_ALTITUDE_FT', label: 'Altitude Filter', group: 'Reporting',
+        help: 'Hide aircraft outside an altitude band from aircraft reports. Raw packets are unfiltered.',
+        tip: 'Filtered: aircraft list and map, aircraft JSON, GDL90, MAVLink, CSBee. Unfiltered: Raw, Beast, MLAT and their feeds. Uses barometric altitude, else GNSS; aircraft without altitude are kept. Within A of the receiver needs a receiver position.',
+        fields: [
+            {
+                id: 'mode', label: 'Mode', type: 'enum',
+                options: [
+                    { value: 'OFF', label: 'Off' },
+                    { value: 'ABOVE', label: 'At or above A' },
+                    { value: 'BELOW', label: 'At or below A' },
+                    { value: 'BETWEEN', label: 'Between A and B' },
+                    { value: 'NEAR_RX', label: 'Within A above or below the receiver' },
+                ],
+            },
+            { id: 'a', label: 'A (ft)', type: 'int', min: -2000, max: 100000, visibleIf: v => v.mode !== 'OFF' },
+            { id: 'b', label: 'B (ft)', type: 'int', min: -2000, max: 100000, visibleIf: v => v.mode === 'BETWEEN' },
+        ],
+    };
+}
+
+// ASTERIX_SAC_SIC is identical on both products.
+function makeAsterixSacSicEntry() {
+    return {
+        cmd: 'ASTERIX_SAC_SIC', label: 'ASTERIX Data Source', group: 'Reporting',
+        help: 'System Area Code and System Identification Code sent in every ASTERIX record.',
+        query: { expect: /^ASTERIX_SAC_SIC=/ },
+        fields: [
+            { id: 'sac', label: 'SAC', type: 'int', min: 0, max: 255 },
+            { id: 'sic', label: 'SIC', type: 'int', min: 0, max: 255 },
         ],
     };
 }
@@ -1048,7 +1084,14 @@ const SETTINGS_SCHEMA_1090 = [
         build(v, dirty) { return [...dirty].map(iface => `AT+PROTOCOL_OUT=${iface},${v[iface]}`); },
     },
     makeMavlinkIdEntry(),
+    makeFilterAltitudeEntry(),
     makeFilterDistanceEntry(),
+    makeAsterixSacSicEntry(),
+    {
+        cmd: 'NTP_SERVER', label: 'NTP Server', group: 'Reporting',
+        help: 'Time server for ASTERIX output when GNSS has no time. Used only while an output uses ASTERIX.',
+        fields: [{ id: 'host', label: 'Host', type: 'string', maxLen: 63 }],
+    },
     // ── Position ──
     makeRxPositionEntry(),
     {

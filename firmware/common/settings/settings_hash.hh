@@ -13,9 +13,9 @@ enum Scope : uint8_t {
 };
 
 // Left out of kScopeFleet: hostname, WiFi access point SSID and channel (defaults come from the part code and a random
-// number), feed receiver IDs, the Remote ID UAS ID, and the receiver position values.
+// number), feed receiver IDs, the Remote ID UAS ID, the receiver position values and the ASTERIX SIC.
 inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) {
-    static_assert(kSettingsVersion == 19 && sizeof(SettingsManager::Settings) == 1344,
+    static_assert(kSettingsVersion == 19 && sizeof(SettingsManager::Settings) == 1660,
                   "Settings changed: add the new fields below, then update this check.");
     typedef SettingsManager::Settings Settings;
     const bool full = scope == kScopeFull;
@@ -89,6 +89,25 @@ inline uint32_t Compute(const SettingsManager::Settings& settings, Scope scope) 
     hasher.AddBool(settings.auto_update_enabled);
     hasher.AddBool(settings.filter_distance_enabled);
     hasher.AddU32(settings.filter_distance_deci_nm);
+    for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
+        hasher.AddU8(settings.feed_transports[i]);
+    }
+    const Settings::MQTTBroker& mqtt = settings.mqtt_broker;
+    hasher.AddString(mqtt.host, sizeof(mqtt.host));
+    hasher.AddU16(mqtt.port);
+    hasher.AddBool(mqtt.tls);
+    hasher.AddU8(mqtt.qos);
+    hasher.AddU8(mqtt.transport);
+    hasher.AddString(mqtt.username, sizeof(mqtt.username));
+    hasher.AddString(mqtt.password, sizeof(mqtt.password));
+    hasher.AddString(mqtt.topic_prefix, sizeof(mqtt.topic_prefix));
+    hasher.AddString(mqtt.websocket_path, sizeof(mqtt.websocket_path));
+    hasher.AddU8(settings.asterix_sac);
+    if (full) hasher.AddU8(settings.asterix_sic);
+    hasher.AddString(settings.ntp_server, sizeof(settings.ntp_server));
+    hasher.AddU8(settings.filter_altitude_mode);
+    hasher.AddI32(settings.filter_altitude_a_ft);
+    hasher.AddI32(settings.filter_altitude_b_ft);
 
     return hasher.Value();
 }

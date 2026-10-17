@@ -72,6 +72,12 @@ bool SettingsManager::Apply() {
     if (settings.rx_position.source >= RxPosition::kNumPositionSources) {
         settings.rx_position.source = RxPosition::kPositionSourceLowestAircraft;
     }
+    if (!AltitudeFilterIsValid(settings.filter_altitude_mode, settings.filter_altitude_a_ft,
+                               settings.filter_altitude_b_ft)) {
+        settings.filter_altitude_mode = kAltitudeFilterOff;
+        settings.filter_altitude_a_ft = Settings::kDefaultFilterAltitudeAFt;
+        settings.filter_altitude_b_ft = Settings::kDefaultFilterAltitudeBFt;
+    }
 
     // All of these can fail if the radio fails to open/close or the RX command can't be restarted; fold that
     // into the return value so boot/LOAD callers can see it.
@@ -252,6 +258,12 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
                    (unsigned long)(settings.filter_distance_deci_nm / 10),
                    (unsigned long)(settings.filter_distance_deci_nm % 10));
+    CONSOLE_PRINTF("\tAltitude Filter: %s, %ld, %ld ft\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
+
+    // ASTERIX settings
+    CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
+    CONSOLE_PRINTF("\tASTERIX SIC: %u\r\n", settings.asterix_sic);
 
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
@@ -279,6 +291,10 @@ void SettingsManager::PrintAT() {
     CONSOLE_PRINTF("AT+FILTER_DISTANCE_NM=%d,%lu.%lu\r\n", settings.filter_distance_enabled,
                    (unsigned long)(settings.filter_distance_deci_nm / 10),
                    (unsigned long)(settings.filter_distance_deci_nm % 10));
+
+    // AT+FILTER_ALTITUDE_FT
+    CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%s,%ld,%ld\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);
@@ -334,4 +350,7 @@ void SettingsManager::PrintAT() {
 
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", adsbee.GetWatchdogTimeoutSec());
+
+    // AT+ASTERIX_SAC_SIC
+    CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
 }

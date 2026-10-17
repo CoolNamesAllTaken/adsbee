@@ -126,7 +126,7 @@ TEST(AircraftJSON, ModeSAircraftPartialFields) {
     printf("ModeSAircraftPartialFields: %.*s", len, buf);
 
     EXPECT_EQ(GetJSONValue(json, "hex"), "123456");
-    EXPECT_EQ(GetJSONValue(json, "type"), "adsb_icao");
+    EXPECT_EQ(GetJSONValue(json, "type"), "mode_s");  // No extended squitter yet.
 
     // Optional fields absent when flags not set.
     EXPECT_FALSE(HasJSONKey(json, "flight"));
@@ -148,22 +148,37 @@ TEST(AircraftJSON, ModeSAircraftPartialFields) {
     EXPECT_TRUE(HasJSONKey(json, "messages"));
 }
 
-TEST(AircraftJSON, ModeSAircraftTypeFlags) {
+TEST(AircraftJSON, ModeSAircraftAddressTypes) {
     char buf[kAircraftJSONMessageStrMaxLen];
+    const struct {
+        ModeSAircraft::AddressType type;
+        const char* hex;
+        const char* type_str;
+    } kCases[] = {
+        {ModeSAircraft::kAddressTypeADSBICAO, "111111", "adsb_icao"},
+        {ModeSAircraft::kAddressTypeADSBICAONonTransponder, "111111", "adsb_icao_nt"},
+        {ModeSAircraft::kAddressTypeADSRICAO, "111111", "adsr_icao"},
+        {ModeSAircraft::kAddressTypeTISBICAO, "111111", "tisb_icao"},
+        {ModeSAircraft::kAddressTypeModeS, "111111", "mode_s"},
+        {ModeSAircraft::kAddressTypeADSBOther, "~111111", "adsb_other"},
+        {ModeSAircraft::kAddressTypeADSROther, "~111111", "adsr_other"},
+        {ModeSAircraft::kAddressTypeTISBTrackFile, "~111111", "tisb_trackfile"},
+        {ModeSAircraft::kAddressTypeTISBOther, "~111111", "tisb_other"},
+    };
+    for (const auto& c : kCases) {
+        // Without a position the last extended squitter's type is reported, with one the position's.
+        ModeSAircraft ac(Aircraft::UIDToICAOAddress(ModeSAircraft::AddressToUID(0x111111, c.type)));
+        ac.last_address_type = c.type;
+        WriteAircraftJSONModeSAircraftStr(buf, ac);
+        EXPECT_EQ(GetJSONValue(std::string_view(buf), "hex"), c.hex);
+        EXPECT_EQ(GetJSONValue(std::string_view(buf), "type"), c.type_str);
 
-    ModeSAircraft ac;
-    ac.icao_address = 0x111111;
-
-    // Non-transponder → adsr_icao
-    ac.WriteBitFlag(ModeSAircraft::kBitFlagIsNonTransponder, true);
-    WriteAircraftJSONModeSAircraftStr(buf, ac);
-    EXPECT_EQ(GetJSONValue(std::string_view(buf), "type"), "adsr_icao");
-
-    // Class B2 ground vehicle → adsb_icao_nt (takes precedence check: non-transponder wins)
-    ac.WriteBitFlag(ModeSAircraft::kBitFlagIsNonTransponder, false);
-    ac.WriteBitFlag(ModeSAircraft::kBitFlagIsClassB2GroundVehicle, true);
-    WriteAircraftJSONModeSAircraftStr(buf, ac);
-    EXPECT_EQ(GetJSONValue(std::string_view(buf), "type"), "adsb_icao_nt");
+        ModeSAircraft positioned(0x111111);
+        positioned.position_address_type = c.type;
+        positioned.WriteBitFlag(ModeSAircraft::kBitFlagPositionValid, true);
+        WriteAircraftJSONModeSAircraftStr(buf, positioned);
+        EXPECT_EQ(GetJSONValue(std::string_view(buf), "type"), c.type_str);
+    }
 }
 
 TEST(AircraftJSON, ModeSAircraftHeadingFields) {
@@ -449,10 +464,11 @@ class PreferredReportForAddress : public ::testing::Test {
     static constexpr uint32_t kICAO = 0xA41090;
     static constexpr uint32_t kNowMs = 1000000;
 
-    ModeSAircraft* AddModeS(bool position_valid, uint32_t position_age_ms, bool non_transponder = false) {
+    ModeSAircraft* AddModeS(bool position_valid, uint32_t position_age_ms,
+                            ModeSAircraft::AddressType type = ModeSAircraft::kAddressTypeADSBICAO) {
         ModeSAircraft* ac = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(kICAO));
         ac->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, position_valid);
-        ac->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsNonTransponder, non_transponder);
+        ac->position_address_type = type;
         ac->last_position_update_ms = kNowMs - position_age_ms;
         return ac;
     }
@@ -510,10 +526,24 @@ TEST_F(PreferredReportForAddress, DirectWinsWhenNoEntryHasAPosition) {
 }
 
 TEST_F(PreferredReportForAddress, UATDirectBeatsDF18Rebroadcast) {
-    ModeSAircraft* df18 = AddModeS(true, 500, true);
+    ModeSAircraft* df18 = AddModeS(true, 500, ModeSAircraft::kAddressTypeADSRICAO);
     UATAircraft* uat = AddUAT(UATAircraft::kADSBTargetWithICAO24BitAddress, true, 900);
     EXPECT_FALSE(Preferred(df18->GetUID()));
     EXPECT_TRUE(Preferred(uat->GetUID()));
+}
+
+TEST_F(PreferredReportForAddress, DF18NonTransponderIsDirect) {
+    ModeSAircraft* df18 = AddModeS(true, 900, ModeSAircraft::kAddressTypeADSBICAONonTransponder);
+    UATAircraft* tisb = AddUAT(UATAircraft::kTISBTargetWithICAO24BitAddress, true, 100);
+    EXPECT_TRUE(Preferred(df18->GetUID()));
+    EXPECT_FALSE(Preferred(tisb->GetUID()));
+}
+
+TEST_F(PreferredReportForAddress, DF18TISBRanksWithUATTISB) {
+    ModeSAircraft* df18 = AddModeS(true, 900, ModeSAircraft::kAddressTypeTISBICAO);
+    UATAircraft* tisb = AddUAT(UATAircraft::kTISBTargetWithICAO24BitAddress, true, 100);
+    EXPECT_FALSE(Preferred(df18->GetUID()));  // Same rank: the newer position wins.
+    EXPECT_TRUE(Preferred(tisb->GetUID()));
 }
 
 TEST_F(PreferredReportForAddress, LoneAndNonICAOEntriesAreAlwaysReported) {
@@ -645,8 +675,9 @@ TEST_F(PreferredReportForAddress, LiveMapListAppliesDistanceFilter) {
 
     for (uint32_t filter_distance_m : {0u, 50000u}) {
         uint32_t uids[kAircraftDictionaryMaxNumAircraft];
-        uint16_t num_uids =
-            ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, kAircraftDictionaryMaxNumAircraft, filter_distance_m);
+        AircraftReportFilter filter;
+        filter.max_distance_m = filter_distance_m;
+        uint16_t num_uids = ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, kAircraftDictionaryMaxNumAircraft, filter);
         std::string all;
         char buf[4000];
         uint16_t next = 0, len;
@@ -655,6 +686,32 @@ TEST_F(PreferredReportForAddress, LiveMapListAppliesDistanceFilter) {
         }
         EXPECT_NE(all.find("\"hex\":\"b00001\""), std::string::npos);
         EXPECT_EQ(all.find("\"hex\":\"b00002\"") != std::string::npos, filter_distance_m == 0);
+        EXPECT_NE(all.find("\"hex\":\"b00003\""), std::string::npos);
+    }
+}
+
+// The Live Map list applies the altitude filter too and keeps aircraft with no altitude.
+TEST_F(PreferredReportForAddress, LiveMapListAppliesAltitudeFilter) {
+    ModeSAircraft* low = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00001));
+    low->baro_altitude_ft = 2000;
+    low->WriteBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid, true);
+    ModeSAircraft* high = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00002));
+    high->gnss_altitude_ft = 35000;
+    high->WriteBitFlag(ModeSAircraft::kBitFlagGNSSAltitudeValid, true);
+    dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xB00003));  // Unknown altitude.
+
+    for (uint8_t mode : {kAltitudeFilterOff, kAltitudeFilterBelow}) {
+        uint32_t uids[kAircraftDictionaryMaxNumAircraft];
+        uint16_t num_uids = ListAircraftJSONLiveMapUIDs(dictionary, kNowMs, uids, kAircraftDictionaryMaxNumAircraft,
+                                                        dictionary.GetReportFilter(0, mode, 10000, 0));
+        std::string all;
+        char buf[4000];
+        uint16_t next = 0, len;
+        while ((len = WriteAircraftJSONLiveMapArray(dictionary, kNowMs, uids, num_uids, next, buf, sizeof(buf))) > 0) {
+            all.append(buf, len);
+        }
+        EXPECT_NE(all.find("\"hex\":\"b00001\""), std::string::npos);
+        EXPECT_EQ(all.find("\"hex\":\"b00002\"") != std::string::npos, mode == kAltitudeFilterOff);
         EXPECT_NE(all.find("\"hex\":\"b00003\""), std::string::npos);
     }
 }
