@@ -470,3 +470,5 @@ jobs:
       run: bash firmware/scripts/test_check_version_sync.sh
     - name: Test the firmware hashes script
       run: python3 firmware/scripts/test_firmware_hashes.py
+    - name: Test the RP2040 partition header script
+      run: python3 firmware/adsbee_1090/pico/linker_scripts/test_util_crc.py

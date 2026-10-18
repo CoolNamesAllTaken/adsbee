@@ -12,6 +12,7 @@ import struct
 import sys
 import zlib
 
+RP2040_HDR0_ADDR = 0x1002C000  # Partition 0 header.
 RP2040_APP0_ADDR = 0x1002D000  # Application 0, the partition a .uf2 fills.
 RP2040_APP_LEN = 8096 * 1024
 UF2_BLOCK_LEN = 512
@@ -63,6 +64,19 @@ def uf2_rp2040_image(path):
     if not image:
         raise ValueError("{} has no application image".format(path))
     return image
+
+
+def check_uf2_header(path, image):
+    """Checks that the .uf2's partition 0 header describes its application, as AT+OTA? verifies it."""
+    contents = read(path)
+    for offset in range(0, len(contents), UF2_BLOCK_LEN):
+        addr = struct.unpack_from("<I", contents, offset + 12)[0]
+        if addr == RP2040_HDR0_ADDR:
+            magic, _, size, crc, _ = struct.unpack_from("<5I", contents, offset + 32)
+            if magic != 0xAD5BEEE or size > len(image) or crc32(image[:size]) != crc:
+                raise ValueError("{}: partition 0 header does not match its image".format(path))
+            return
+    raise ValueError("{} has no partition 0 header".format(path))
 
 
 def ota_rp2040_images(path):
@@ -119,6 +133,8 @@ def hashes_1090(args):
     images = []
     if args.uf2:
         images.append(("UF2 image, partition 0", uf2_rp2040_image(args.uf2)))
+        if args.check_uf2_header:
+            check_uf2_header(args.uf2, images[-1][1])
     if args.ota:
         for partition, image in enumerate(ota_rp2040_images(args.ota)):
             images.append(("OTA image, partition {}".format(partition), image))
@@ -166,6 +182,8 @@ def main():
     p1090 = products.add_parser("adsbee_1090")
     p1090.add_argument("--uf2", help="adsbee_1090-<version>.uf2 (combined.uf2)")
     p1090.add_argument("--ota", help="adsbee_1090-<version>.ota")
+    p1090.add_argument("--check-uf2-header", action="store_true",
+                       help="fail if the .uf2's partition 0 header does not describe its application")
     p1090.add_argument("--esp32", required=True, help="ESP32 application image (adsbee_esp.bin)")
     p1090.add_argument("--cc1312", required=True, help="CC1312 image (sub_ghz_radio.bin)")
     p1090.set_defaults(func=hashes_1090)

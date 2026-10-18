@@ -4,6 +4,8 @@ import zlib
 import struct
 import argparse
 import os
+import subprocess
+import tempfile
 from util_uf2 import *
 from util_asm import *
 
@@ -97,8 +99,8 @@ def generate_header(app_bin_filenames, asm_section=None, ota_filename=None):
         if i == 0:
             hdr_bin_filename = os.path.join(app_bin_dir, f"{asm_section}.bin")
             hdr_asm_filename = os.path.join(app_bin_dir, f"{asm_section}.S")
-            # Create a header with the status Byte forced to valid to skip the CRC check in the bootloader
-            # (header CRC from application.bin does not match the CRC calculated from the contents flashed by combined.elf).
+            # Create a header with the status Byte forced to valid to skip the CRC check in the bootloader. This is a
+            # placeholder: patch_elf_header() replaces it with the header of the image combined.elf actually contains.
             hdr_bin_contents = create_header_bin_contents(len(app_bin_contents), app_crc, status_valid=True)
 
             print(f"\tWriting {len(hdr_bin_contents)} Bytes to {hdr_bin_filename}.")
@@ -143,15 +145,51 @@ def generate_header(app_bin_filenames, asm_section=None, ota_filename=None):
             f.write(ota_file_contents)
 
 
+def patch_elf_header(elf_filename, objcopy, section, app_offset):
+    """
+    Rewrite the partition header section of an ELF to describe the application the ELF itself contains. The combined
+    image is linked separately from app0.bin, so the header generated for app0.bin doesn't match it.
+    @param[in] elf_filename ELF with a bootloader, a partition header section and an application, linked from the
+    start of flash.
+    @param[in] objcopy Path to the toolchain's objcopy.
+    @param[in] section Name of the header section, e.g. ".hdr0".
+    @param[in] app_offset Offset of the application from the start of flash.
+    @retval Header contents written to the ELF.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        flat_filename = os.path.join(tmp_dir, "flat.bin")
+        hdr_filename = os.path.join(tmp_dir, "hdr.bin")
+        subprocess.run([objcopy, "-O", "binary", elf_filename, flat_filename], check=True)
+        with open(flat_filename, 'rb') as f:
+            app_bin_contents = f.read()[app_offset:]
+        if not app_bin_contents:
+            print(f"Error: {elf_filename} has no application at offset 0x{app_offset:x}.")
+            sys.exit(1)
+        app_crc = calculate_crc32(app_bin_contents)
+        hdr_bin_contents = create_header_bin_contents(len(app_bin_contents), app_crc, status_valid=True)
+        with open(hdr_filename, 'wb') as f:
+            f.write(hdr_bin_contents)
+        subprocess.run([objcopy, "--update-section", f"{section}={hdr_filename}", elf_filename], check=True)
+    print(f"Patched {section} of {elf_filename}: {len(app_bin_contents)} Bytes, CRC32 0x{app_crc:x}.")
+    return hdr_bin_contents
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CRC tools.")
     parser.add_argument("filenames", nargs='+', help="List of binary filenames.")
     parser.add_argument("--header", help="Generate a binary header, then turn it into an assembly header with the provided section name.")
     parser.add_argument("--ota", help="Generate a .ota file that combines the header and application binary.")
+    parser.add_argument("--patch-elf-header", metavar="SECTION",
+                        help="Rewrite this header section of the ELF given as filename to describe its own application.")
+    parser.add_argument("--objcopy", default="arm-none-eabi-objcopy", help="objcopy for --patch-elf-header.")
+    parser.add_argument("--app-offset", type=lambda x: int(x, 0), default=0x2D000,
+                        help="Application offset from the start of flash for --patch-elf-header.")
 
     args = parser.parse_args()
 
-    if args.header:
+    if args.patch_elf_header:
+        patch_elf_header(args.filenames[0], args.objcopy, args.patch_elf_header, args.app_offset)
+    elif args.header:
         # Generate header binary and assembly files.
         generate_header(args.filenames, args.header, args.ota)
     else:

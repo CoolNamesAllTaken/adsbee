@@ -188,7 +188,7 @@ if (ON_EMBEDDED_DEVICE)
     target_include_directories(combined PRIVATE $<TARGET_PROPERTY:application,INCLUDE_DIRECTORIES>)
     target_link_libraries(combined $<TARGET_PROPERTY:application,LINK_LIBRARIES>)
     target_link_options(combined PUBLIC "-Wl,-Map=combined.map")
-    # Lets code tell that it runs from the combined image, whose partition 0 header describes app0.bin (see util_crc.py).
+    # Lets code tell that it runs from the combined image, which differs from app0.bin.
     target_compile_definitions(combined PRIVATE COMBINED_IMAGE)
     target_compile_options(combined PRIVATE -fstack-usage) # Adds stack usage files in Debug/application/CMakeFiles/combined.dir/... as .su files.
     add_dependencies(combined
@@ -199,6 +199,14 @@ if (ON_EMBEDDED_DEVICE)
     pico_enable_stdio_usb(combined 1) # use USB for standard printing
     pico_enable_stdio_uart(combined 0) # disable STDIO UART
     pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
+    # hdr0.S describes app0.bin. Make the header describe this image so AT+OTA? can verify a partition written from
+    # the .uf2. Added before pico_add_uf2_output() so the .uf2 is made from the patched ELF.
+    add_custom_command(TARGET combined POST_BUILD
+        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_crc.py $<TARGET_FILE:combined>
+                --patch-elf-header .${APPLICATION_HEADER_SECTION_NAME}
+                --objcopy ${CMAKE_OBJCOPY}
+        VERBATIM
+    )
     pico_add_uf2_output(combined)
 
     # Version-stamped copies for releases, named like the ADSBee 1421 artifacts.
@@ -210,7 +218,7 @@ if (ON_EMBEDDED_DEVICE)
         COMMAND ${CMAKE_COMMAND} -E copy adsbee_1090.ota ${ARTIFACT_BASE}.ota
         # Hashes AT+CONFIG_HASH? reports for a device running these images.
         COMMAND ${Python3_EXECUTABLE} ${ADSBEE_COMMON_DIR}/../scripts/firmware_hashes.py adsbee_1090
-                --uf2 combined.uf2 --ota adsbee_1090.ota
+                --uf2 combined.uf2 --check-uf2-header --ota adsbee_1090.ota
                 --esp32 ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/adsbee_esp.bin
                 --cc1312 ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/sub_ghz_radio.bin
                 -o ${ARTIFACT_BASE}.hashes.txt
