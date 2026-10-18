@@ -441,6 +441,9 @@ void ADSBee::UpdateRxPosition() {
     // Update the aircraft dictionary's reference location.
     if (rx_position_available) {
         aircraft_dictionary.SetReferencePosition(rx_position.latitude_deg, rx_position.longitude_deg);
+        aircraft_dictionary.SetReferenceAltitudeFt(rx_position.FilterAltitudeFt());
+    } else {
+        aircraft_dictionary.ClearReferenceAltitude();
     }
 }
 
@@ -764,7 +767,8 @@ void ADSBee::IngestAndForwardPackets() {
             //              aircraft_dictionary.GetNumAircraft());
         }
         // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
-        // dictionary didn't know what to do with them.
+        // dictionary didn't know what to do with them. Raw packets are never filtered: Raw, Beast, MLAT and the ESP32's
+        // feeds carry every packet. AT+FILTER_DISTANCE_NM and AT+FILTER_ALTITUDE_FT only gate aircraft reports.
         if (decoded_packet.is_valid) {
             if (comms_manager.mode_s_packet_reporting_queue.IsFull()) {
                 comms_manager.ForceFlushRawPackets();

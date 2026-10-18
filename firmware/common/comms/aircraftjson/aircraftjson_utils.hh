@@ -25,6 +25,49 @@ static inline bool EmitterCategoryToStr(char* buf, size_t buf_len, ADSBTypes::Em
 }
 
 /**
+ * Returns the readsb "type" string of a Mode S address type.
+ */
+static inline const char* ModeSAddressTypeToStr(ModeSAircraft::AddressType type) {
+    switch (type) {
+        case ModeSAircraft::kAddressTypeADSBICAO:
+            return "adsb_icao";
+        case ModeSAircraft::kAddressTypeADSBICAONonTransponder:
+            return "adsb_icao_nt";
+        case ModeSAircraft::kAddressTypeADSRICAO:
+            return "adsr_icao";
+        case ModeSAircraft::kAddressTypeTISBICAO:
+            return "tisb_icao";
+        case ModeSAircraft::kAddressTypeADSBOther:
+            return "adsb_other";
+        case ModeSAircraft::kAddressTypeADSROther:
+            return "adsr_other";
+        case ModeSAircraft::kAddressTypeTISBTrackFile:
+            return "tisb_trackfile";
+        case ModeSAircraft::kAddressTypeTISBOther:
+            return "tisb_other";
+        default:
+            return "mode_s";
+    }
+}
+
+/**
+ * Appends readsb's "r_dst" (distance from the receiver, nautical miles) and "r_dir" (bearing from the receiver,
+ * degrees) when the aircraft's distance is known.
+ * @retval New length of buf, clamped to max.
+ */
+inline int16_t AppendAircraftJSONDistanceAndBearing(char buf[], int16_t n, int16_t max, const Aircraft& aircraft) {
+    if (aircraft.distance_m == Aircraft::kDistanceUnknown) {
+        return n;
+    }
+    uint32_t distance_milli_nm = static_cast<uint32_t>((static_cast<uint64_t>(aircraft.distance_m) * 1000 + 926) / 1852);
+    uint32_t bearing_decideg = ((static_cast<uint32_t>(aircraft.bearing_bam16) * 3600 + 32768) >> 16) % 3600;
+    n += snprintf(buf + n, max - n, ",\"r_dst\":%lu.%03lu,\"r_dir\":%lu.%lu", (unsigned long)(distance_milli_nm / 1000),
+                  (unsigned long)(distance_milli_nm % 1000), (unsigned long)(bearing_decideg / 10),
+                  (unsigned long)(bearing_decideg % 10));
+    return n < max ? n : max;
+}
+
+/**
  * Serializes a ModeSAircraft to a single-line readsb-compatible JSON object.
  * @param[out] buf Character array of at least kAircraftJSONMessageStrMaxLen bytes.
  * @param[in] aircraft Aircraft to serialize.
@@ -35,23 +78,19 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
     int16_t n = 0;
     const int16_t max = kAircraftJSONMessageStrMaxLen;
 
-    // hex (always)
+    // hex (always). Non-ICAO addresses get a '~' prefix per readsb convention.
+    ModeSAircraft::AddressType address_type = aircraft.GetAddressType();
     n += snprintf(buf + n, max - n,
 #if defined(ON_PICO) || defined(ON_HOST)
-                  "{\"hex\":\"%06x\"",
+                  "{\"hex\":\"%s%06x\"",
 #else
-                  "{\"hex\":\"%06lx\"",
+                  "{\"hex\":\"%s%06lx\"",
 #endif
-                  aircraft.icao_address);
+                  address_type >= ModeSAircraft::kFirstNonICAOAddressType ? "~" : "", aircraft.icao_address);
     n = n < max ? n : max;
 
-    // type
-    const char* type_str = "adsb_icao";
-    if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsNonTransponder)) {
-        type_str = "adsr_icao";
-    } else if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsClassB2GroundVehicle)) {
-        type_str = "adsb_icao_nt";
-    }
+    // type (readsb address types)
+    const char* type_str = ModeSAddressTypeToStr(address_type);
     n += snprintf(buf + n, max - n, ",\"type\":\"%s\",\"link\":\"1090\"", type_str);
     n = n < max ? n : max;
 
@@ -82,6 +121,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                       aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_baro
     if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid)) {
@@ -285,6 +325,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                       aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_baro
     if (aircraft.HasBitFlag(UATAircraft::kBitFlagBaroAltitudeValid)) {
@@ -450,6 +491,7 @@ inline int16_t WriteAircraftJSONRemoteIDAircraftStr(char buf[], const RemoteIDAi
         n += snprintf(buf + n, max - n, ",\"lat\":%.5f,\"lon\":%.5f", aircraft.latitude_deg, aircraft.longitude_deg);
         n = n < max ? n : max;
     }
+    n = AppendAircraftJSONDistanceAndBearing(buf, n, max, aircraft);
 
     // alt_geom (geometric / WGS84 altitude)
     if (aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagGNSSAltitudeValid)) {
@@ -518,21 +560,25 @@ inline int16_t WriteAircraftJSONRemoteIDAircraftStr(char buf[], const RemoteIDAi
 }
 
 /**
- * Lists the aircraft the Live Map websocket reports: the preferred entry per ICAO address (one target per aircraft).
+ * Lists the aircraft the Live Map websocket reports: the preferred entry per ICAO address (one target per aircraft),
+ * minus those the report filter (AT+FILTER_DISTANCE_NM, AT+FILTER_ALTITUDE_FT) leaves out.
  * @param[in] dictionary Aircraft dictionary to list.
  * @param[in] timestamp_ms Current local time (get_time_since_boot_ms()), for preference.
  * @param[out] uids UIDs of the aircraft to report.
  * @param[in] max_uids Length of uids.
+ * @param[in] filter AircraftDictionary::GetReportFilter(): aircraft to leave out. The default keeps all.
  * @retval Number of UIDs written.
  */
 inline uint16_t ListAircraftJSONLiveMapUIDs(const AircraftDictionary& dictionary, uint32_t timestamp_ms,
-                                            uint32_t uids[], uint16_t max_uids) {
+                                            uint32_t uids[], uint16_t max_uids,
+                                            const AircraftReportFilter& filter = AircraftReportFilter()) {
     uint16_t num_uids = 0;
     for (const auto& itr : dictionary.dict) {
         if (num_uids >= max_uids) {
             break;
         }
-        if (dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms)) {
+        if (dictionary.IsPreferredReportForAddress(itr.first, timestamp_ms) &&
+            !std::visit([&filter](const auto& a) { return filter.Excludes(a); }, itr.second)) {
             uids[num_uids++] = itr.first;
         }
     }

@@ -1,8 +1,15 @@
+#include <algorithm>
+#include <cstring>
+#include <vector>
+
 #include "aircraft_dictionary.hh"
+#include "beast_utils.hh"
 #include "decode_utils.hh"  // for location calculation utility functions
 #include "gtest/gtest.h"
 #include "hal_god_powers.hh"  // for changing timestamp
 #include "mode_s_packet.hh"
+#include "raw_utils.hh"
+#include "settings.hh"
 
 constexpr float kLatDegCloseEnough = 0.001f;
 constexpr float kLonDegCloseEnough = 0.0001f;
@@ -1856,4 +1863,328 @@ TEST(AircraftDictionary, SingleCorruptCPRPacketCannotConfirmItself) {
         EXPECT_NEAR(aircraft.longitude_deg, lon0, 0.05);
         EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
     }
+}
+
+// Ingests the even/odd pair from FilterCPRLocations, which decodes to 48.5977 N, 18.70521 E.
+static ModeSAircraft* IngestPositionPair(AircraftDictionary& dictionary) {
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8D48922358C387D91DF354DCCCB8");  // even
+    inc_time_since_boot_ms(1000);
+    packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    packet = DecodedModeSPacket((char*)"8D48922358C38066020D8401D571");  // odd
+    inc_time_since_boot_ms(1000);
+    packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    return dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(packet.icao_address, Aircraft::kAircraftTypeModeS),
+                                                    false);
+}
+
+TEST(AircraftDictionary, DistanceAndBearingFromReceiver) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    ModeSAircraft* aircraft = IngestPositionPair(dictionary);
+    ASSERT_TRUE(aircraft);
+    // WGS-84 geodesic from 48 N 18 E: 84585 m at 37.95 deg.
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 37.95f, 0.2f);
+
+    // Distance filter: 0 is off, aircraft beyond the limit are left out.
+    EXPECT_FALSE(aircraft->IsBeyondDistance(0));
+    EXPECT_FALSE(aircraft->IsBeyondDistance(100000));
+    EXPECT_TRUE(aircraft->IsBeyondDistance(50000));
+
+    // Moving the receiver by less than kReferenceMoveThresholdMeters keeps the distances; moving it farther makes
+    // Update() recompute them.
+    dictionary.SetReferencePosition(48.0005f, 18.0f);  // 56 m.
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+    dictionary.SetReferencePosition(48.5f, 18.6f);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 13356, 10);  // Geodesic: 13355.6 m at 35.52 deg.
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 35.52f, 0.2f);
+
+    // Without a receiver position the distance is unknown and the filter keeps the aircraft.
+    dictionary.ClearReferencePosition();
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_EQ(aircraft->distance_m, Aircraft::kDistanceUnknown);
+    EXPECT_FALSE(aircraft->IsBeyondDistance(1));
+}
+
+// AT+FILTER_DISTANCE_NM gates aircraft reports only. An aircraft 45.7 nm out with the filter at 35 nm is left out of
+// the report UID snapshot (CSBee, MAVLink, GDL90, aircraft JSON), while its packets still make the same Raw and Beast
+// frames, which take no filter at all.
+TEST(AircraftDictionary, DistanceFilterGatesAircraftReportsNotRawPackets) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    ModeSAircraft* far = IngestPositionPair(dictionary);  // 84.6 km = 45.7 nm.
+    ASSERT_TRUE(far);
+    ModeSAircraft* near = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xBEE001));
+    near->distance_m = 20000;
+    ModeSAircraft* unknown = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(0xBEE002));  // No position.
+
+    SettingsManager::Settings settings;
+    settings.filter_distance_deci_nm = 350;
+    uint32_t uids[10];
+    for (bool enabled : {false, true}) {
+        settings.filter_distance_enabled = enabled;
+        uint16_t n = dictionary.GetReportUIDs(uids, 10, dictionary.GetReportFilter(settings));
+        std::vector<uint32_t> reported(uids, uids + n);
+        auto has = [&](const ModeSAircraft* a) {
+            return std::find(reported.begin(), reported.end(), a->GetUID()) != reported.end();
+        };
+        EXPECT_TRUE(has(near));
+        EXPECT_TRUE(has(unknown));  // Unknown distance: always kept.
+        EXPECT_EQ(has(far), !enabled);
+    }
+    EXPECT_EQ(dictionary.GetReportUIDs(uids, 1, AircraftReportFilter()), 1u);  // Capacity respected.
+
+    // The far aircraft's packet still encodes to the full Raw and Beast frames with the filter on.
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8D48922358C387D91DF354DCCCB8");
+    ASSERT_TRUE(far->IsBeyondDistance(settings.FilterDistanceMeters()));
+    char raw_frame[kRawModeSFrameMaxNumChars];
+    EXPECT_GT(BuildRawModeSFrame(packet.raw, raw_frame), 0);
+    EXPECT_NE(strstr(raw_frame, "8D48922358C387D91DF354DCCCB8"), nullptr);
+    uint8_t beast_frame[BeastReporter::kModeSBeastFrameMaxLenBytes];
+    EXPECT_GT(BeastReporter::BuildModeSBeastFrame(beast_frame, packet), 0);
+}
+
+// Report UIDs as a set of ICAO addresses, for the altitude filter tests below.
+static std::vector<uint32_t> ReportedICAOs(const AircraftDictionary& dictionary, const AircraftReportFilter& filter) {
+    uint32_t uids[kAircraftDictionaryMaxNumAircraft];
+    uint16_t n = dictionary.GetReportUIDs(uids, kAircraftDictionaryMaxNumAircraft, filter);
+    std::vector<uint32_t> icaos;
+    for (uint16_t i = 0; i < n; i++) icaos.push_back(Aircraft::UIDToICAOAddress(uids[i]));
+    std::sort(icaos.begin(), icaos.end());
+    return icaos;
+}
+
+// Mode S aircraft with the given altitudes; INT32_MIN leaves that altitude unknown.
+static ModeSAircraft* InsertAircraftAtAltitude(AircraftDictionary& dictionary, uint32_t icao, int32_t baro_ft,
+                                               int32_t gnss_ft = INT32_MIN) {
+    ModeSAircraft* a = dictionary.InsertAircraft<ModeSAircraft>(ModeSAircraft(icao));
+    if (baro_ft != INT32_MIN) {
+        a->baro_altitude_ft = baro_ft;
+        a->WriteBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid, true);
+    }
+    if (gnss_ft != INT32_MIN) {
+        a->gnss_altitude_ft = gnss_ft;
+        a->WriteBitFlag(ModeSAircraft::kBitFlagGNSSAltitudeValid, true);
+    }
+    return a;
+}
+
+TEST(AltitudeFilter, ModeStrings) {
+    struct {
+        const char* str;
+        uint8_t mode;
+    } good[] = {{"OFF", kAltitudeFilterOff},          {"above", kAltitudeFilterAbove}, {"Below", kAltitudeFilterBelow},
+                {"BETWEEN", kAltitudeFilterBetween}, {"near_rx", kAltitudeFilterNearRx}, {"Near_Rx", kAltitudeFilterNearRx}};
+    for (const auto& g : good) {
+        uint8_t mode = 0xFF;
+        EXPECT_TRUE(ParseAltitudeFilterMode(g.str, strlen(g.str), mode)) << g.str;
+        EXPECT_EQ(mode, g.mode) << g.str;
+        EXPECT_STREQ(AltitudeFilterModeStr(mode), kAltitudeFilterModeStrs[g.mode]);
+    }
+    // Numbers, unknown words, prefixes and longer words are rejected and leave mode alone.
+    for (const char* bad : {"0", "1", "3", "4", "", "RANGE", "NEAR", "NEAR RX", "ABOVEX", "ABOV", "OFF ", "\x7f"}) {
+        uint8_t mode = kAltitudeFilterAbove;
+        EXPECT_FALSE(ParseAltitudeFilterMode(bad, strlen(bad), mode)) << bad;
+        EXPECT_EQ(mode, kAltitudeFilterAbove);
+    }
+    // Only the given length counts (AT arguments are string views, not terminated).
+    uint8_t mode = 0;
+    EXPECT_TRUE(ParseAltitudeFilterMode("BELOW,5000", 5, mode));
+    EXPECT_EQ(mode, kAltitudeFilterBelow);
+    EXPECT_STREQ(AltitudeFilterModeStr(kNumAltitudeFilterModes), "INVALID");
+}
+
+TEST(AltitudeFilter, Validation) {
+    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterOff, 0, 10000));
+    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterAbove, -2000, 100000));
+    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterBelow, 100000, -2000));  // b is unused.
+    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterBetween, 5000, 5000));
+    EXPECT_TRUE(AltitudeFilterIsValid(kAltitudeFilterNearRx, 1, 0));
+    EXPECT_FALSE(AltitudeFilterIsValid(kNumAltitudeFilterModes, 0, 0));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterAbove, -2001, 0));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterAbove, 100001, 0));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterOff, 0, -2001));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterBetween, 5001, 5000));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterNearRx, 0, 0));
+    EXPECT_FALSE(AltitudeFilterIsValid(kAltitudeFilterNearRx, -500, 0));
+
+    // Invalid settings resolve to no filter.
+    EXPECT_FALSE(AltitudeFilterBounds::Of(kAltitudeFilterBetween, 6000, 5000, false, 0).enabled);
+    EXPECT_FALSE(AltitudeFilterBounds::Of(kAltitudeFilterOff, 0, 0, true, 0).enabled);
+    AltitudeFilterBounds near = AltitudeFilterBounds::Of(kAltitudeFilterNearRx, 100000, 0, true, 100000);
+    EXPECT_EQ(near.min_ft, 0);
+    EXPECT_EQ(near.max_ft, 200000);
+}
+
+// Each AT+FILTER_ALTITUDE_FT mode on aircraft at known, barometric-only, GNSS-only and unknown altitudes. Bounds are
+// inclusive; the barometric altitude wins over GNSS; aircraft with no altitude are kept.
+TEST(AircraftDictionary, AltitudeFilterModes) {
+    AircraftDictionary dictionary;
+    InsertAircraftAtAltitude(dictionary, 0xBEE001, 1000);
+    InsertAircraftAtAltitude(dictionary, 0xBEE002, 5000);
+    InsertAircraftAtAltitude(dictionary, 0xBEE003, 30000);
+    InsertAircraftAtAltitude(dictionary, 0xBEE004, INT32_MIN, 20000);  // GNSS only.
+    InsertAircraftAtAltitude(dictionary, 0xBEE005, 3000, 40000);       // Barometric wins.
+    InsertAircraftAtAltitude(dictionary, 0xBEE006, INT32_MIN);         // No altitude.
+    InsertAircraftAtAltitude(dictionary, 0xBEE007, -1500);
+
+    using V = std::vector<uint32_t>;
+    const V all = {0xBEE001, 0xBEE002, 0xBEE003, 0xBEE004, 0xBEE005, 0xBEE006, 0xBEE007};
+    EXPECT_EQ(ReportedICAOs(dictionary, AircraftReportFilter()), all);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterOff, 5000, 6000)), all);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterAbove, 5000, 0)),
+              (V{0xBEE002, 0xBEE003, 0xBEE004, 0xBEE006}));
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBelow, 5000, 0)),
+              (V{0xBEE001, 0xBEE002, 0xBEE005, 0xBEE006, 0xBEE007}));
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBelow, 0, 0)),
+              (V{0xBEE006, 0xBEE007}));
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBetween, 1000, 5000)),
+              (V{0xBEE001, 0xBEE002, 0xBEE005, 0xBEE006}));
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBetween, 20000, 20000)),
+              (V{0xBEE004, 0xBEE006}));
+
+    // Near receiver filters nothing until the receiver has a position and an altitude.
+    const AircraftReportFilter near_filter = dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0);
+    EXPECT_FALSE(near_filter.altitude.enabled);
+    EXPECT_EQ(ReportedICAOs(dictionary, near_filter), all);
+    dictionary.SetReferenceAltitudeFt(4000);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0)), all);
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0)),
+              (V{0xBEE002, 0xBEE005, 0xBEE006}));  // 2000 to 6000 ft.
+    dictionary.SetReferenceAltitudeFt(0);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 1500, 0)),
+              (V{0xBEE001, 0xBEE006, 0xBEE007}));  // -1500 to 1500 ft.
+    dictionary.ClearReferenceAltitude();
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0)), all);
+    dictionary.SetReferenceAltitudeFt(4000);
+    dictionary.ClearReferencePosition();  // Clears the receiver altitude too.
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterNearRx, 2000, 0)), all);
+}
+
+// UAT aircraft use the same barometric-then-GNSS rule; Remote ID aircraft only carry a GNSS altitude.
+TEST(AircraftDictionary, AltitudeFilterOtherAircraftTypes) {
+    AircraftDictionary dictionary;
+    UATAircraft* uat_baro = dictionary.InsertAircraft<UATAircraft>(UATAircraft(0xBEE011));
+    uat_baro->baro_altitude_ft = 2000;
+    uat_baro->WriteBitFlag(UATAircraft::kBitFlagBaroAltitudeValid, true);
+    UATAircraft* uat_gnss = dictionary.InsertAircraft<UATAircraft>(UATAircraft(0xBEE012));
+    uat_gnss->gnss_altitude_ft = 9000;
+    uat_gnss->WriteBitFlag(UATAircraft::kBitFlagGNSSAltitudeValid, true);
+    RemoteIDAircraft* drone = dictionary.InsertAircraft<RemoteIDAircraft>(RemoteIDAircraft(0xBEE013));
+    drone->gnss_altitude_ft = 400;
+    drone->WriteBitFlag(RemoteIDAircraft::kBitFlagGNSSAltitudeValid, true);
+    RemoteIDAircraft* drone_no_alt = dictionary.InsertAircraft<RemoteIDAircraft>(RemoteIDAircraft(0xBEE014));
+    drone_no_alt->baro_altitude_ft = 50000;  // Not a Remote ID altitude: ignored.
+
+    using V = std::vector<uint32_t>;
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBetween, 1000, 10000)),
+              (V{0xBEE011, 0xBEE012, 0xBEE014}));
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(0, kAltitudeFilterBelow, 1000, 0)),
+              (V{0xBEE013, 0xBEE014}));
+}
+
+// An aircraft is reported only if it passes both the distance and the altitude filter, and raw frames of filtered
+// aircraft are unchanged.
+TEST(AircraftDictionary, AltitudeAndDistanceFiltersCombine) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    ModeSAircraft* far = IngestPositionPair(dictionary);  // 45.7 nm out.
+    ASSERT_TRUE(far);
+    ASSERT_TRUE(far->HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid));
+    const int32_t far_ft = far->baro_altitude_ft;
+    ModeSAircraft* near_low = InsertAircraftAtAltitude(dictionary, 0xBEE001, far_ft - 10000);
+    near_low->distance_m = 20000;
+    ModeSAircraft* near_high = InsertAircraftAtAltitude(dictionary, 0xBEE002, far_ft);
+    near_high->distance_m = 20000;
+
+    SettingsManager::Settings settings;
+    settings.filter_distance_deci_nm = 350;
+    settings.filter_altitude_a_ft = far_ft - 1000;
+    using V = std::vector<uint32_t>;
+    const uint32_t far_icao = far->icao_address;
+    V all = {0xBEE001, 0xBEE002, far_icao};
+    std::sort(all.begin(), all.end());
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(settings)), all);  // Both off.
+    settings.filter_distance_enabled = true;
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(settings)), (V{0xBEE001, 0xBEE002}));
+    settings.filter_distance_enabled = false;
+    settings.filter_altitude_mode = kAltitudeFilterAbove;
+    V high = {0xBEE002, far_icao};
+    std::sort(high.begin(), high.end());
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(settings)), high);
+    settings.filter_distance_enabled = true;
+    EXPECT_EQ(ReportedICAOs(dictionary, dictionary.GetReportFilter(settings)), (V{0xBEE002}));
+
+    // The filtered aircraft's packets still encode to the full Raw and Beast frames.
+    ASSERT_TRUE(dictionary.GetReportFilter(settings).Excludes(*far));
+    ASSERT_TRUE(dictionary.GetReportFilter(settings).Excludes(*near_low));
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8D48922358C387D91DF354DCCCB8");
+    char raw_frame[kRawModeSFrameMaxNumChars];
+    EXPECT_GT(BuildRawModeSFrame(packet.raw, raw_frame), 0);
+    EXPECT_NE(strstr(raw_frame, "8D48922358C387D91DF354DCCCB8"), nullptr);
+    uint8_t beast_frame[BeastReporter::kModeSBeastFrameMaxLenBytes];
+    EXPECT_GT(BeastReporter::BuildModeSBeastFrame(beast_frame, packet), 0);
+}
+
+// The receiver altitude for the near-receiver mode: GNSS for a GNSS fix, otherwise barometric unless that is 0.
+TEST(AltitudeFilter, ReceiverAltitudeFromRxPosition) {
+    SettingsManager::RxPosition rx;
+    rx.gnss_altitude_ft = 1200;
+    rx.baro_altitude_ft = 1100;
+    rx.source = SettingsManager::RxPosition::kPositionSourceFixed;
+    EXPECT_EQ(rx.FilterAltitudeFt(), 1100);
+    rx.source = SettingsManager::RxPosition::kPositionSourceGNSS;
+    EXPECT_EQ(rx.FilterAltitudeFt(), 1200);
+    rx.source = SettingsManager::RxPosition::kPositionSourceLowestAircraft;
+    rx.baro_altitude_ft = 0;
+    EXPECT_EQ(rx.FilterAltitudeFt(), 1200);
+}
+
+TEST(AircraftDictionary, DistanceUnknownWithoutReceiverPosition) {
+    AircraftDictionary dictionary;
+    ModeSAircraft* aircraft = IngestPositionPair(dictionary);
+    ASSERT_TRUE(aircraft);
+    EXPECT_TRUE(aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid));
+    EXPECT_EQ(aircraft->distance_m, Aircraft::kDistanceUnknown);
+
+    // Once the receiver position arrives, the next Update() fills in the distance.
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 84585, 30);
+}
+
+TEST(AircraftDictionary, DistanceFollowsMovesOnUpdate) {
+    AircraftDictionary dictionary;
+    dictionary.SetReferencePosition(48.0f, 18.0f);
+    auto ingest = [&](const char* hex) {
+        DecodedModeSPacket packet = DecodedModeSPacket((char*)hex);
+        inc_time_since_boot_ms(500);
+        packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+        EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+    };
+    // 48.3 N 18.2 E: the first position gets its distance right away (geodesic 36527 m at 23.97 deg).
+    ingest("8DBEE001589B803335F17E3806C1");
+    ingest("8DBEE001589B87A9D1D79C757A00");
+    ModeSAircraft* aircraft =
+        dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(0xBEE001, Aircraft::kAircraftTypeModeS), false);
+    ASSERT_TRUE(aircraft);
+    EXPECT_NEAR(aircraft->distance_m, 36527, 15);
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 23.97f, 0.2f);
+
+    // Moved to 48.4 N: the distance is refreshed by the next Update(), not per position message.
+    for (int i = 0; i < 2; i++) {  // A pair mixing the old and new positions doesn't count; the next ones do.
+        ingest("8DBEE001589B804445F17E39A3D0");
+        ingest("8DBEE001589B87BA99D79C52EE84");
+    }
+    EXPECT_NEAR(aircraft->latitude_deg, 48.4f, 0.001f);
+    EXPECT_NEAR(aircraft->distance_m, 36527, 15);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_NEAR(aircraft->distance_m, 46897, 15);  // Geodesic: 46897 m at 18.41 deg.
+    EXPECT_NEAR(Bam16ToDeg(aircraft->bearing_bam16), 18.41f, 0.2f);
 }

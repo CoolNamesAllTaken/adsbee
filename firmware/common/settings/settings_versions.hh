@@ -14,10 +14,13 @@
  *     literals. This makes each snapshot immune to any future change in the live Settings struct or its enums/constants.
  *   - Once a version is frozen here it is NEVER edited again. The byte layout is locked with static_asserts.
  *
- * RECIPE when bumping kSettingsVersion (e.g. 14 -> 15):
- *   1. Copy the CURRENT live SettingsManager::Settings layout into a new `namespace settings_v14` snapshot here
+ *   - Only versions shipped in a tagged release or RC get a snapshot. Versions that never reached a tag (v13, v16)
+ *     have none: no device holds them, and migrations step over them.
+ *
+ * RECIPE when bumping kSettingsVersion (only when the current version shipped in a tag, e.g. 19 -> 20):
+ *   1. Copy the CURRENT live SettingsManager::Settings layout into a new `namespace settings_v19` snapshot here
  *      (translating enum members to their underlying types, hardcoding constants), and lock it with static_asserts.
- *   2. Add a `MigrateV14ToV15()` step and extend the dispatcher in settings_migration.cpp.
+ *   2. Add a `MigrateV19ToV20()` step and extend the dispatcher in settings_migration.cpp.
  */
 namespace settings_v12 {
 
@@ -73,7 +76,7 @@ struct alignas(4) Settings {
     bool subg_rx_enabled;
     bool subg_bias_tee_enabled;
     uint8_t subg_mode;
-    // (v13 inserts `bool remote_id_rx_enabled` and `uint8_t remote_id_transports` here.)
+    // (v14 inserts `bool remote_id_rx_enabled` and `uint8_t remote_id_transports` here.)
     char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
     uint16_t feed_ports[kMaxNumFeeds];
     bool feed_is_active[kMaxNumFeeds];
@@ -98,97 +101,17 @@ static_assert(offsetof(Settings, rx_position) == 1056, "v12 rx_position offset d
 }  // namespace settings_v12
 
 /**
- * v13 layout: identical to v12 except two Remote ID *receive* fields inserted between subg_mode and feed_uris (which
- * shifts everything from feed_uris onward by 2 bytes). v14 appends the Remote ID *transmit* settings after them.
- */
-namespace settings_v13 {
-
-// v13 array-size constants (hardcoded; identical to v12's).
-static constexpr uint16_t kHostnameMaxLen = 32;
-static constexpr uint16_t kWiFiSSIDMaxLen = 31;
-static constexpr uint16_t kWiFiPasswordMaxLen = 63;
-static constexpr uint16_t kNumSerialInterfaces = 3;
-static constexpr uint16_t kMaxNumFeeds = 10;
-static constexpr uint16_t kFeedURIMaxNumChars = 63;
-static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
-
-// Unchanged from v12, but re-declared so this snapshot stays self-contained and immune to edits to the v12 snapshot.
-struct CoreNetworkSettings {
-    bool esp32_enabled;
-    char hostname[kHostnameMaxLen + 1];
-    bool wifi_ap_enabled;
-    uint8_t wifi_ap_channel;
-    char wifi_ap_ssid[kWiFiSSIDMaxLen + 2];
-    char wifi_ap_password[kWiFiPasswordMaxLen + 2];
-    bool wifi_sta_enabled;
-    char wifi_sta_ssid[kWiFiSSIDMaxLen + 2];
-    char wifi_sta_password[kWiFiPasswordMaxLen + 2];
-    bool ethernet_enabled;
-    uint32_t crc32;
-};
-
-struct __attribute__((packed)) RxPosition {
-    uint8_t source;
-    float latitude_deg;
-    float longitude_deg;
-    int32_t gnss_altitude_ft;
-    int32_t baro_altitude_ft;
-    float heading_deg;
-    int32_t speed_kts;
-    uint32_t icao_address;
-};
-
-struct alignas(4) Settings {
-    uint32_t settings_version;
-    CoreNetworkSettings core_network_settings;
-    bool r1090_rx_enabled;
-    int32_t tl_offset_mv;
-    bool r1090_bias_tee_enabled;
-    uint32_t watchdog_timeout_sec;
-    uint16_t log_level;
-    uint16_t reporting_protocols[kNumSerialInterfaces];
-    uint32_t baud_rates[kNumSerialInterfaces];
-    int8_t subg_enabled;
-    bool subg_rx_enabled;
-    bool subg_bias_tee_enabled;
-    uint8_t subg_mode;
-    bool remote_id_rx_enabled;     // Added in v13.
-    uint8_t remote_id_transports;  // Added in v13.
-    // (v14 appends the Remote ID transmit settings here.)
-    char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
-    uint16_t feed_ports[kMaxNumFeeds];
-    bool feed_is_active[kMaxNumFeeds];
-    uint16_t feed_protocols[kMaxNumFeeds];
-    uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
-    uint8_t mavlink_system_id;
-    uint8_t mavlink_component_id;
-    RxPosition rx_position;
-};
-
-// Lock the v13 byte layout (measured from the real v13 struct). Same rules as v12: never "fix" these by editing the
-// numbers — a failure means the snapshot no longer matches the real historical layout.
-static_assert(sizeof(CoreNetworkSettings) == 240, "v13 CoreNetworkSettings must be 240 bytes.");
-static_assert(sizeof(RxPosition) == 29, "v13 RxPosition must be 29 bytes.");
-static_assert(sizeof(Settings) == 1088, "v13 Settings must be 1088 bytes.");
-static_assert(offsetof(Settings, core_network_settings) == 4, "v13 CoreNetworkSettings offset drift.");
-static_assert(offsetof(Settings, remote_id_rx_enabled) == 284, "v13 remote_id_rx_enabled offset drift.");
-static_assert(offsetof(Settings, feed_uris) == 286, "v13 feed_uris offset drift.");
-static_assert(offsetof(Settings, feed_receiver_ids) == 976, "v13 feed_receiver_ids offset drift.");
-static_assert(offsetof(Settings, rx_position) == 1058, "v13 rx_position offset drift.");
-
-}  // namespace settings_v13
-
-/**
- * v14 layout: v13 plus `led_enabled`, the GNSS settings (`gnss_enabled`, `gnss_receiver_type`, `gnss_notify`) and the
- * Remote ID *transmit* settings (remote_id_tx_*). This is the layout every adsbee_1090 release tagged with
- * kSettingsVersion == 14 shipped (0.9.1-rc1/rc2); adsbee_1421 has its own settings. The GNSS fields were added
- * (e1f28fe7) a few commits after v14 was introduced (82f9813e) without a version bump, but no release carried the
- * pre-GNSS layout, so this is the only v14 layout real devices hold. The three GNSS bytes landed in what had been
- * padding, so everything from baud_rates onward sits at the same offsets either way.
+ * v14 layout: v12 plus the Remote ID *receive* settings (`remote_id_rx_enabled`, `remote_id_transports`, between
+ * subg_mode and feed_uris; added in the unshipped v13), `led_enabled`, the GNSS settings (`gnss_enabled`,
+ * `gnss_receiver_type`, `gnss_notify`) and the Remote ID *transmit* settings (remote_id_tx_*). This is the layout
+ * every adsbee_1090 release tagged with kSettingsVersion == 14 shipped (0.9.1-rc1/rc2); adsbee_1421 has its own
+ * settings. The GNSS fields were added (e1f28fe7) a few commits after v14 was introduced (82f9813e) without a version
+ * bump, but no release carried the pre-GNSS layout, so this is the only v14 layout real devices hold. The three GNSS
+ * bytes landed in what had been padding, so everything from baud_rates onward sits at the same offsets either way.
  */
 namespace settings_v14 {
 
-// v14 array-size constants (hardcoded; identical to v12/v13's, plus the Remote ID ID length).
+// v14 array-size constants (hardcoded; identical to v12's, plus the Remote ID ID length).
 static constexpr uint16_t kHostnameMaxLen = 32;
 static constexpr uint16_t kWiFiSSIDMaxLen = 31;
 static constexpr uint16_t kWiFiPasswordMaxLen = 63;
@@ -198,7 +121,7 @@ static constexpr uint16_t kFeedURIMaxNumChars = 63;
 static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
 static constexpr uint16_t kRemoteIDIDMaxLen = 20;
 
-// Unchanged from v12/v13, but re-declared so this snapshot stays self-contained.
+// Unchanged from v12, but re-declared so this snapshot stays self-contained.
 struct CoreNetworkSettings {
     bool esp32_enabled;
     char hostname[kHostnameMaxLen + 1];
@@ -262,7 +185,7 @@ struct alignas(4) Settings {
     RxPosition rx_position;
 };
 
-// Lock the v14 byte layout (measured from the live struct at tag adsbee_1090-0.9.1-rc2). Same rules as v12/v13:
+// Lock the v14 byte layout (measured from the live struct at tag adsbee_1090-0.9.1-rc2). Same rules as v12:
 // never "fix" these by editing the numbers -- a failure means the snapshot no longer matches the true historical
 // layout.
 static_assert(sizeof(CoreNetworkSettings) == 240, "v14 CoreNetworkSettings must be 240 bytes.");
@@ -384,106 +307,8 @@ static_assert(offsetof(Settings, rx_position) == 1112, "v15 rx_position offset d
 }  // namespace settings_v15
 
 /**
- * v16 layout: v15 plus `ip_mode` in the tail padding after rx_position (adsbee_1090 #281).
- */
-namespace settings_v16 {
-
-static constexpr uint16_t kHostnameMaxLen = 32;
-static constexpr uint16_t kWiFiSSIDMaxLen = 31;
-static constexpr uint16_t kWiFiPasswordMaxLen = 63;
-static constexpr uint16_t kNumSerialInterfaces = 3;
-static constexpr uint16_t kMaxNumFeeds = 10;
-static constexpr uint16_t kFeedURIMaxNumChars = 63;
-static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
-static constexpr uint16_t kRemoteIDIDMaxLen = 20;
-
-struct CoreNetworkSettings {
-    bool esp32_enabled;
-    char hostname[kHostnameMaxLen + 1];
-    bool wifi_ap_enabled;
-    uint8_t wifi_ap_channel;
-    char wifi_ap_ssid[kWiFiSSIDMaxLen + 2];
-    char wifi_ap_password[kWiFiPasswordMaxLen + 2];
-    bool wifi_sta_enabled;
-    char wifi_sta_ssid[kWiFiSSIDMaxLen + 2];
-    char wifi_sta_password[kWiFiPasswordMaxLen + 2];
-    bool ethernet_enabled;
-    uint32_t crc32;
-};
-
-struct __attribute__((packed)) RxPosition {
-    uint8_t source;
-    float latitude_deg;
-    float longitude_deg;
-    int32_t gnss_altitude_ft;
-    int32_t baro_altitude_ft;
-    float heading_deg;
-    int32_t speed_kts;
-    uint32_t icao_address;
-};
-
-// Byte-identical copy of the shipped v15 Settings layout. Enum members are stored as their underlying integer types.
-struct alignas(4) Settings {
-    uint32_t settings_version;
-    CoreNetworkSettings core_network_settings;
-    bool r1090_rx_enabled;
-    int32_t tl_offset_mv;
-    bool r1090_bias_tee_enabled;
-    uint32_t watchdog_timeout_sec;
-    bool led_enabled;
-    bool feeds_enabled;  // Added in v15.
-    bool gnss_enabled;
-    uint8_t gnss_receiver_type;
-    bool gnss_notify;
-    uint16_t log_level;
-    uint16_t reporting_protocols[kNumSerialInterfaces];
-    uint32_t baud_rates[kNumSerialInterfaces];
-    int8_t subg_enabled;
-    bool subg_rx_enabled;
-    bool subg_bias_tee_enabled;
-    uint8_t subg_mode;
-    bool remote_id_rx_enabled;
-    uint8_t remote_id_transports;
-    bool remote_id_tx_enabled;
-    uint8_t remote_id_tx_transports;
-    uint8_t remote_id_tx_uas_id_type;
-    uint8_t remote_id_tx_ua_type;
-    char remote_id_tx_uas_id[kRemoteIDIDMaxLen + 1];
-    char remote_id_tx_operator_id[kRemoteIDIDMaxLen + 1];
-    char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
-    uint16_t feed_ports[kMaxNumFeeds];
-    bool feed_is_active[kMaxNumFeeds];
-    uint16_t feed_protocols[kMaxNumFeeds];
-    uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
-    uint8_t mavlink_system_id;
-    uint8_t mavlink_component_id;
-    RxPosition rx_position;
-    uint8_t ip_mode;  // Added in v16 (IPMode: 0 = IPv4, 1 = dual, 2 = IPv6).
-};
-
-// Lock the v16 byte layout (the live layout lock in settings.hh at kSettingsVersion == 16).
-static_assert(sizeof(CoreNetworkSettings) == 240, "v16 CoreNetworkSettings must be 240 bytes.");
-static_assert(sizeof(RxPosition) == 29, "v16 RxPosition must be 29 bytes.");
-static_assert(sizeof(Settings) == 1144, "v16 Settings must be 1144 bytes.");
-static_assert(offsetof(Settings, core_network_settings) == 4, "v16 CoreNetworkSettings offset drift.");
-static_assert(offsetof(Settings, led_enabled) == 260, "v16 led_enabled offset drift.");
-static_assert(offsetof(Settings, feeds_enabled) == 261, "v16 feeds_enabled offset drift.");
-static_assert(offsetof(Settings, gnss_notify) == 264, "v16 gnss_notify offset drift.");
-static_assert(offsetof(Settings, log_level) == 266, "v16 log_level offset drift.");
-static_assert(offsetof(Settings, baud_rates) == 276, "v16 baud_rates offset drift.");
-static_assert(offsetof(Settings, subg_mode) == 291, "v16 subg_mode offset drift.");
-static_assert(offsetof(Settings, remote_id_tx_enabled) == 294, "v16 remote_id_tx_enabled offset drift.");
-static_assert(offsetof(Settings, feed_uris) == 340, "v16 feed_uris offset drift.");
-static_assert(offsetof(Settings, feed_protocols) == 1010, "v16 feed_protocols offset drift.");
-static_assert(offsetof(Settings, feed_receiver_ids) == 1030, "v16 feed_receiver_ids offset drift.");
-static_assert(offsetof(Settings, mavlink_system_id) == 1110, "v16 mavlink_system_id offset drift.");
-static_assert(offsetof(Settings, rx_position) == 1112, "v16 rx_position offset drift.");
-static_assert(offsetof(Settings, ip_mode) == 1141, "v16 ip_mode offset drift.");
-
-}  // namespace settings_v16
-
-/**
- * v17 layout: v16 plus `wifi_sta_extra_networks` (adsbee_1090 #280). v18 put `auto_update_enabled` in its tail padding.
+ * v17 layout: v15 plus `ip_mode` in the tail padding after rx_position (adsbee_1090 #281, in the unshipped v16) and
+ * `wifi_sta_extra_networks` (adsbee_1090 #280). v18 put `auto_update_enabled` in its tail padding.
  */
 namespace settings_v17 {
 
@@ -588,3 +413,109 @@ static_assert(offsetof(Settings, ip_mode) == 1141, "v17 ip_mode offset drift.");
 static_assert(offsetof(Settings, wifi_sta_extra_networks) == 1142, "v17 wifi_sta_extra_networks offset drift.");
 
 }  // namespace settings_v17
+
+namespace settings_v18 {
+
+static constexpr uint16_t kHostnameMaxLen = 32;
+static constexpr uint16_t kWiFiSSIDMaxLen = 31;
+static constexpr uint16_t kWiFiPasswordMaxLen = 63;
+static constexpr uint16_t kNumSerialInterfaces = 3;
+static constexpr uint16_t kMaxNumFeeds = 10;
+static constexpr uint16_t kFeedURIMaxNumChars = 63;
+static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
+static constexpr uint16_t kRemoteIDIDMaxLen = 20;
+static constexpr uint16_t kWiFiSTANumExtraNetworks = 2;
+
+struct CoreNetworkSettings {
+    bool esp32_enabled;
+    char hostname[kHostnameMaxLen + 1];
+    bool wifi_ap_enabled;
+    uint8_t wifi_ap_channel;
+    char wifi_ap_ssid[kWiFiSSIDMaxLen + 2];
+    char wifi_ap_password[kWiFiPasswordMaxLen + 2];
+    bool wifi_sta_enabled;
+    char wifi_sta_ssid[kWiFiSSIDMaxLen + 2];
+    char wifi_sta_password[kWiFiPasswordMaxLen + 2];
+    bool ethernet_enabled;
+    uint32_t crc32;
+};
+
+struct WiFiNetwork {
+    char ssid[kWiFiSSIDMaxLen + 2];
+    char password[kWiFiPasswordMaxLen + 2];
+};
+
+struct __attribute__((packed)) RxPosition {
+    uint8_t source;
+    float latitude_deg;
+    float longitude_deg;
+    int32_t gnss_altitude_ft;
+    int32_t baro_altitude_ft;
+    float heading_deg;
+    int32_t speed_kts;
+    uint32_t icao_address;
+};
+
+// Byte-identical copy of the v18 Settings layout. Enum members are stored as their underlying integer types.
+struct alignas(4) Settings {
+    uint32_t settings_version;
+    CoreNetworkSettings core_network_settings;
+    bool r1090_rx_enabled;
+    int32_t tl_offset_mv;
+    bool r1090_bias_tee_enabled;
+    uint32_t watchdog_timeout_sec;
+    bool led_enabled;
+    bool feeds_enabled;  // Added in v15.
+    bool gnss_enabled;
+    uint8_t gnss_receiver_type;
+    bool gnss_notify;
+    uint16_t log_level;
+    uint16_t reporting_protocols[kNumSerialInterfaces];
+    uint32_t baud_rates[kNumSerialInterfaces];
+    int8_t subg_enabled;
+    bool subg_rx_enabled;
+    bool subg_bias_tee_enabled;
+    uint8_t subg_mode;
+    bool remote_id_rx_enabled;
+    uint8_t remote_id_transports;
+    bool remote_id_tx_enabled;
+    uint8_t remote_id_tx_transports;
+    uint8_t remote_id_tx_uas_id_type;
+    uint8_t remote_id_tx_ua_type;
+    char remote_id_tx_uas_id[kRemoteIDIDMaxLen + 1];
+    char remote_id_tx_operator_id[kRemoteIDIDMaxLen + 1];
+    char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
+    uint16_t feed_ports[kMaxNumFeeds];
+    bool feed_is_active[kMaxNumFeeds];
+    uint16_t feed_protocols[kMaxNumFeeds];
+    uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
+    uint8_t mavlink_system_id;
+    uint8_t mavlink_component_id;
+    RxPosition rx_position;
+    uint8_t ip_mode;
+    WiFiNetwork wifi_sta_extra_networks[kWiFiSTANumExtraNetworks];  // Added in v17.
+    bool auto_update_enabled;                                       // Added in v18 (tail padding of v17).
+};
+
+// Lock the v18 byte layout (the live layout lock in settings.hh at kSettingsVersion == 18).
+static_assert(sizeof(CoreNetworkSettings) == 240, "v18 CoreNetworkSettings must be 240 bytes.");
+static_assert(sizeof(RxPosition) == 29, "v18 RxPosition must be 29 bytes.");
+static_assert(sizeof(Settings) == 1340, "v18 Settings must be 1340 bytes.");
+static_assert(offsetof(Settings, core_network_settings) == 4, "v18 CoreNetworkSettings offset drift.");
+static_assert(offsetof(Settings, led_enabled) == 260, "v18 led_enabled offset drift.");
+static_assert(offsetof(Settings, feeds_enabled) == 261, "v18 feeds_enabled offset drift.");
+static_assert(offsetof(Settings, gnss_notify) == 264, "v18 gnss_notify offset drift.");
+static_assert(offsetof(Settings, log_level) == 266, "v18 log_level offset drift.");
+static_assert(offsetof(Settings, baud_rates) == 276, "v18 baud_rates offset drift.");
+static_assert(offsetof(Settings, subg_mode) == 291, "v18 subg_mode offset drift.");
+static_assert(offsetof(Settings, remote_id_tx_enabled) == 294, "v18 remote_id_tx_enabled offset drift.");
+static_assert(offsetof(Settings, feed_uris) == 340, "v18 feed_uris offset drift.");
+static_assert(offsetof(Settings, feed_protocols) == 1010, "v18 feed_protocols offset drift.");
+static_assert(offsetof(Settings, feed_receiver_ids) == 1030, "v18 feed_receiver_ids offset drift.");
+static_assert(offsetof(Settings, mavlink_system_id) == 1110, "v18 mavlink_system_id offset drift.");
+static_assert(offsetof(Settings, rx_position) == 1112, "v18 rx_position offset drift.");
+static_assert(offsetof(Settings, ip_mode) == 1141, "v18 ip_mode offset drift.");
+static_assert(offsetof(Settings, wifi_sta_extra_networks) == 1142, "v18 wifi_sta_extra_networks offset drift.");
+static_assert(offsetof(Settings, auto_update_enabled) == 1338, "v18 auto_update_enabled offset drift.");
+
+}  // namespace settings_v18

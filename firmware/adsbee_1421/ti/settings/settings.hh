@@ -7,6 +7,8 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "altitude_filter.hh"
+#include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
 #include "string.h"  // for memset
@@ -15,7 +17,7 @@
 #endif
 
 // Change this when settings format changes! A mismatched version resets all settings to factory defaults on boot.
-static constexpr uint32_t kSettingsVersion = 5;
+static constexpr uint32_t kSettingsVersion = 6;
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 // Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
@@ -55,6 +57,7 @@ class SettingsManager {
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
+        kASTERIX,                // EUROCONTROL ASTERIX CAT021 target reports and CAT023 status.
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -108,6 +111,18 @@ class SettingsManager {
         uint32_t icao_address =
             0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
                 // lowest plane being tracked when source is kPositionSourceLowestAircraft.
+
+        /**
+         * Receiver altitude for AT+FILTER_ALTITUDE_FT's near-receiver mode: the GNSS altitude for a GNSS fix (it has no
+         * barometric altitude), otherwise the barometric altitude, falling back to the GNSS altitude when that is 0
+         * (not entered, or not known for the aircraft the position comes from).
+         */
+        int32_t FilterAltitudeFt() const {
+            if (source == kPositionSourceGNSS || baro_altitude_ft == 0) {
+                return gnss_altitude_ft;
+            }
+            return baro_altitude_ft;
+        }
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
@@ -120,6 +135,13 @@ class SettingsManager {
     // in-RAM instance is aligned separately (see the `settings` member below).
     struct __attribute__((packed)) Settings {
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
+        // AT+FILTER_DISTANCE_NM, in tenths of a nautical mile.
+        static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
+        static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
+        static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
+        // AT+FILTER_ALTITUDE_FT defaults: off, with 0 to 10,000 ft ready for range mode.
+        static constexpr int32_t kDefaultFilterAltitudeAFt = 0;
+        static constexpr int32_t kDefaultFilterAltitudeBFt = 10000;
         // NOTE: Lengths do not include null terminator.
         // Single source of truth for the console boot baud rate: CommsManagerConfig defaults to this,
         // and Apply() falls back to it if the stored rate isn't whitelisted.
@@ -171,6 +193,25 @@ class SettingsManager {
         // Receiver position settings
         RxPosition rx_position;
 
+        // Distance filter (AT+FILTER_DISTANCE_NM), added in version 6. When enabled, aircraft known to be farther than
+        // filter_distance_deci_nm tenths of a nautical mile from the receiver are left out of aircraft reports
+        // (aircraft JSON, GDL90, MAVLink, CSBee). Raw packets (Raw, Beast, MLAT) are never filtered. Aircraft at an
+        // unknown distance are always kept.
+        bool filter_distance_enabled = false;
+        uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
+
+        // ASTERIX data source identifier (I021/010, I023/010), added in version 6: System Area Code and System
+        // Identification Code.
+        uint8_t asterix_sac = 0;
+        uint8_t asterix_sic = 0;
+
+        // Altitude filter (AT+FILTER_ALTITUDE_FT=<mode>,<a>,<b>), added in version 6: an AltitudeFilterMode with its
+        // arguments in feet. Leaves aircraft outside the selected altitudes out of the same aircraft reports as the
+        // distance filter. Aircraft with no known altitude are always kept.
+        uint8_t filter_altitude_mode = kAltitudeFilterOff;
+        int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
+        int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
+
         // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
         uint32_t crc = 0;
 
@@ -178,6 +219,14 @@ class SettingsManager {
          * Default constructor.
          */
         Settings() {}
+
+        /**
+         * The distance filter as Aircraft::IsBeyondDistance() takes it.
+         * @retval Filter distance in meters, or 0 when the filter is off.
+         */
+        inline uint32_t FilterDistanceMeters() const {
+            return filter_distance_enabled ? DeciNmToMeters(filter_distance_deci_nm) : 0;
+        }
 
         /**
          * CRC32 over the struct from `magic` up to (not including) `crc`.
@@ -212,6 +261,35 @@ class SettingsManager {
     // trailing padding. Trips if the packed attribute is ever dropped or a member is added after `crc`.
     static_assert(offsetof(Settings, crc) == sizeof(Settings) - sizeof(uint32_t),
                   "Settings::crc must be the last member, with no trailing padding.");
+
+    // Version 5 stored the same fields up to rx_position, then the CRC; version 6 appended filter_distance_enabled,
+    // filter_distance_deci_nm, asterix_sac, asterix_sic and the altitude filter (filter_altitude_*).
+    static constexpr uint16_t kVersion5SettingsSize = 62;
+    static_assert(kSettingsVersion == 6 &&
+                      offsetof(Settings, filter_distance_enabled) == kVersion5SettingsSize - sizeof(uint32_t) &&
+                      sizeof(Settings) == kVersion5SettingsSize + 16,
+                  "Settings changed: update MigrateFromVersion5 or add a migration from version 6.");
+
+    /**
+     * Converts a version 5 settings blob, so a firmware update keeps the user's settings.
+     * @param[in] blob Stored bytes, at least kVersion5SettingsSize long.
+     * @param[out] out Migrated and stamped settings. Untouched unless the blob is an intact version 5 blob.
+     * @retval True if the blob was an intact version 5 blob.
+     */
+    static bool MigrateFromVersion5(const uint8_t *blob, Settings &out) {
+        constexpr uint16_t kFieldBytes = kVersion5SettingsSize - sizeof(uint32_t);  // Everything before the CRC.
+        uint32_t magic, version, crc;
+        memcpy(&magic, blob, sizeof(magic));
+        memcpy(&version, blob + sizeof(magic), sizeof(version));
+        memcpy(&crc, blob + kFieldBytes, sizeof(crc));
+        if (magic != kSettingsMagic || version != 5 || crc != crc32_ieee_802_3(blob, kFieldBytes)) {
+            return false;
+        }
+        out = Settings();  // The fields added in version 6 take their defaults.
+        memcpy(static_cast<void *>(&out), blob, kFieldBytes);
+        out.Stamp();
+        return true;
+    }
 
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {

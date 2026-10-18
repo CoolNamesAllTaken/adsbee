@@ -37,6 +37,21 @@ bool RemoteIDManager::CanCoexistWithWiFi() {
     return HardwareCapabilities::HasPSRAM();
 }
 
+static_assert(RemoteIDGuard::kTransportsBLE ==
+              (SettingsManager::kRemoteIDTransportBLE4 | SettingsManager::kRemoteIDTransportBLE5Long));
+static_assert(RemoteIDGuard::kTransportWiFiBeacon == SettingsManager::kRemoteIDTransportWiFiBeacon);
+
+// Free heap needed to bring the Bluetooth stack up for receive or transmit.
+static uint32_t BLEStartFreeBytes(uint32_t with_psram_bytes) {
+    return HardwareCapabilities::HasPSRAM() ? with_psram_bytes
+                                            : RemoteIDGuard::kReserveFreeBytes + RemoteIDManager::kBLEHeapCostBytes;
+}
+
+uint8_t RemoteIDManager::AllowedTransports() {
+    return RemoteIDGuard::AllowedTransports(HardwareCapabilities::HasPSRAM(), comms_manager.wifi_ap_enabled,
+                                            comms_manager.wifi_sta_enabled, comms_manager.ethernet_enabled);
+}
+
 void RemoteIDManager::OnRawRemoteIDPacket(const RawRemoteIDPacket& packet) {
     // Runs in the NimBLE host task or the WiFi promiscuous callback. Keep it minimal: just enqueue. The queue exists
     // whenever a transport is running (EnsureBuffers is called before any transport starts).
@@ -120,7 +135,9 @@ void RemoteIDManager::Reconcile() {
         return;
     }
 
-    const uint8_t transports = settings_manager.settings.remote_id_transports;
+    const uint8_t requested = settings_manager.settings.remote_id_transports;
+    const uint8_t transports = requested & AllowedTransports();
+    if (transports != requested) status_ |= kStatusBlockedByNetwork;
     const bool want_ble = transports & (SettingsManager::kRemoteIDTransportBLE4 | SettingsManager::kRemoteIDTransportBLE5Long);
     const bool want_coded = transports & SettingsManager::kRemoteIDTransportBLE5Long;
     const bool want_wifi = transports & SettingsManager::kRemoteIDTransportWiFiBeacon;
@@ -128,12 +145,8 @@ void RemoteIDManager::Reconcile() {
     const bool wifi_ap_sta_up =
         comms_manager.wifi_ap_enabled || comms_manager.wifi_sta_enabled;
 
-    // Without PSRAM, Remote ID only runs with WiFi AP/STA off.
-    if (wifi_ap_sta_up && !CanCoexistWithWiFi()) {
-        status_ |= kStatusBlockedByWiFi;
-        // Still surface whether Bluetooth is even compiled in, so this early-return doesn't mask kStatusNotInBuild: a
-        // user seeing only "blocked_by_wifi" can't otherwise tell they also need the Bluetooth-enabled firmware.
-        if (want_ble && !BluetoothIsSupported()) status_ |= kStatusNotInBuild;
+    if (transports == 0 || heap_watch_.IsPaused()) {
+        if (heap_watch_.IsPaused()) status_ |= kStatusPausedLowHeap;
         BLEStop();
         WiFiSnifferStop();
         return;
@@ -154,7 +167,8 @@ void RemoteIDManager::Reconcile() {
         if (!BluetoothIsSupported()) {
             // Bluetooth isn't compiled into this firmware at all: the user needs a different image.
             status_ |= kStatusNotInBuild;
-        } else if (ble_running_ || HardwareCapabilities::GetInternalFreeBytes() >= kMinHeapFreeBytesForBLE) {
+        } else if (BLEStackUp() ||
+                   HardwareCapabilities::GetInternalFreeBytes() >= BLEStartFreeBytes(kMinHeapFreeBytesForBLE)) {
             if (BLEStart(want_coded)) {
                 status_ |= kStatusBLEActive;
                 if (ble_coded_running_) status_ |= kStatusBLECodedPHYActive;
@@ -197,16 +211,16 @@ void RemoteIDManager::ReconcileTx() {
         return;
     }
 
-    const uint8_t transports = settings_manager.settings.remote_id_tx_transports;
+    const uint8_t requested = settings_manager.settings.remote_id_tx_transports;
+    const uint8_t transports = requested & AllowedTransports();
+    if (transports != requested) status_ |= kStatusBlockedByNetwork | kStatusTxBlocked;
     const bool want_ble_legacy = transports & SettingsManager::kRemoteIDTransportBLE4;
     const bool want_ble_coded = transports & SettingsManager::kRemoteIDTransportBLE5Long;
     const bool want_wifi = transports & SettingsManager::kRemoteIDTransportWiFiBeacon;
 
-    // Transmitting does not need WiFi AP/STA (a Remote ID transmitter has no use for them), but if the user has them
-    // enabled on a board that can't coexist, the radios are already committed and Remote ID must stay off.
     const bool wifi_ap_sta_up = comms_manager.wifi_ap_enabled || comms_manager.wifi_sta_enabled;
-    if (wifi_ap_sta_up && !CanCoexistWithWiFi()) {
-        status_ |= kStatusBlockedByWiFi | kStatusTxBlocked;
+    if (transports == 0 || heap_watch_.IsPaused()) {
+        if (heap_watch_.IsPaused()) status_ |= kStatusPausedLowHeap | kStatusTxBlocked;
         BLETxStop();
         WiFiTxStop();
         return;
@@ -216,12 +230,9 @@ void RemoteIDManager::ReconcileTx() {
     if (want_ble_legacy || want_ble_coded) {
         if (!BluetoothIsSupported()) {
             status_ |= kStatusNotInBuild | kStatusTxBlocked;
-        } else if (ble_tx_legacy_running_ || ble_tx_coded_running_ ||
-                   HardwareCapabilities::GetInternalFreeBytes() >= kMinHeapFreeBytesForTx) {
-            if (BLETxStart(want_ble_legacy, want_ble_coded)) {
-                if (ble_tx_legacy_running_) status_ |= kStatusTxBLELegacyActive;
-                if (ble_tx_coded_running_) status_ |= kStatusTxBLECodedActive;
-            } else {
+        } else if (BLEStackUp() ||
+                   HardwareCapabilities::GetInternalFreeBytes() >= BLEStartFreeBytes(kMinHeapFreeBytesForTx)) {
+            if (!BLETxStart(want_ble_legacy, want_ble_coded)) {
                 status_ |= kStatusTxBlocked;
             }
         } else {
@@ -247,6 +258,9 @@ void RemoteIDManager::ReconcileTx() {
     } else {
         WiFiTxStop();
     }
+
+    tx_blocked_by_policy_ = (status_ & kStatusTxBlocked) != 0;
+    BLETxUpdateStatus();
 }
 
 void RemoteIDManager::ServiceTxTick() {
@@ -272,14 +286,56 @@ void RemoteIDManager::ServiceTxTick() {
     }
 }
 
-void RemoteIDManager::Apply() {
+void RemoteIDManager::ReconcileAll() {
+    const SettingsManager::Settings& settings = settings_manager.settings;
+    const uint32_t rid_settings = settings.remote_id_rx_enabled | settings.remote_id_tx_enabled << 1 |
+                                  settings.remote_id_transports << 8 | settings.remote_id_tx_transports << 16;
+    if (rid_settings != applied_rid_settings_) {
+        applied_rid_settings_ = rid_settings;
+        heap_watch_.Reset();  // The user changed Remote ID: try again right away.
+    }
     Reconcile();
     ReconcileTx();
+    BLEReleaseIfIdle();
     // Publish the resolved status so the RP2040 can surface it via AT+REMOTE_ID? / AT+REMOTE_ID_TX?.
     object_dictionary.device_status.remote_id_status = status_;
 }
 
+void RemoteIDManager::ServiceHeapWatch() {
+    uint32_t now_ms = get_time_since_boot_ms();
+    if (now_ms - last_heap_watch_ms_ < 1000) return;
+    last_heap_watch_ms_ = now_ms;
+
+    const uint32_t free_bytes = HardwareCapabilities::GetInternalFreeBytes();
+    const uint32_t largest_block_bytes = heap_caps_get_largest_free_block(HardwareCapabilities::kInternalHeapCaps);
+    const bool was_paused = heap_watch_.IsPaused();
+    if (heap_watch_.Update(free_bytes, largest_block_bytes, now_ms, AnyTransportRunning()) == was_paused) {
+        // A transport that was refused for lack of RAM gets another chance every kBlockedRetryIntervalMs.
+        if ((status_ & kStatusBlockedByRAM) && !was_paused &&
+            now_ms - last_blocked_retry_ms_ >= kBlockedRetryIntervalMs) {
+            last_blocked_retry_ms_ = now_ms;
+            ReconcileAll();
+        }
+        return;
+    }
+    if (heap_watch_.IsPaused()) {
+        CONSOLE_WARNING("RemoteIDManager::ServiceHeapWatch",
+                        "Pausing Remote ID: %lu Bytes free (largest block %lu), web server needs %lu (%lu). Retrying "
+                        "in %lu s.",
+                        (unsigned long)free_bytes, (unsigned long)largest_block_bytes,
+                        (unsigned long)RemoteIDGuard::kReserveFreeBytes,
+                        (unsigned long)RemoteIDGuard::kReserveLargestBlockBytes,
+                        (unsigned long)(heap_watch_.HoldOffMs() / 1000));
+    } else {
+        CONSOLE_INFO("RemoteIDManager::ServiceHeapWatch", "Retrying Remote ID with %lu Bytes free.",
+                     (unsigned long)free_bytes);
+    }
+    ReconcileAll();
+}
+
 void RemoteIDManager::Update() {
+    if (apply_pending_.exchange(false)) ReconcileAll();
+    ServiceHeapWatch();
     if (wifi_sniffer_running_) {
         WiFiSnifferServiceHopper();
     }

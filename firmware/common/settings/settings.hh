@@ -7,6 +7,8 @@
 
 #include "crc.hh"
 #include "macros.hh"
+#include "altitude_filter.hh"
+#include "unit_conversions.hh"  // DeciNmToMeters
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
 #include "string.h"  // for memset
@@ -15,7 +17,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 18;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 19;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -45,10 +47,51 @@ class SettingsManager {
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
+        kASTERIX,                // EUROCONTROL ASTERIX CAT021 target reports and CAT023 status.
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
     static const char kReportingProtocolStrs[ReportingProtocol::kNumProtocols][kReportingProtocolStrMaxLen];
+
+    // How a network feed reaches its destination. Values are flash-persisted: only append.
+    enum FeedTransport : uint8_t {
+        kFeedTransportTCP = 0,  // Stream to a TCP server.
+        kFeedTransportUDP,      // Datagrams of whole frames to a host, broadcast or multicast address.
+        kFeedTransportMQTT,     // Publish to an MQTT broker.
+        kNumFeedTransports
+    };
+    static constexpr uint16_t kFeedTransportStrMaxLen = 5;
+    static const char kFeedTransportStrs[kNumFeedTransports][kFeedTransportStrMaxLen];
+
+    /**
+     * Transport a new feed of a protocol uses when none is given: TCP for aggregator protocols, UDP for protocols that
+     * local devices listen for and for ASTERIX, MQTT for aircraft JSON.
+     */
+    static constexpr FeedTransport DefaultFeedTransport(ReportingProtocol protocol) {
+        switch (protocol) {
+            case kMAVLINK1:
+            case kMAVLINK2:
+            case kGDL90:
+            case kGDL90NoUATUplink:
+            case kASTERIX:
+                return kFeedTransportUDP;
+            case kAircraftJSON:
+            case kAircraftJSONUATUplink:
+                return kFeedTransportMQTT;
+            default:
+                return kFeedTransportTCP;
+        }
+    }
+
+    // How the MQTT client reaches the broker. Values are flash-persisted: only append.
+    enum MQTTTransport : uint8_t {
+        kMQTTTransportTCP = 0,    // MQTT on its own port (1883, or 8883 with TLS).
+        kMQTTTransportWebSocket,  // MQTT inside a WebSocket (port 80, or 443 with TLS), for brokers behind web proxies.
+        kNumMQTTTransports
+    };
+    static constexpr uint16_t kMQTTTransportStrMaxLen = 4;
+    static const char kMQTTTransportStrs[kNumMQTTTransports][kMQTTTransportStrMaxLen];
+    static constexpr uint16_t kDefaultMQTTPort = 1883;
 
     static constexpr uint8_t kWiFiAPChannelMax = 11;  // Operation in channels 12-14 avoided in USA.
 
@@ -133,6 +176,18 @@ class SettingsManager {
         static bool MayBeTransmittedAsOwnPosition(PositionSource source) {
             return source == kPositionSourceFixed || source == kPositionSourceGNSS;
         }
+
+        /**
+         * Receiver altitude for AT+FILTER_ALTITUDE_FT's near-receiver mode: the GNSS altitude for a GNSS fix (it has no
+         * barometric altitude), otherwise the barometric altitude, falling back to the GNSS altitude when that is 0
+         * (not entered, or not known for the aircraft the position comes from).
+         */
+        int32_t FilterAltitudeFt() const {
+            if (source == kPositionSourceGNSS || baro_altitude_ft == 0) {
+                return gnss_altitude_ft;
+            }
+            return baro_altitude_ft;
+        }
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
@@ -140,6 +195,13 @@ class SettingsManager {
     struct alignas(4) Settings {
         static constexpr int kDefaultTLOffsetMV = 600;  // [mV]
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
+        // AT+FILTER_DISTANCE_NM, in tenths of a nautical mile.
+        static constexpr uint32_t kDefaultFilterDistanceDeciNm = 1000;  // 100.0 nm.
+        static constexpr uint32_t kMinFilterDistanceDeciNm = 1;         // 0.1 nm.
+        static constexpr uint32_t kMaxFilterDistanceDeciNm = 100000;    // 10,000.0 nm.
+        // AT+FILTER_ALTITUDE_FT defaults: off, with 0 to 10,000 ft ready for range mode.
+        static constexpr int32_t kDefaultFilterAltitudeAFt = 0;
+        static constexpr int32_t kDefaultFilterAltitudeBFt = 10000;
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
         // For settings struct backwards compatibility. ESP IDF can't handle the full length SSID and password, so length was reduced.
@@ -156,9 +218,15 @@ class SettingsManager {
         static constexpr uint16_t kMaxNumFeeds = 10;
         static constexpr uint16_t kFeedURIMaxNumChars = 63;
         static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
+        static constexpr uint16_t kMQTTUsernameMaxLen = 31;
+        static constexpr uint16_t kMQTTPasswordMaxLen = 63;
+        static constexpr uint16_t kMQTTTopicPrefixMaxLen = 31;
+        static constexpr uint16_t kMQTTWebSocketPathMaxLen = 31;
+        static constexpr uint8_t kMQTTMaxQoS = 2;
         static constexpr uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
+        static constexpr uint16_t kNTPServerMaxLen = 63;
 
         /**
          * Core Network Settings struct is used for storing network settings that should remain unchanged through most
@@ -221,6 +289,19 @@ class SettingsManager {
         struct WiFiNetwork {
             char ssid[kWiFiSSIDMaxLen + 2];  // Empty means the slot is unused.
             char password[kWiFiPasswordMaxLen + 2];
+        };
+
+        // The one MQTT broker that every feed with kFeedTransportMQTT publishes to (AT+MQTT).
+        struct MQTTBroker {
+            char host[kFeedURIMaxNumChars + 1];  // Empty: MQTT feeds stay disconnected.
+            uint16_t port;
+            bool tls;     // Encrypt, and check the broker's certificate against the built-in CA bundle.
+            uint8_t qos;  // MQTT quality of service of published messages, 0-2.
+            MQTTTransport transport;
+            char username[kMQTTUsernameMaxLen + 1];  // Empty connects without credentials.
+            char password[kMQTTPasswordMaxLen + 1];
+            char topic_prefix[kMQTTTopicPrefixMaxLen + 1];        // Empty means "adsbee".
+            char websocket_path[kMQTTWebSocketPathMaxLen + 1];  // Empty means "/mqtt".
         };
 
         uint32_t settings_version = kSettingsVersion;
@@ -315,6 +396,39 @@ class SettingsManager {
         // Opt-in: the ESP32 checks adsbee.aero for firmware and installs what it recommends. Off by default.
         bool auto_update_enabled = false;
 
+        // Distance filter (AT+FILTER_DISTANCE_NM). When enabled, aircraft known to be farther than
+        // filter_distance_deci_nm tenths of a nautical mile from the receiver are left out of aircraft reports (aircraft
+        // JSON, the web UI's list and map, GDL90, MAVLink, CSBee). Raw packets (Raw, Beast, MLAT and every feed of them)
+        // are never filtered. Aircraft at an unknown distance are always kept. filter_distance_enabled sits in what was
+        // auto_update_enabled's tail padding.
+        bool filter_distance_enabled = false;
+        uint32_t filter_distance_deci_nm = kDefaultFilterDistanceDeciNm;
+
+        /**
+         * The distance filter as Aircraft::IsBeyondDistance() takes it.
+         * @retval Filter distance in meters, or 0 when the filter is off.
+         */
+        inline uint32_t FilterDistanceMeters() const {
+            return filter_distance_enabled ? DeciNmToMeters(filter_distance_deci_nm) : 0;
+        }
+        // Feed settings added after the first feed fields.
+        FeedTransport feed_transports[kMaxNumFeeds];
+        MQTTBroker mqtt_broker;
+        // ASTERIX data source identifier (I021/010, I023/010): System Area Code and System Identification Code.
+        uint8_t asterix_sac = 0;
+        uint8_t asterix_sic = 0;
+
+        // Network Time Protocol server the ESP32 sets its clock from while an output uses ASTERIX.
+        char ntp_server[kNTPServerMaxLen + 1];
+
+        // Altitude filter (AT+FILTER_ALTITUDE_FT=<mode>,<a>,<b>), an AltitudeFilterMode with its arguments in feet.
+        // Leaves aircraft outside the selected altitudes out of the same aircraft reports as the distance filter.
+        // Aircraft with no known altitude are always kept. filter_altitude_mode sits in what was ntp_server's tail
+        // padding.
+        uint8_t filter_altitude_mode = kAltitudeFilterOff;
+        int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
+        int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
+
         /**
          * Default constructor.
          */
@@ -325,6 +439,10 @@ class SettingsManager {
             memset(remote_id_tx_uas_id, '\0', sizeof(remote_id_tx_uas_id));
             memset(remote_id_tx_operator_id, '\0', sizeof(remote_id_tx_operator_id));
             memset(wifi_sta_extra_networks, '\0', sizeof(wifi_sta_extra_networks));
+            memset(&mqtt_broker, '\0', sizeof(mqtt_broker));
+            mqtt_broker.port = kDefaultMQTTPort;
+            memset(ntp_server, '\0', sizeof(ntp_server));
+            strncpy(ntp_server, "pool.ntp.org", kNTPServerMaxLen);
 
 #ifdef ON_PICO
             DeviceInfo device_info;
@@ -346,6 +464,7 @@ class SettingsManager {
                 feed_ports[i] = 0;
                 feed_is_active[i] = false;
                 feed_protocols[i] = kNoReports;
+                feed_transports[i] = kFeedTransportTCP;
 #ifdef ON_PICO
                 // Pico has access to EEPROM for receiver ID in device info.
                 device_info.GetDefaultFeedReceiverID(feed_receiver_ids[i]);
@@ -607,6 +726,20 @@ class SettingsManager {
     }
 
     /**
+     * Parses an AT command feed transport string (TCP, UDP or MQTT, case-insensitive).
+     * @retval True if `str` named a transport and `transport` was written.
+     */
+    static inline bool FeedTransportFromStr(const char* str, FeedTransport& transport) {
+        for (uint8_t i = 0; i < kNumFeedTransports; i++) {
+            if (strcasecmp(str, kFeedTransportStrs[i]) == 0) {
+                transport = static_cast<FeedTransport>(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Helper function for converting a GNSSReceiverType to its AT command value string. Returns "NONE" for
      * out-of-range values (e.g. from a corrupted settings blob) so the AT dump stays replayable.
      * @param[in] type GNSSReceiverType to convert to a string.
@@ -656,6 +789,11 @@ class SettingsManager {
      * Print the settings in AT command format. Used for dumping settings before a firmware update.
      */
     void PrintAT();
+
+    /**
+     * @retval True if the console, the comms UART or an active network feed reports the protocol.
+     */
+    static bool ProtocolInUse(const Settings& settings, ReportingProtocol protocol);
 
     /**
      * Takes a password as a string and fills a buffer with the corresponding number of asterix.
@@ -731,9 +869,9 @@ extern SettingsManager settings_manager;
 //      settings_migration.cpp (see the recipe at the top of settings_versions.hh).
 //   3. Update the version and the numbers below to the new layout.
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
-static_assert(kSettingsVersion == 18,
+static_assert(kSettingsVersion == 19,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 1340,
+static_assert(sizeof(SettingsManager::Settings) == 1660,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -755,5 +893,16 @@ static_assert(offsetof(SettingsManager::Settings, rx_position) == 1112, "Setting
 static_assert(offsetof(SettingsManager::Settings, ip_mode) == 1141, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, wifi_sta_extra_networks) == 1142, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, auto_update_enabled) == 1338, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_distance_enabled) == 1339, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_distance_deci_nm) == 1340, "Settings layout changed. See above.");
+static_assert(sizeof(SettingsManager::Settings::MQTTBroker) == 230, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, feed_transports) == 1344, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, mqtt_broker) == 1354, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, asterix_sac) == 1584, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, asterix_sic) == 1585, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, ntp_server) == 1586, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_altitude_mode) == 1650, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_altitude_a_ft) == 1652, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, filter_altitude_b_ft) == 1656, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

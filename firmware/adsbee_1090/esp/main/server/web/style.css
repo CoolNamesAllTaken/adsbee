@@ -517,6 +517,8 @@ body {
     padding: 28px 36px;
     min-width: 360px;
     max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
     width: 90vw;
     color: #fff;
     font-family: Arial, sans-serif;
@@ -547,8 +549,16 @@ body {
     margin-bottom: 4px;
 }
 
+.feed-mqtt-topics {
+    font-size: 0.8em;
+    color: #aaa;
+    margin: 0 0 12px;
+    overflow-wrap: anywhere;
+}
+
 .feed-field input[type="text"],
 .feed-field input[type="number"],
+.feed-field input[type="password"],
 .feed-field select {
     background: #2a2a2a;
     border: 1px solid #444;
@@ -562,6 +572,92 @@ body {
     flex-direction: row;
     align-items: center;
     gap: 10px;
+}
+
+.feed-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.feed-row .feed-field {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.feed-row .feed-field-wide {
+    flex: 2 1 0;
+}
+
+.feed-row .feed-field-inline {
+    flex: 0 0 auto;
+    padding-bottom: 6px;
+}
+
+.feed-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.feed-preset {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 12px;
+    color: #ddd;
+    cursor: pointer;
+    font-size: 0.8em;
+    padding: 3px 10px;
+}
+
+.feed-preset:hover {
+    border-color: #ffcb00;
+    color: #ffcb00;
+}
+
+/* ESP32 RAM the active feeds take out of the unit's budget. */
+.feed-ram {
+    position: relative;
+    width: 4.5rem;
+    height: 0.5rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    background: var(--bg-card);
+    cursor: help;
+}
+
+#feed-ram-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 2px;
+    background: #22c55e;
+}
+
+#feed-ram-fill.high {
+    background: #f59e0b;
+}
+
+#feed-ram-fill.full {
+    background: #ef4444;
+}
+
+.feed-ram:hover::after,
+.feed-ram:focus::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: 1rem;
+    left: -6rem;
+    z-index: 1000;
+    width: 15rem;
+    padding: 6px 9px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    font: 0.78rem/1.35 Arial, sans-serif;
 }
 
 .feed-field-inline label {

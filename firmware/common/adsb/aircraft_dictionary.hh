@@ -8,6 +8,8 @@
 
 #include "adsb_types.hh"
 #include "aircraft_dictionary_config.hh"
+#include "altitude_filter.hh"
+#include "geo_utils.hh"
 // Can't include comms.hh or we will get a circular dependency.
 #include "hal.hh"
 #include "json_utils.hh"
@@ -103,6 +105,7 @@ class Aircraft {
     // Local time (get_time_since_boot_ms()) of the last accepted position, comparable across aircraft types. The
     // protocol-specific last_track_update_timestamp_ms holds packet MLAT time for Mode S.
     uint32_t last_position_update_ms = 0;
+    uint32_t last_velocity_update_ms = 0;  // Local time of the last velocity, 0 until one arrives.
 
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
@@ -115,6 +118,23 @@ class Aircraft {
 
     int32_t baro_vertical_rate_fpm = 0;
     int32_t gnss_vertical_rate_fpm = 0;
+
+    // Distance and bearing from the receiver, kept up to date by the AircraftDictionary (at most 1 s behind the
+    // position). kDistanceUnknown while the aircraft's or the receiver's position is unknown.
+    static constexpr uint32_t kDistanceUnknown = UINT32_MAX;
+    uint32_t distance_m = kDistanceUnknown;
+    uint16_t bearing_bam16 = 0;              // Clockwise from north, in 1/65536 turns. See Bam16ToDeg().
+    uint16_t distance_reference_epoch = 0;  // AircraftDictionary reference epoch distance_m was computed in.
+
+    /**
+     * Whether the distance filter (AT+FILTER_DISTANCE_NM) leaves this aircraft out of aircraft reports. Raw packets are
+     * never filtered. Aircraft at an unknown distance are kept.
+     * @param[in] max_distance_m Largest distance from the receiver to keep, in meters. 0 turns the filter off.
+     * @retval True if the aircraft is known to be farther than max_distance_m.
+     */
+    inline bool IsBeyondDistance(uint32_t max_distance_m) const {
+        return max_distance_m != 0 && distance_m != kDistanceUnknown && distance_m > max_distance_m;
+    }
 };
 
 /**
@@ -155,7 +175,7 @@ class ModeSAircraft : public Aircraft {
         kBitFlagIdent = 16,                     // IDENT switch is currently active.
         kBitFlagAlert = 17,                     // Aircraft is indicating an alert.
         kBitFlagTCASRA = 18,                    // Indicates a TCAS resolution advisory is active.
-        kBitFlagIsNonTransponder = 19,          // Aircraft is being rebroadcast (this is not a primary source).
+        kBitFlagIsNonTransponder = 19,          // Reported address type is a DF18 one (GetAddressType()).
         kBitFlagReserved0 = 20,
         kBitFlagReserved1 = 21,
         kBitFlagReserved2 = 22,
@@ -174,12 +194,60 @@ class ModeSAircraft : public Aircraft {
 
     static const uint8_t kBitFlagEndOfPersistentFlags = kBitFlagUpdatedBaroAltitude;
 
+    // How the aircraft is heard, in readsb's order: a lower value is a more direct source. DO-260C Table 2-7.
+    enum AddressType : uint8_t {
+        kAddressTypeADSBICAO = 0,                // DF17.
+        kAddressTypeADSBICAONonTransponder = 1,  // DF18 CF=0.
+        kAddressTypeADSRICAO = 2,                // DF18 CF=6, rebroadcast of UAT ADS-B.
+        kAddressTypeTISBICAO = 3,                // DF18 CF=2, radar or multilateration track.
+        kAddressTypeModeS = 4,                   // Mode S replies or DF19 only.
+        // Addresses below aren't ICAO addresses and get their own dictionary entries.
+        kAddressTypeADSBOther = 5,      // DF18 CF=1: anonymous, ground vehicle or obstruction address.
+        kAddressTypeADSROther = 6,      // DF18 CF=6 with IMF (ICAO/Mode A flag) set.
+        kAddressTypeTISBTrackFile = 7,  // DF18 CF=2 with IMF set: Mode A code and track file number.
+        kAddressTypeTISBOther = 8,      // DF18 CF=5.
+        kAddressTypeInvalid = 0xF
+    };
+    static constexpr AddressType kFirstNonICAOAddressType = kAddressTypeADSBOther;
+    // A less direct source can't replace position, velocity or other data from a more direct one for this long.
+    static constexpr uint32_t kAddressTypeHoldMs = 15e3;
+
+    /**
+     * Returns the address type of an extended squitter, or kAddressTypeInvalid if it doesn't describe a target
+     * (DF18 CF=3, 4 and 7). The ICAO/Mode A flag position depends on the type code (DO-260C 2.2.17, 2.2.18).
+     */
+    static AddressType GetAddressType(const ModeSADSBPacket& packet);
+
+    // TIS-B or ADS-R (DF18 CF=2, 5, 6).
+    static inline bool IsRebroadcast(AddressType type) {
+        return type == kAddressTypeADSRICAO || type == kAddressTypeTISBICAO || type >= kAddressTypeADSROther;
+    }
+    static inline bool IsTISB(AddressType type) {
+        return type == kAddressTypeTISBICAO || type == kAddressTypeTISBTrackFile || type == kAddressTypeTISBOther;
+    }
+    static inline bool IsADSR(AddressType type) {
+        return type == kAddressTypeADSRICAO || type == kAddressTypeADSROther;
+    }
+
+    /**
+     * Dictionary key of a Mode S address: non-ICAO address types go in the address qualifier bits so they never
+     * collide with an ICAO address.
+     */
+    static inline uint32_t AddressToUID(uint32_t address, AddressType type) {
+        uint32_t qualifier = type >= kFirstNonICAOAddressType && type != kAddressTypeInvalid ? type : 0;
+        return ICAOToUID((address & 0xFFFFFF) | (qualifier << kAddressQualifierBitShift), kAircraftTypeModeS);
+    }
+
     struct Metrics {
         // We can only confirm that valid frames came from this aircraft. Not sure who invalid frames are from.
         uint16_t valid_squitter_frames = 0;
         uint16_t valid_extended_squitter_frames = 0;
     };
 
+    /**
+     * @param[in] icao_address_in 24-bit address. A non-ICAO address carries its address type in the address
+     * qualifier bits (AddressToUID).
+     */
     ModeSAircraft(uint32_t icao_address_in);
     ModeSAircraft();
 
@@ -192,7 +260,7 @@ class ModeSAircraft : public Aircraft {
      * with the same ICAO address.
      * @retval Unique identifier for the aircraft.
      */
-    inline uint32_t GetUID() const { return ICAOToUID(icao_address, kAircraftTypeModeS); }
+    inline uint32_t GetUID() const { return AddressToUID(icao_address, static_cast<AddressType>(last_address_type)); }
 
     /**
      * Standard Functions
@@ -383,6 +451,31 @@ class ModeSAircraft : public Aircraft {
     uint16_t width_m = 0;
 
     int8_t adsb_version = 0;
+
+    AddressType position_address_type = kAddressTypeADSBICAO;  // Source of the position.
+    AddressType velocity_address_type = kAddressTypeADSBICAO;  // Source of the velocity.
+    uint8_t cpr_address_type  : 4 = kAddressTypeADSBICAO;      // Source of the cached CPR packets.
+    uint8_t last_address_type : 4 = kAddressTypeModeS;         // Source of the last extended squitter applied.
+
+    /**
+     * Returns how the aircraft is heard: the source of its position, or of the last extended squitter applied if it
+     * has no position. kAddressTypeModeS if no extended squitter was applied.
+     */
+    inline AddressType GetAddressType() const {
+        return HasBitFlag(kBitFlagPositionValid) ? position_address_type : static_cast<AddressType>(last_address_type);
+    }
+
+    /**
+     * Decides whether an extended squitter may update the aircraft, and records its source. Like readsb, a less
+     * direct source is ignored for kAddressTypeHoldMs after a more direct one updated the same data: position
+     * messages are held against the position, velocity messages against the velocity, and others against the
+     * position.
+     * @param[in] type Address type of the message.
+     * @param[in] type_code Type code of the message.
+     * @param[in] timestamp_ms Local time (get_time_since_boot_ms()).
+     * @retval True if the message should be applied.
+     */
+    bool AcceptAddressType(AddressType type, uint16_t type_code, uint32_t timestamp_ms);
 
     /**
      * GENERIC COMMENT FOR ALL MESSAGE INGESTION HELPERS
@@ -782,14 +875,54 @@ class RemoteIDAircraft : public Aircraft {
     Metrics metrics_counter_;
 };
 
+/**
+ * Which aircraft go into aircraft reports, resolved once per reporting round by AircraftDictionary::GetReportFilter():
+ * the distance filter (AT+FILTER_DISTANCE_NM) and the altitude filter (AT+FILTER_ALTITUDE_FT). An aircraft is reported
+ * only if it passes both. Raw packets are never filtered.
+ */
+struct AircraftReportFilter {
+    uint32_t max_distance_m = 0;  // 0: no distance filter.
+    AltitudeFilterBounds altitude;
+
+    // Altitude the altitude filter compares: barometric, else GNSS. False if neither is known.
+    template <typename T>
+    static bool ReportAltitudeFt(const T &aircraft, int32_t &altitude_ft) {
+        if (aircraft.HasBitFlag(T::kBitFlagBaroAltitudeValid)) {
+            altitude_ft = aircraft.baro_altitude_ft;
+            return true;
+        }
+        if (aircraft.HasBitFlag(T::kBitFlagGNSSAltitudeValid)) {
+            altitude_ft = aircraft.gnss_altitude_ft;
+            return true;
+        }
+        return false;
+    }
+    static bool ReportAltitudeFt(const RemoteIDAircraft &aircraft, int32_t &altitude_ft) {
+        altitude_ft = aircraft.gnss_altitude_ft;
+        return aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagGNSSAltitudeValid);
+    }
+
+    /**
+     * Whether an aircraft is left out of aircraft reports. Aircraft with an unknown distance or altitude pass that
+     * filter.
+     */
+    template <typename T>
+    bool Excludes(const T &aircraft) const {
+        if (aircraft.IsBeyondDistance(max_distance_m)) return true;
+        if (!altitude.enabled) return false;
+        int32_t altitude_ft = 0;
+        bool known = ReportAltitudeFt(aircraft, altitude_ft);
+        return altitude.Excludes(known, altitude_ft);
+    }
+};
+
 class AircraftDictionary {
    public:
     static constexpr uint16_t kMaxNumAircraft = kAircraftDictionaryMaxNumAircraft;
     static constexpr uint16_t kMaxNumSources = 4;  // One per 1090 demodulator state machine.
 
 #ifdef FILTER_CPR_POSITIONS
-    // Table-based inverse haversine isn't super accurate at small distances, and aircraft velocity may be super
-    // accurate, so we always allow a position jump of less than or equal to this distance.
+    // Reported velocities can be inaccurate, so a position jump of up to this distance is always allowed.
     static constexpr uint32_t kPositionFilterDeadbandMeters = 20e3;
 #endif
 
@@ -1173,15 +1306,16 @@ class AircraftDictionary {
      */
     bool ContainsAircraft(uint32_t uid) const;
 
-    // One ICAO address can have several entries: its own 1090ES, its own UAT ADS-B, and ground rebroadcasts (DF18, UAT
-    // TIS-B/ADS-R). Address-keyed outputs (aircraft JSON, GDL90 traffic) report one: the best-ranked entry with a
-    // position newer than kPreferredReportPositionFreshMs, else the newest position. 15 s covers a TIS-B radar scan.
+    // One ICAO address can have up to three entries: Mode S (direct, ADS-R or TIS-B, see ModeSAircraft::AddressType),
+    // UAT ADS-B, and UAT TIS-B/ADS-R. Address-keyed outputs (aircraft JSON, GDL90 traffic, ASTERIX) report one: the
+    // best-ranked entry with a position newer than kPreferredReportPositionFreshMs, else the newest position. 15 s
+    // covers a TIS-B radar scan.
     static constexpr uint32_t kPreferredReportPositionFreshMs = 15e3;
     enum AddressSourceRank : int8_t {
-        kAddressSourceRankDirect = 0,       // 1090ES DF17 / Mode S replies, or UAT ADS-B with an ICAO address.
-        kAddressSourceRankRebroadcast = 1,  // DF18 (ADS-R / TIS-B / non-transponder on 1090).
-        kAddressSourceRankTISB = 2,         // UAT TIS-B or ADS-R with an ICAO address (address qualifier 2).
-        kAddressSourceRankUnique = -1       // Not an ICAO-addressed entry (Remote ID, track files, self-assigned).
+        kAddressSourceRankDirect = 0,       // DF17, DF18 CF=0, Mode S replies, or UAT ADS-B with an ICAO address.
+        kAddressSourceRankRebroadcast = 1,  // 1090 ADS-R (DF18 CF=6) with an ICAO address.
+        kAddressSourceRankTISB = 2,         // 1090 TIS-B, or UAT TIS-B/ADS-R, with an ICAO address.
+        kAddressSourceRankUnique = -1       // Not an ICAO-addressed entry (Remote ID, track files, anonymous).
     };
 
     /**
@@ -1202,6 +1336,53 @@ class AircraftDictionary {
     bool IsPreferredReportForAddress(uint32_t uid, uint32_t timestamp_ms) const;
 
     /**
+     * Resolves the aircraft report filters for a reporting round. kAltitudeFilterNearRx uses the receiver
+     * altitude from SetReferenceAltitudeFt(); without one it filters nothing.
+     * @param[in] max_distance_m Settings::FilterDistanceMeters(): largest distance to report, 0 for no filter.
+     * @param[in] altitude_mode AltitudeFilterMode (Settings::filter_altitude_mode).
+     * @param[in] altitude_a_ft First altitude argument, in feet.
+     * @param[in] altitude_b_ft Second altitude argument, in feet.
+     */
+    AircraftReportFilter GetReportFilter(uint32_t max_distance_m, uint8_t altitude_mode, int32_t altitude_a_ft,
+                                         int32_t altitude_b_ft) const {
+        AircraftReportFilter filter;
+        filter.max_distance_m = max_distance_m;
+        filter.altitude = AltitudeFilterBounds::Of(altitude_mode, altitude_a_ft, altitude_b_ft,
+                                                   reference_position_valid_ && reference_altitude_valid_,
+                                                   reference_altitude_ft_);
+        return filter;
+    }
+
+    // GetReportFilter() for a SettingsManager::Settings (either product's).
+    template <typename SettingsT>
+    AircraftReportFilter GetReportFilter(const SettingsT &settings) const {
+        return GetReportFilter(settings.FilterDistanceMeters(), settings.filter_altitude_mode,
+                               settings.filter_altitude_a_ft, settings.filter_altitude_b_ft);
+    }
+
+    /**
+     * Lists the aircraft that aircraft reports (CSBee, MAVLink, GDL90, aircraft JSON) cover in a reporting round: every
+     * tracked aircraft except those the report filter leaves out. Raw packets don't go through here and are never
+     * filtered.
+     * @param[out] uids Filled with up to max_uids aircraft UIDs.
+     * @param[in] max_uids Capacity of uids.
+     * @param[in] filter From GetReportFilter().
+     * @retval Number of UIDs written.
+     */
+    uint16_t GetReportUIDs(uint32_t uids[], uint16_t max_uids, const AircraftReportFilter &filter) const {
+        uint16_t count = 0;
+        for (const auto &itr : dict) {
+            if (count >= max_uids) {
+                break;
+            }
+            if (!std::visit([&filter](const auto &a) { return filter.Excludes(a); }, itr.second)) {
+                uids[count++] = itr.first;
+            }
+        }
+        return count;
+    }
+
+    /**
      * Used to enable or disable the CPR position filter.
      * @param[in] enabled True to enable the filter, false to disable it.
      */
@@ -1220,7 +1401,20 @@ class AircraftDictionary {
      * are ingested (air/ground state, movement, heading) but their CPR position decode is skipped, since surface
      * CPR decoded against a bogus reference silently yields a wrong position.
      */
-    inline void ClearReferencePosition() { reference_position_valid_ = false; }
+    void ClearReferencePosition();
+
+    /**
+     * Sets the receiver altitude that AT+FILTER_ALTITUDE_FT's near-receiver mode compares against. It counts only
+     * while the reference position is valid, and ClearReferencePosition() clears it.
+     * @param[in] altitude_ft Receiver altitude, in feet.
+     */
+    inline void SetReferenceAltitudeFt(int32_t altitude_ft) {
+        reference_altitude_ft_ = altitude_ft;
+        reference_altitude_valid_ = true;
+    }
+
+    // Marks the receiver altitude as unknown: the near-receiver altitude filter then filters nothing.
+    inline void ClearReferenceAltitude() { reference_altitude_valid_ = false; }
 
     /**
      * Check whether a valid reference position has been set.
@@ -1344,6 +1538,51 @@ class AircraftDictionary {
     uint32_t reference_latitude_awb32_ = 0;
     uint32_t reference_longitude_awb32_ = 0;
     bool reference_position_valid_ = false;  // Set by SetReferencePosition, cleared by ClearReferencePosition.
+    int32_t reference_altitude_ft_ = 0;
+    bool reference_altitude_valid_ = false;  // Set by SetReferenceAltitudeFt, cleared by ClearReferencePosition.
+    // Receiver position for aircraft distance and bearing. Moving it more than kReferenceMoveThresholdMeters or
+    // clearing it bumps reference_epoch_, and Update() recomputes every aircraft computed in an older epoch or marked
+    // stale by a move.
+    static constexpr uint32_t kReferenceMoveThresholdMeters = 500;
+    // Epoch value that marks an aircraft's distance as stale; reference_epoch_ never takes it.
+    static constexpr uint16_t kDistanceEpochStale = UINT16_MAX;
+    GeoReference distance_reference_;
+    uint16_t reference_epoch_ = 0;
+
+    // Position and validity of an aircraft before a packet is applied, to tell whether its distance needs updating.
+    struct PositionSnapshot {
+        float latitude_deg;
+        float longitude_deg;
+        bool valid;
+        template <typename T>
+        static PositionSnapshot Of(const T &aircraft) {
+            return {aircraft.latitude_deg, aircraft.longitude_deg, aircraft.HasBitFlag(T::kBitFlagPositionValid)};
+        }
+    };
+
+    /**
+     * After a packet: an aircraft's first position (or a lost one) updates its distance at once, so the distance filter
+     * applies to new aircraft right away. Later moves only mark the distance stale, and Update() recomputes it once a
+     * second: the cost follows the number of aircraft, not the position message rate.
+     */
+    template <typename T>
+    void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before) {
+        PositionSnapshot after = PositionSnapshot::Of(aircraft);
+        if (after.valid != before.valid || (after.valid && aircraft.distance_m == Aircraft::kDistanceUnknown)) {
+            UpdateDistanceAndBearing(aircraft, after.valid);
+        } else if (after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg) {
+            aircraft.distance_reference_epoch = kDistanceEpochStale;
+        }
+    }
+
+    void BumpReferenceEpoch();
+
+    /**
+     * Recomputes an aircraft's distance and bearing from the receiver.
+     * @param[in,out] aircraft Aircraft to update.
+     * @param[in] position_valid Whether the aircraft's latitude_deg and longitude_deg hold a position.
+     */
+    void UpdateDistanceAndBearing(Aircraft &aircraft, bool position_valid);
 
     FixedPoolResource pool_;  // Free-list pool + monotonic bucket region; must outlive dict.
 };

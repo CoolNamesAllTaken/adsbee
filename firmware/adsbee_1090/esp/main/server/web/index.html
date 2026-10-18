@@ -53,6 +53,7 @@
                     <div class="feed-metrics-header">
                         <span id="feed-count" class="metrics-header">Feeds: 0</span>
                         <span id="feed-tip" class="info-tip" tabindex="0" role="note" aria-label="Feed performance" data-tip="Fewer feeds carry higher message rates: about 2,000 msg/s with 4 feeds and 1,000 msg/s with 10 on Ethernet, less on WiFi.">i</span>
+                        <span id="feed-ram" class="feed-ram" tabindex="0" role="meter" aria-label="ESP32 RAM for feeds" style="display:none;"><span id="feed-ram-fill"></span></span>
                         <button id="add-feed-btn" class="add-feed-btn" onclick="FeedEditor.openFirstEmpty()">+ Add</button>
                     </div>
                     <!-- Cards will be dynamically inserted here -->
@@ -115,6 +116,8 @@
                             <th data-sort-key="track">Hdg</th>
                             <th data-sort-key="lat">Lat</th>
                             <th data-sort-key="lon">Lon</th>
+                            <th data-sort-key="r_dst" title="Distance from the receiver">Dist&nbsp;(nm)</th>
+                            <th data-sort-key="r_dir" title="Bearing from the receiver">Brg</th>
                             <th data-sort-key="rssi">RSSI</th>
                         </tr>
                     </thead>
@@ -148,21 +151,76 @@
             <p id="feed-modal-status"></p>
             <input type="hidden" id="feed-slot">
             <div id="feed-form" style="display:none;">
-                <div class="feed-field">
-                    <label>URI</label>
-                    <input type="text" id="feed-uri" placeholder="feed.adsb.fi">
+                <div id="feed-presets" class="feed-presets"></div>
+                <div class="feed-row">
+                    <div class="feed-field">
+                        <label>Protocol</label>
+                        <select id="feed-protocol"></select>
+                    </div>
+                    <div class="feed-field">
+                        <label>Transport</label>
+                        <select id="feed-transport" title="TCP to a server, UDP datagrams to a host or broadcast address, or MQTT to the broker"></select>
+                    </div>
+                    <div class="feed-field feed-field-inline">
+                        <label>Active</label>
+                        <input type="checkbox" id="feed-active">
+                    </div>
                 </div>
-                <div class="feed-field">
-                    <label>Port</label>
-                    <input type="number" id="feed-port" min="1" max="65535">
+                <div id="feed-endpoint" class="feed-row">
+                    <div class="feed-field feed-field-wide">
+                        <label>Host</label>
+                        <input type="text" id="feed-uri" placeholder="feed.adsb.fi">
+                    </div>
+                    <div class="feed-field">
+                        <label>Port</label>
+                        <input type="number" id="feed-port" min="1" max="65535">
+                    </div>
                 </div>
-                <div class="feed-field feed-field-inline">
-                    <label>Active</label>
-                    <input type="checkbox" id="feed-active">
-                </div>
-                <div class="feed-field">
-                    <label>Protocol</label>
-                    <select id="feed-protocol"></select>
+                <div id="feed-mqtt" style="display:none;">
+                    <div class="feed-row">
+                        <div class="feed-field feed-field-wide">
+                            <label title="All MQTT feeds publish to this broker over one connection">Broker (shared)</label>
+                            <input type="text" id="feed-mqtt-host" maxlength="63" placeholder="homeassistant.local">
+                        </div>
+                        <div class="feed-field">
+                            <label>Port</label>
+                            <input type="number" id="feed-mqtt-port" min="1" max="65535">
+                        </div>
+                    </div>
+                    <div class="feed-row">
+                        <div class="feed-field">
+                            <label>Username</label>
+                            <input type="text" id="feed-mqtt-username" maxlength="31" placeholder="none">
+                        </div>
+                        <div class="feed-field">
+                            <label>Password</label>
+                            <input type="password" id="feed-mqtt-password" maxlength="63">
+                        </div>
+                    </div>
+                    <div class="feed-row">
+                        <div class="feed-field feed-field-inline" title="Encrypt and check the broker's certificate (port 8883, or 443 with WebSocket)">
+                            <label>TLS</label>
+                            <input type="checkbox" id="feed-mqtt-tls">
+                        </div>
+                        <div class="feed-field feed-field-inline" title="MQTT over WebSocket, for brokers behind web proxies (port 80 or 443)">
+                            <label>WebSocket</label>
+                            <input type="checkbox" id="feed-mqtt-ws">
+                        </div>
+                        <div class="feed-field" title="WebSocket path">
+                            <input type="text" id="feed-mqtt-path" maxlength="31" placeholder="/mqtt">
+                        </div>
+                    </div>
+                    <div class="feed-row">
+                        <div class="feed-field feed-field-wide">
+                            <label>Topic prefix</label>
+                            <input type="text" id="feed-mqtt-prefix" maxlength="31" placeholder="adsbee">
+                        </div>
+                        <div class="feed-field" title="0: at most once, 1: at least once, 2: exactly once">
+                            <label>QoS</label>
+                            <select id="feed-mqtt-qos"><option value="0">0</option><option value="1">1</option><option value="2">2</option></select>
+                        </div>
+                    </div>
+                    <p id="feed-mqtt-topics" class="feed-mqtt-topics" title="Published topics"></p>
                 </div>
                 <div id="feed-map-row" class="feed-map-row" style="display:none;">
                     <a id="feed-map-link" target="_blank" rel="noopener">View this receiver on the whereplane.xyz map</a>

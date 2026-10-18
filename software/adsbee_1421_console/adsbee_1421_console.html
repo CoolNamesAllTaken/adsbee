@@ -1997,6 +1997,8 @@
                             <th data-sort-key="track">Hdg</th>
                             <th data-sort-key="lat">Lat</th>
                             <th data-sort-key="lon">Lon</th>
+                            <th data-sort-key="r_dst" title="Distance from the receiver">Dist&nbsp;(nm)</th>
+                            <th data-sort-key="r_dir" title="Bearing from the receiver">Brg</th>
                             <th data-sort-key="rssi">RSSI</th>
                         </tr>
                     </thead>
@@ -4659,7 +4661,6 @@
 // ══ BEGIN VENDORED ADSBee settings engine (from firmware/adsbee_1090/esp/main/server/web/settings.js) ══
 // Copied verbatim from between that file's BEGIN/END SHARED SETTINGS ENGINE markers;
 // edit it there and re-copy. Unindented to keep the copy mechanical, like Leaflet above.
-
 // Schema-driven settings form. Each schema entry describes one AT command:
 //
 //   {
@@ -4695,7 +4696,10 @@
 //   display  read-only informational value populated by parse(); never written
 // Fields may declare visibleIf(values) to show/hide based on sibling values,
 // note: '...' for a hint line under the input, and validate(value) returning an error
-// message (or '') for checks beyond the type's own.
+// message (or '') for checks beyond the type's own. lockOffIf(deviceValues) (bool) and
+// lockOffBits(deviceValues) (bitmask) stop the user from turning a setting or option on
+// while still allowing it to be turned off; entries may declare notice(deviceValues),
+// a line under the help text explaining such a lock.
 //
 // To expose a new AT command in the GUI, add one entry to the product's schema array.
 
@@ -4808,6 +4812,13 @@ class SettingsEngine {
             el.appendChild(help);
         }
 
+        if (entry.notice) {
+            const notice = document.createElement('div');
+            notice.className = 'settings-note';
+            notice.id = `settings-notice-${entry.cmd}`;
+            el.appendChild(notice);
+        }
+
         for (const field of entry.fields) {
             el.appendChild(this._renderField(entry, field));
         }
@@ -4836,7 +4847,7 @@ class SettingsEngine {
                 input.type = 'number';
                 if (field.min !== undefined) input.min = field.min;
                 if (field.max !== undefined) input.max = field.max;
-                input.step = field.type === 'float' ? 'any' : '1';
+                input.step = field.step !== undefined ? field.step : (field.type === 'float' ? 'any' : '1');
                 break;
             case 'enum': {
                 input = document.createElement('select');
@@ -4906,7 +4917,28 @@ class SettingsEngine {
 
     _onFieldChanged(entry) {
         this._updateVisibility(entry);
+        this._applyLocks(entry);
         this._updateDirtyUI();
+    }
+
+    // Disables options the device says can't be turned on (see lockOffIf / lockOffBits);
+    // ones that are on stay enabled so they can be turned off.
+    _applyLocks(entry) {
+        const device = this.deviceValues[entry.cmd];
+        if (!device || !this.readOk[entry.cmd]) return;
+        for (const field of entry.fields) {
+            const input = this._input(entry, field);
+            if (field.type === 'bool' && field.lockOffIf) {
+                input.disabled = !input.checked && !!field.lockOffIf(device);
+            } else if (field.type === 'bitmask' && field.lockOffBits) {
+                const bits = field.lockOffBits(device);
+                for (const cb of input.querySelectorAll('input[type="checkbox"]')) {
+                    cb.disabled = !cb.checked && (bits & parseInt(cb.dataset.bit, 10)) !== 0;
+                }
+            }
+        }
+        const notice = document.getElementById(`settings-notice-${entry.cmd}`);
+        if (notice) notice.textContent = (entry.notice && entry.notice(device)) || '';
     }
 
     // ── Values ──
@@ -5247,6 +5279,7 @@ class SettingsEngine {
         }
         this.readOk[entry.cmd] = true;
         this._setEntryEnabled(entry, true);
+        this._applyLocks(entry);
         this._updateVisibility(entry);
         this._entryStatus(entry, '');
         this._validateEntry(entry, new Set());  // clear stale inline errors
@@ -5333,7 +5366,7 @@ class SettingsEngine {
 // Constants and schema-entry factories for AT commands shared by both products.
 
 const SETTINGS_PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK', 'CSBEE',
-    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK'];
+    'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'GDL90_NO_UAT_UPLINK', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX'];
 const SETTINGS_LOG_LEVELS = ['SILENT', 'ERRORS', 'WARNINGS', 'INFO'];
 
 // RX_POSITION is identical on both products; the entry is built by a factory so each
@@ -5410,6 +5443,55 @@ function makeMavlinkIdEntry() {
             return values.sys === undefined ? null : values;
         },
         build(v) { return [`AT+MAVLINK_ID=${v.sys},${v.comp}`]; },
+    };
+}
+
+// FILTER_DISTANCE_NM is identical on both products.
+function makeFilterDistanceEntry() {
+    return {
+        cmd: 'FILTER_DISTANCE_NM', label: 'Distance Filter', group: 'Reporting',
+        help: 'Hide far aircraft from aircraft reports. Raw packets are unfiltered.',
+        tip: 'Filtered: aircraft list and map, aircraft JSON, GDL90, MAVLink, CSBee. Unfiltered: Raw, Beast, MLAT and their feeds. Needs a receiver position; aircraft without a position are kept.',
+        fields: [
+            { id: 'en', label: 'Enabled', type: 'bool' },
+            { id: 'nm', label: 'Distance (nm)', type: 'float', min: 0.1, max: 10000, step: 0.1 },
+        ],
+    };
+}
+
+// FILTER_ALTITUDE_FT is identical on both products.
+function makeFilterAltitudeEntry() {
+    return {
+        cmd: 'FILTER_ALTITUDE_FT', label: 'Altitude Filter', group: 'Reporting',
+        help: 'Hide aircraft outside an altitude band from aircraft reports. Raw packets are unfiltered.',
+        tip: 'Filtered: aircraft list and map, aircraft JSON, GDL90, MAVLink, CSBee. Unfiltered: Raw, Beast, MLAT and their feeds. Uses barometric altitude, else GNSS; aircraft without altitude are kept. Within A of the receiver needs a receiver position.',
+        fields: [
+            {
+                id: 'mode', label: 'Mode', type: 'enum',
+                options: [
+                    { value: 'OFF', label: 'Off' },
+                    { value: 'ABOVE', label: 'At or above A' },
+                    { value: 'BELOW', label: 'At or below A' },
+                    { value: 'BETWEEN', label: 'Between A and B' },
+                    { value: 'NEAR_RX', label: 'Within A above or below the receiver' },
+                ],
+            },
+            { id: 'a', label: 'A (ft)', type: 'int', min: -2000, max: 100000, visibleIf: v => v.mode !== 'OFF' },
+            { id: 'b', label: 'B (ft)', type: 'int', min: -2000, max: 100000, visibleIf: v => v.mode === 'BETWEEN' },
+        ],
+    };
+}
+
+// ASTERIX_SAC_SIC is identical on both products.
+function makeAsterixSacSicEntry() {
+    return {
+        cmd: 'ASTERIX_SAC_SIC', label: 'ASTERIX Data Source', group: 'Reporting',
+        help: 'System Area Code and System Identification Code sent in every ASTERIX record.',
+        query: { expect: /^ASTERIX_SAC_SIC=/ },
+        fields: [
+            { id: 'sac', label: 'SAC', type: 'int', min: 0, max: 255 },
+            { id: 'sic', label: 'SIC', type: 'int', min: 0, max: 255 },
+        ],
     };
 }
 
@@ -5978,7 +6060,7 @@ function makeRxEnableEntry() {
 
         // ─── AircraftTable ───────────────────────────────────────────────────────
 
-        const kNumericSortKeys = new Set(['alt_baro', 'gs', 'track', 'lat', 'lon', 'rssi']);
+        const kNumericSortKeys = new Set(['alt_baro', 'gs', 'track', 'lat', 'lon', 'r_dst', 'r_dir', 'rssi']);
 
         class AircraftTable {
             constructor(tbodyId, store, onSelect) {
@@ -6053,6 +6135,8 @@ function makeRxEnableEntry() {
                     const hdg = dir != null ? Math.round(dir) + '°' : '';
                     const lat = ac.lat != null ? ac.lat.toFixed(4) : '';
                     const lon = ac.lon != null ? ac.lon.toFixed(4) : '';
+                    const rdst = ac.r_dst != null ? ac.r_dst.toFixed(1) : '';
+                    const rdir = ac.r_dir != null ? Math.round(ac.r_dir) % 360 + '°' : '';
                     const rssi = ac.rssi != null ? ac.rssi.toFixed(1) : '';
                     // Ground aircraft show gray regardless of their (latched) altitude.
                     const color = ac.on_ground ? '#888888' : acAltColor(ac.alt_baro);
@@ -6065,14 +6149,15 @@ function makeRxEnableEntry() {
                         c[3].textContent = sqwk; c[4].textContent = alt;
                         c[5].textContent = gs; c[6].textContent = hdg;
                         c[7].textContent = lat; c[8].textContent = lon;
-                        c[9].textContent = rssi;
+                        c[9].textContent = rdst; c[10].textContent = rdir;
+                        c[11].textContent = rssi;
                         r.classList.toggle('trail-active', this.selectedHex === ac.hex);
                     } else {
                         const r = document.createElement('tr');
                         r.dataset.hex = ac.hex;
                         r.innerHTML = `<td style="color:${color};font-family:monospace">${ac.hex}</td>` +
                             `<td>${cs}</td><td>${type}</td><td>${sqwk}</td><td>${alt}</td><td>${gs}</td>` +
-                            `<td>${hdg}</td><td>${lat}</td><td>${lon}</td><td>${rssi}</td>`;
+                            `<td>${hdg}</td><td>${lat}</td><td>${lon}</td><td>${rdst}</td><td>${rdir}</td><td>${rssi}</td>`;
                         r.addEventListener('click', () => {
                             if (this.onSelect) this.onSelect(ac.hex);
                         });
@@ -6507,6 +6592,9 @@ function makeRxEnableEntry() {
                 build(v) { return [`AT+PROTOCOL_OUT=CONSOLE,${v.CONSOLE}`]; },
             },
             makeMavlinkIdEntry(),
+            makeFilterAltitudeEntry(),
+            makeFilterDistanceEntry(),
+            makeAsterixSacSicEntry(),
             // ── Position ──
             makeRxPositionEntry(),
             // ── Serial ──

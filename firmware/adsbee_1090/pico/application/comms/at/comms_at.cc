@@ -11,6 +11,7 @@
 #include "esp32.hh"  // Access to ESP32 low level SPICoprocessorSlaveInterface.
 #include "esp32_firmware_check.hh"
 #include "esp32_flasher.hh"
+#include "remote_id_guard.hh"
 #include "firmware_update.hh"
 #include "flash_utils.hh"
 #include "main.hh"
@@ -18,6 +19,7 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"  // for getchar etc
 #include "pico/unique_id.h"
+#include "feed_ram_budget.hh"
 #include "settings.hh"
 #include "settings_hash.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
@@ -25,6 +27,7 @@
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
+#include "unit_conversions.hh"  // ParseDeciNm
 #endif
 
 // For mapping cpp_at_printf
@@ -535,6 +538,9 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 } else {
                     CPP_AT_PRINTF("ESP32 PSRAM: NONE\r\n");
                 }
+                CPP_AT_PRINTF("ESP32 Heap: %lu KB free, %lu KB largest block\r\n",
+                              (unsigned long)(esp32_ll.heap_free_bytes / 1024),
+                              (unsigned long)(esp32_ll.heap_largest_free_block_bytes / 1024));
             } else {
                 CPP_AT_PRINTF("ESP32 Disabled\r\n");
             }
@@ -683,6 +689,62 @@ CPP_AT_CALLBACK(CommsManager::ATESP32TriggerAbortCallback) {
 }
 #endif
 
+// The ESP32 image runs on modules with and without PSRAM (ESP32-S3-MINI-1U-N4R2 vs -N8) and reports which one it is in
+// ESP32DeviceStatus::hardware_capabilities. Returns true only once the ESP32 has positively reported "no PSRAM"; while
+// the capability is unknown (ESP32 disabled, not read yet, or older ESP32 firmware) settings are accepted and the ESP32's
+// own runtime gating (RemoteIDManager) remains the backstop.
+static bool ESP32KnownToLackPSRAM() {
+    return (esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapReported) &&
+           !(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapPSRAM);
+}
+
+// Remote ID transports this hardware can run with the enabled network interfaces (all while PSRAM is unknown).
+static uint8_t RemoteIDAllowedTransports() {
+    const SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
+    return RemoteIDGuard::AllowedTransports(!ESP32KnownToLackPSRAM(), cns.wifi_ap_enabled, cns.wifi_sta_enabled,
+                                            cns.ethernet_enabled);
+}
+
+// Why this hardware can't run the given Remote ID transports with the enabled network interfaces, or nullptr if it can.
+static const char* RemoteIDTransportsError(const char* command, uint8_t transports) {
+    static char error[300];
+    char names[RemoteIDGuard::kTransportsStrMaxLen];
+    const uint8_t allowed = RemoteIDAllowedTransports();
+    if ((transports & ~allowed) == 0) return nullptr;
+    if (allowed == 0) {
+        return "Remote ID can't run while WiFi AP or WiFi Station is enabled on this hardware: its ESP32 has no PSRAM, "
+               "so there isn't enough RAM for the web server and Remote ID at the same time. Disable WiFi and use "
+               "Ethernet or USB, or use hardware with PSRAM.";
+    }
+    snprintf(error, sizeof(error),
+             "Only the Bluetooth transports can run while Ethernet is enabled on this hardware: its ESP32 has no "
+             "PSRAM, so there isn't enough RAM for the web server, Bluetooth and the WiFi beacon receiver at the same "
+             "time. Use AT+%s=1,%s, disable Ethernet, or use hardware with PSRAM.",
+             command, RemoteIDGuard::TransportsStr(allowed, names, sizeof(names)));
+    return error;
+}
+
+// Warns when a network interface is being enabled while Remote ID uses transports it rules out on hardware without
+// PSRAM. Networking wins (it is how users reach the device), so the setting is accepted and those transports pause.
+static void WarnIfNetworkPausesRemoteID() {
+    const SettingsManager::Settings& s = settings_manager.settings;
+    const uint8_t allowed = RemoteIDAllowedTransports();
+    if (!(s.remote_id_rx_enabled && (s.remote_id_transports & ~allowed)) &&
+        !(s.remote_id_tx_enabled && (s.remote_id_tx_transports & ~allowed))) {
+        return;
+    }
+    CPP_AT_PRINTF(
+        "WARNING: this hardware's ESP32 has no PSRAM, so Remote ID will be paused while WiFi is enabled, and only its "
+        "Bluetooth transports run while Ethernet is enabled.\r\n");
+}
+
+// Explains why requested Remote ID isn't running, from the ESP32's live status.
+static void PrintRemoteIDBlockedReason(bool requested, uint16_t status_mask) {
+    if (!requested) return;
+    const char* reason = RemoteIDGuard::BlockedReason(esp32_ll.remote_id_status & status_mask);
+    if (reason != nullptr) CPP_AT_PRINTF("Remote ID %s.\r\n", reason);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
     switch (op) {
         case '?':
@@ -697,69 +759,57 @@ CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
             CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.core_network_settings.ethernet_enabled);
             CPP_AT_CMD_PRINTF(": ethernet_enabled: %d\r\n",
                               settings_manager.settings.core_network_settings.ethernet_enabled);
+            if (settings_manager.settings.core_network_settings.ethernet_enabled) WarnIfNetworkPausesRemoteID();
             CPP_AT_SUCCESS();
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-// The ESP32 image runs on modules with and without PSRAM (ESP32-S3-MINI-1U-N4R2 vs -N8) and reports which one it is in
-// ESP32DeviceStatus::hardware_capabilities. Returns true only once the ESP32 has positively reported "no PSRAM"; while
-// the capability is unknown (ESP32 disabled, not read yet, or older ESP32 firmware) settings are accepted and the ESP32's
-// own runtime gating (RemoteIDManager) remains the backstop.
-static bool ESP32KnownToLackPSRAM() {
-    return (esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapReported) &&
-           !(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapPSRAM);
-}
-
-static bool WiFiAPOrSTAEnabled() {
-    const SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
-    return cns.wifi_ap_enabled || cns.wifi_sta_enabled;
-}
-
-static const char kRemoteIDNeedsPSRAMError[] =
-    "Remote ID can't run while WiFi AP or WiFi Station is enabled on this hardware: its ESP32 has no PSRAM, so there "
-    "isn't enough RAM for WiFi networking and Remote ID at the same time. Disable both (AT+WIFI_AP=0 and "
-    "AT+WIFI_STA=0) and use Ethernet, or use hardware with PSRAM.";
-
-// Warns when WiFi AP/STA is being enabled while Remote ID is on, on hardware without PSRAM. WiFi networking wins (it is
-// how most users reach the device), so the setting is accepted and Remote ID pauses; this makes that visible.
-static void WarnIfWiFiPausesRemoteID() {
-    const SettingsManager::Settings& s = settings_manager.settings;
-    if (!ESP32KnownToLackPSRAM() || !WiFiAPOrSTAEnabled()) return;
-    if (!s.remote_id_rx_enabled && !s.remote_id_tx_enabled) return;
-    CPP_AT_PRINTF(
-        "WARNING: Remote ID is enabled but will be paused while WiFi AP or WiFi Station is enabled: this hardware's "
-        "ESP32 has no PSRAM, so it can't run WiFi networking and Remote ID at the same time.\r\n");
-}
-
 CPP_AT_CALLBACK(CommsManager::ATRemoteIDCallback) {
     switch (op) {
-        case '?':
-            // Report the requested settings plus the ESP32's resolved live status bitfield (why RID may not be running).
+        case '?': {
+            // Report the requested settings plus the ESP32's resolved live status (why RID may not be running).
             // remote_id_status is cached on the low-level ESP32 slave interface (esp32_ll) by ESP32::Update(); the
             // high-level SPICoprocessor `esp32` only inherits the base interface, which does not carry it.
-            CPP_AT_CMD_PRINTF("=%d,0x%02X(TRANSPORTS),0x%02X(ESP32_STATUS)",
-                              settings_manager.settings.remote_id_rx_enabled,
-                              settings_manager.settings.remote_id_transports, esp32_ll.remote_id_status);
+            char transports[RemoteIDGuard::kTransportsStrMaxLen], status[RemoteIDGuard::kStatusStrMaxLen],
+                allowed[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(
+                "=%d,%s(TRANSPORTS),%s(ESP32_STATUS),%s(ALLOWED_TRANSPORTS)",
+                settings_manager.settings.remote_id_rx_enabled,
+                RemoteIDGuard::TransportsStr(settings_manager.settings.remote_id_transports, transports,
+                                             sizeof(transports)),
+                RemoteIDGuard::StatusStr(esp32_ll.remote_id_status & 0x00FF, status, sizeof(status)),
+                RemoteIDGuard::TransportsStr(RemoteIDAllowedTransports(), allowed, sizeof(allowed)));
+            PrintRemoteIDBlockedReason(settings_manager.settings.remote_id_rx_enabled, 0x00FF);
             CPP_AT_SILENT_SUCCESS();
             break;
+        }
         case '=':
             if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID=<enabled>[,<transport_mask>]");
+                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID=<enabled>[,<transports>]");
             }
             bool rx_enabled;
             CPP_AT_TRY_ARG2NUM(0, rx_enabled);
-            if (rx_enabled && ESP32KnownToLackPSRAM() && WiFiAPOrSTAEnabled()) {
-                CPP_AT_ERROR("%s", kRemoteIDNeedsPSRAMError);
+            uint8_t transports = settings_manager.settings.remote_id_transports;
+            if (CPP_AT_HAS_ARG(1) && !RemoteIDGuard::ParseTransports(args[1], transports)) {
+                CPP_AT_ERROR(
+                    "Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with + (e.g. BT4+BT5_LR), ALL or "
+                    "NONE. Numeric masks are no longer accepted.",
+                    static_cast<int>(args[1].length()), args[1].data());
+            }
+            const char* transports_error = RemoteIDTransportsError("REMOTE_ID", transports);
+            if (rx_enabled && transports_error != nullptr) {
+                CPP_AT_ERROR("%s", transports_error);
             }
             settings_manager.settings.remote_id_rx_enabled = rx_enabled;
-            if (CPP_AT_HAS_ARG(1)) {
-                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.remote_id_transports);
-            }
-            CPP_AT_CMD_PRINTF(": remote_id_rx_enabled: %d, transports: 0x%02X\r\n",
+            settings_manager.settings.remote_id_transports = transports;
+            // Push the new receive configuration to the ESP32, which owns the radios.
+            settings_manager.SyncToCoprocessors();
+            char names[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(": remote_id_rx_enabled: %d, transports: %s\r\n",
                               settings_manager.settings.remote_id_rx_enabled,
-                              settings_manager.settings.remote_id_transports);
+                              RemoteIDGuard::TransportsStr(transports, names, sizeof(names)));
             CPP_AT_SUCCESS();
             break;
     }
@@ -786,10 +836,10 @@ void ATRemoteIDTxHelpCallback() {
     CPP_AT_PRINTF(
         "\t[EXPERIMENTAL] Remote ID is not yet a stable part of the system; its settings and behavior may change in "
         "future firmware.\r\n"
-        "\tAT+REMOTE_ID_TX=<enabled>[,<transport_mask>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
+        "\tAT+REMOTE_ID_TX=<enabled>[,<transports>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
         "\tTransmit Broadcast Remote ID (drone ID) from this device, for use as a Remote ID test transmitter or as a "
         "combined ADS-B receiver / Remote ID transmitter on a drone. No WiFi AP/STA is required.\r\n"
-        "\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7 = all methods).\r\n"
+        "\ttransports = BT4, BT5_LR and WIFI_BEACON joined with +, ALL or NONE (default ALL), e.g. BT4+BT5_LR.\r\n"
         "\tuas_id = UAS serial / registration, up to %d chars ('-' to clear and use this device's serial).\r\n"
         "\tid_type = [1 SERIAL, 2 CAA_REGISTRATION, 3 UTM_UUID, 4 SESSION_ID].\r\n"
         "\tua_type = [1 AEROPLANE, 2 HELICOPTER_MULTIROTOR, ... 15 OTHER].\r\n"
@@ -798,18 +848,24 @@ void ATRemoteIDTxHelpCallback() {
         "\tdescribe this device. The aircraft-derived sources (LOWEST, ICAO) carry a received aircraft's position;\r\n"
         "\tbroadcasting those would place a fabricated drone on a real aircraft, so an unknown position is sent\r\n"
         "\tinstead.\r\n"
-        "\tAT+REMOTE_ID_TX?\r\n\tQuery transmit settings and the ESP32's live status bitfield.",
+        "\tAT+REMOTE_ID_TX?\r\n\tQuery transmit settings, the ESP32's live status and the allowed transports.\r\n"
+        "\tTransmit status words: TX_BT4, TX_BT5_LR, TX_WIFI_BEACON, TX_NO_POSITION, TX_BLOCKED,\r\n"
+        "\tTX_POSITION_SOURCE_NOT_ALLOWED, plus the receive words of AT+REMOTE_ID?.",
         SettingsManager::Settings::kRemoteIDIDMaxLen, SettingsManager::Settings::kRemoteIDIDMaxLen);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
     switch (op) {
-        case '?':
-            // Report the requested settings plus the ESP32's resolved live status bitfield (the high byte carries the
-            // transmit state; see RemoteIDManager::Status).
-            CPP_AT_CMD_PRINTF("=%d,0x%02X(TRANSPORTS),%s(UAS_ID),%d(ID_TYPE),%d(UA_TYPE),%s(OPERATOR_ID),0x%04X(ESP32_STATUS)",
+        case '?': {
+            // Report the requested settings plus the ESP32's resolved live status (the high byte carries the transmit
+            // state; see RemoteIDGuard::Status).
+            char transports[RemoteIDGuard::kTransportsStrMaxLen], status[RemoteIDGuard::kStatusStrMaxLen],
+                allowed[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF("=%d,%s(TRANSPORTS),%s(UAS_ID),%d(ID_TYPE),%d(UA_TYPE),%s(OPERATOR_ID),%s(ESP32_STATUS),"
+                              "%s(ALLOWED_TRANSPORTS)",
                               settings_manager.settings.remote_id_tx_enabled,
-                              settings_manager.settings.remote_id_tx_transports,
+                              RemoteIDGuard::TransportsStr(settings_manager.settings.remote_id_tx_transports,
+                                                           transports, sizeof(transports)),
                               settings_manager.settings.remote_id_tx_uas_id[0] == '\0'
                                   ? "(device serial)"
                                   : settings_manager.settings.remote_id_tx_uas_id,
@@ -818,22 +874,31 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
                               settings_manager.settings.remote_id_tx_operator_id[0] == '\0'
                                   ? "(none)"
                                   : settings_manager.settings.remote_id_tx_operator_id,
-                              esp32_ll.remote_id_status);
+                              RemoteIDGuard::StatusStr(esp32_ll.remote_id_status, status, sizeof(status)),
+                              RemoteIDGuard::TransportsStr(RemoteIDAllowedTransports(), allowed, sizeof(allowed)));
+            PrintRemoteIDBlockedReason(settings_manager.settings.remote_id_tx_enabled, 0xFFFF);
             CPP_AT_SILENT_SUCCESS();
             break;
+        }
         case '=': {
             if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID_TX=<enabled>[,<transport_mask>]");
+                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID_TX=<enabled>[,<transports>]");
             }
             bool tx_enabled;
             CPP_AT_TRY_ARG2NUM(0, tx_enabled);
-            if (tx_enabled && ESP32KnownToLackPSRAM() && WiFiAPOrSTAEnabled()) {
-                CPP_AT_ERROR("%s", kRemoteIDNeedsPSRAMError);
+            uint8_t tx_transports = settings_manager.settings.remote_id_tx_transports;
+            if (CPP_AT_HAS_ARG(1) && !RemoteIDGuard::ParseTransports(args[1], tx_transports)) {
+                CPP_AT_ERROR(
+                    "Invalid transports '%.*s': use BT4, BT5_LR and WIFI_BEACON joined with + (e.g. BT4+BT5_LR), ALL or "
+                    "NONE. Numeric masks are no longer accepted.",
+                    static_cast<int>(args[1].length()), args[1].data());
+            }
+            const char* transports_error = RemoteIDTransportsError("REMOTE_ID_TX", tx_transports);
+            if (tx_enabled && transports_error != nullptr) {
+                CPP_AT_ERROR("%s", transports_error);
             }
             settings_manager.settings.remote_id_tx_enabled = tx_enabled;
-            if (CPP_AT_HAS_ARG(1)) {
-                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.remote_id_tx_transports);
-            }
+            settings_manager.settings.remote_id_tx_transports = tx_transports;
             if (CPP_AT_HAS_ARG(2)) {
                 // "-" clears the UAS ID, which makes the transmitter fall back to this device's own serial number.
                 if (args[2].compare("-") == 0) {
@@ -871,9 +936,10 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
             }
             // Push the new transmit configuration to the ESP32, which owns the radios.
             settings_manager.SyncToCoprocessors();
-            CPP_AT_CMD_PRINTF(": remote_id_tx_enabled: %d, transports: 0x%02X\r\n",
+            char names[RemoteIDGuard::kTransportsStrMaxLen];
+            CPP_AT_CMD_PRINTF(": remote_id_tx_enabled: %d, transports: %s\r\n",
                               settings_manager.settings.remote_id_tx_enabled,
-                              settings_manager.settings.remote_id_tx_transports);
+                              RemoteIDGuard::TransportsStr(tx_transports, names, sizeof(names)));
             WarnIfRemoteIDTxPositionSourceNotTransmittable();
             CPP_AT_SUCCESS();
             break;
@@ -884,11 +950,47 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
 
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
-        "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>\r\n\tSet details for a "
-        "network feed.\r\n\tindex = [0-%d], uri = ip address or URL, feed_port = [0-65535], "
-        "active = [0 1], protocol = [BEAST BEAST_RAW].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
-        "feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]\r\n",
+        "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>[,<transport>]\r\n\tSet details for a "
+        "network feed. Empty arguments keep their value.\r\n\tindex = [0-%d], uri = IP address or hostname (\"-\" "
+        "clears it), port = [0-65535], active = [0 1], protocol = [BEAST RAW AIRCRAFT_JSON ...], transport = [TCP UDP "
+        "MQTT].\r\n\tWithout a transport, a feed whose protocol changes takes the protocol's default: UDP for GDL90 "
+        "and MAVLink, MQTT for AIRCRAFT_JSON, TCP for the others.\r\n\tUDP sends whole frames per datagram to a host, "
+        "broadcast or multicast address. MQTT feeds publish to the broker set with AT+MQTT and ignore uri and port."
+        "\r\n\tA feed is refused if the active feeds would need more ESP32 RAM than the unit has for them."
+        "\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a "
+        "specific feed.\r\n\tfeed_index = [0-%d]\r\n",
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
+}
+
+// Feed RAM budget of this unit, or 0 while the ESP32 hasn't reported whether it has PSRAM (no check then).
+static uint32_t FeedRAMBudgetBytes() {
+    if (!(esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapReported)) {
+        return 0;
+    }
+    return FeedRAMBudget::BudgetBytes(settings_manager.settings,
+                                      esp32_ll.hardware_capabilities & ObjectDictionary::kESP32HWCapPSRAM);
+}
+
+// True if feed settings that went from old_used_bytes to the current use fit the RAM budget. Changes that don't add to
+// the use always fit.
+static bool FeedRAMFits(uint32_t old_used_bytes, uint32_t& used_bytes, uint32_t& budget_bytes) {
+    used_bytes = FeedRAMBudget::UsedBytes(settings_manager.settings);
+    budget_bytes = FeedRAMBudgetBytes();
+    return budget_bytes == 0 || used_bytes <= budget_bytes || used_bytes <= old_used_bytes;
+}
+
+#define FEED_RAM_ERROR_FORMAT                                                                                           \
+    "Not enough ESP32 RAM: the active feeds would need %lu kB of the %lu kB this unit has for feeds. Turn off a feed, " \
+    "or use UDP, or MQTT without TLS."
+
+static void PrintFeed(const CppAT::ATCommandDef_t& def, uint16_t index) {
+    const SettingsManager::Settings& s = settings_manager.settings;
+    char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
+    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
+    CPP_AT_CMD_PRINTF("=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID),%s(TRANSPORT)", index,
+                      s.feed_uris[index], s.feed_ports[index], s.feed_is_active[index],
+                      SettingsManager::kReportingProtocolStrs[s.feed_protocols[index]], receiver_id_str,
+                      SettingsManager::kFeedTransportStrs[s.feed_transports[index]]);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
@@ -902,30 +1004,16 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
                                  SettingsManager::Settings::kMaxNumFeeds - 1, index);
                 }
-                char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
-                SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
-                CPP_AT_CMD_PRINTF(
-                    "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", index,
-                    settings_manager.settings.feed_uris[index], settings_manager.settings.feed_ports[index],
-                    settings_manager.settings.feed_is_active[index],
-                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]],
-                    receiver_id_str);
+                PrintFeed(def, index);
             } else {
                 // Querying info about all feeds.
                 for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-                    char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
-                    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[i], receiver_id_str);
-                    CPP_AT_CMD_PRINTF(
-                        "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", i,
-                        settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
-                        settings_manager.settings.feed_is_active[i],
-                        SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[i]],
-                        receiver_id_str);
+                    PrintFeed(def, i);
                 }
             }
             CPP_AT_SILENT_SUCCESS();
             break;
-        case '=':
+        case '=': {
             // Setting feed information for a specific feed.
             uint16_t index = UINT16_MAX;
             if (!CPP_AT_HAS_ARG(0)) {
@@ -936,38 +1024,167 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
                              SettingsManager::Settings::kMaxNumFeeds - 1, index);
             }
+            // Check the names before changing anything.
+            SettingsManager::Settings& s = settings_manager.settings;
+            SettingsManager::ReportingProtocol feed_protocol = s.feed_protocols[index];
+            if (CPP_AT_HAS_ARG(4)) {
+                uint16_t i = 0;
+                while (i < SettingsManager::ReportingProtocol::kNumProtocols &&
+                       args[4].compare(SettingsManager::kReportingProtocolStrs[i]) != 0) {
+                    i++;
+                }
+                if (i == SettingsManager::ReportingProtocol::kNumProtocols) {
+                    CPP_AT_ERROR("Unknown protocol '%.*s'.", (int)args[4].length(), args[4].data());
+                }
+                feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
+            }
+            SettingsManager::FeedTransport feed_transport = s.feed_transports[index];
+            if (CPP_AT_HAS_ARG(5)) {
+                char transport_str[SettingsManager::kFeedTransportStrMaxLen] = {0};
+                if (args[5].length() >= sizeof(transport_str)) {
+                    CPP_AT_ERROR("Unknown transport '%.*s'. Use TCP, UDP or MQTT.", (int)args[5].length(),
+                                 args[5].data());
+                }
+                memcpy(transport_str, args[5].data(), args[5].length());
+                if (!SettingsManager::FeedTransportFromStr(transport_str, feed_transport)) {
+                    CPP_AT_ERROR("Unknown transport '%s'. Use TCP, UDP or MQTT.", transport_str);
+                }
+            } else if (feed_protocol != s.feed_protocols[index]) {
+                feed_transport = SettingsManager::DefaultFeedTransport(feed_protocol);
+            }
+            uint16_t feed_port = s.feed_ports[index];
+            if (CPP_AT_HAS_ARG(2)) {
+                CPP_AT_TRY_ARG2NUM(2, feed_port);
+            }
+            bool feed_is_active = s.feed_is_active[index];
+            if (CPP_AT_HAS_ARG(3)) {
+                CPP_AT_TRY_ARG2NUM(3, feed_is_active);
+            }
+
+            // Check the RAM budget with the new active flag and transport, then set everything.
+            uint32_t old_used_bytes = FeedRAMBudget::UsedBytes(s);
+            bool old_is_active = s.feed_is_active[index];
+            SettingsManager::FeedTransport old_transport = s.feed_transports[index];
+            s.feed_is_active[index] = feed_is_active;
+            s.feed_transports[index] = feed_transport;
+            uint32_t used_bytes, budget_bytes;
+            if (!FeedRAMFits(old_used_bytes, used_bytes, budget_bytes)) {
+                s.feed_is_active[index] = old_is_active;
+                s.feed_transports[index] = old_transport;
+                CPP_AT_ERROR(FEED_RAM_ERROR_FORMAT, (unsigned long)(used_bytes / 1024), (unsigned long)(budget_bytes / 1024));
+            }
             // Set FEED_URI. A single "-" is a sentinel meaning "clear the URI to empty".
             if (CPP_AT_HAS_ARG(1)) {
                 if (args[1] == "-") {
-                    settings_manager.settings.feed_uris[index][0] = '\0';
+                    s.feed_uris[index][0] = '\0';
                 } else {
-                    strncpy(settings_manager.settings.feed_uris[index], args[1].data(),
-                            SettingsManager::Settings::kFeedURIMaxNumChars);
-                    settings_manager.settings.feed_uris[index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
+                    strncpy(s.feed_uris[index], args[1].data(), SettingsManager::Settings::kFeedURIMaxNumChars);
+                    s.feed_uris[index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
                 }
             }
-            // Set FEED_PORT
-            if (CPP_AT_HAS_ARG(2)) {
-                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.feed_ports[index]);
+            s.feed_ports[index] = feed_port;
+            s.feed_protocols[index] = feed_protocol;
+            settings_manager.SyncToCoprocessors();
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+// Copies an AT argument into a settings string: "-" clears it, an empty argument keeps it.
+static bool SetATString(std::string_view arg, char* dest, uint16_t max_len) {
+    if (arg.empty()) {
+        return true;
+    }
+    if (arg == "-") {
+        dest[0] = '\0';
+        return true;
+    }
+    if (arg.length() > max_len) {
+        return false;
+    }
+    memset(dest, '\0', max_len + 1);
+    memcpy(dest, arg.data(), arg.length());
+    return true;
+}
+
+CPP_AT_CALLBACK(CommsManager::ATMQTTCallback) {
+    typedef SettingsManager::Settings Settings;
+    switch (op) {
+        case '?': {
+            const Settings::MQTTBroker& mqtt = settings_manager.settings.mqtt_broker;
+            char redacted_password[Settings::kMQTTPasswordMaxLen + 1];
+            SettingsManager::RedactPassword(const_cast<char*>(mqtt.password), redacted_password,
+                                            Settings::kMQTTPasswordMaxLen);
+            CPP_AT_CMD_PRINTF("=%s(HOST),%u(PORT),%s(USERNAME),%s(PASSWORD),%d(TLS),%u(QOS),%s(TOPIC_PREFIX),"
+                              "%s(TRANSPORT),%s(PATH)",
+                              mqtt.host, mqtt.port, mqtt.username, redacted_password, mqtt.tls, mqtt.qos,
+                              mqtt.topic_prefix, SettingsManager::kMQTTTransportStrs[mqtt.transport],
+                              mqtt.websocket_path);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+        case '=': {
+            Settings::MQTTBroker mqtt = settings_manager.settings.mqtt_broker;
+            if (num_args > 0 && !SetATString(args[0], mqtt.host, Settings::kFeedURIMaxNumChars)) {
+                CPP_AT_ERROR("Host must be %d characters or fewer.", Settings::kFeedURIMaxNumChars);
             }
-            // Set ACTIVE
-            if (CPP_AT_HAS_ARG(3)) {
-                uint8_t is_active;
-                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[index]);
+            if (CPP_AT_HAS_ARG(1)) {
+                CPP_AT_TRY_ARG2NUM(1, mqtt.port);
             }
-            // Set PROTOCOL
+            if (num_args > 2 && !SetATString(args[2], mqtt.username, Settings::kMQTTUsernameMaxLen)) {
+                CPP_AT_ERROR("Username must be %d characters or fewer.", Settings::kMQTTUsernameMaxLen);
+            }
+            if (num_args > 3 && !SetATString(args[3], mqtt.password, Settings::kMQTTPasswordMaxLen)) {
+                CPP_AT_ERROR("Password must be %d characters or fewer.", Settings::kMQTTPasswordMaxLen);
+            }
             if (CPP_AT_HAS_ARG(4)) {
-                SettingsManager::ReportingProtocol feed_protocol;
-                for (uint16_t i = 0; i < SettingsManager::ReportingProtocol::kNumProtocols; i++) {
-                    if (args[4].compare(SettingsManager::kReportingProtocolStrs[i]) == 0) {
-                        feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
-                    }
+                CPP_AT_TRY_ARG2NUM(4, mqtt.tls);
+            }
+            if (CPP_AT_HAS_ARG(5)) {
+                CPP_AT_TRY_ARG2NUM(5, mqtt.qos);
+                if (mqtt.qos > Settings::kMQTTMaxQoS) {
+                    CPP_AT_ERROR("QoS must be 0, 1 or 2.");
                 }
-                settings_manager.settings.feed_protocols[index] = feed_protocol;
+            }
+            if (num_args > 6 && !SetATString(args[6], mqtt.topic_prefix, Settings::kMQTTTopicPrefixMaxLen)) {
+                CPP_AT_ERROR("Topic prefix must be %d characters or fewer.", Settings::kMQTTTopicPrefixMaxLen);
+            }
+            if (strpbrk(mqtt.topic_prefix, "+#") != nullptr) {
+                CPP_AT_ERROR("Topic prefix can't contain the MQTT wildcards + or #.");
+            }
+            if (CPP_AT_HAS_ARG(7)) {
+                uint8_t i = 0;
+                while (i < SettingsManager::kNumMQTTTransports &&
+                       !(args[7].length() == strlen(SettingsManager::kMQTTTransportStrs[i]) &&
+                         strncasecmp(args[7].data(), SettingsManager::kMQTTTransportStrs[i], args[7].length()) == 0)) {
+                    i++;
+                }
+                if (i == SettingsManager::kNumMQTTTransports) {
+                    CPP_AT_ERROR("Unknown transport '%.*s'. Use TCP or WS.", (int)args[7].length(), args[7].data());
+                }
+                mqtt.transport = static_cast<SettingsManager::MQTTTransport>(i);
+            }
+            if (num_args > 8 && !SetATString(args[8], mqtt.websocket_path, Settings::kMQTTWebSocketPathMaxLen)) {
+                CPP_AT_ERROR("Path must be %d characters or fewer.", Settings::kMQTTWebSocketPathMaxLen);
+            }
+            if (mqtt.websocket_path[0] != '\0' && mqtt.websocket_path[0] != '/') {
+                CPP_AT_ERROR("Path must start with /.");
+            }
+            // TLS adds to the RAM that active MQTT feeds take.
+            uint32_t old_used_bytes = FeedRAMBudget::UsedBytes(settings_manager.settings);
+            Settings::MQTTBroker old_mqtt = settings_manager.settings.mqtt_broker;
+            settings_manager.settings.mqtt_broker = mqtt;
+            uint32_t used_bytes, budget_bytes;
+            if (!FeedRAMFits(old_used_bytes, used_bytes, budget_bytes)) {
+                settings_manager.settings.mqtt_broker = old_mqtt;
+                CPP_AT_ERROR(FEED_RAM_ERROR_FORMAT, (unsigned long)(used_bytes / 1024), (unsigned long)(budget_bytes / 1024));
             }
             settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
+        }
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
@@ -1211,6 +1428,55 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATASTERIXSACSICCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%u,%u", settings_manager.settings.asterix_sac, settings_manager.settings.asterix_sic);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
+                CPP_AT_ERROR("Requires two arguments: AT+ASTERIX_SAC_SIC=<sac>,<sic>.");
+            }
+            uint16_t sac, sic;
+            CPP_AT_TRY_ARG2NUM(0, sac);
+            CPP_AT_TRY_ARG2NUM(1, sic);
+            if (sac > 255 || sic > 255) {
+                CPP_AT_ERROR("SAC and SIC must be between 0 and 255.");
+            }
+            settings_manager.settings.asterix_sac = static_cast<uint8_t>(sac);
+            settings_manager.settings.asterix_sic = static_cast<uint8_t>(sic);
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATNTPServerCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s", settings_manager.settings.ntp_server);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            if (!CPP_AT_HAS_ARG(0) || args[0].size() > SettingsManager::Settings::kNTPServerMaxLen) {
+                CPP_AT_ERROR("Requires a host name or IP address of up to %u characters. AT+NTP_SERVER=<host>",
+                             SettingsManager::Settings::kNTPServerMaxLen);
+            }
+            for (char c : args[0]) {
+                if (!(isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == ':')) {
+                    CPP_AT_ERROR("Invalid character '%c' in NTP server.", c);
+                }
+            }
+            memset(settings_manager.settings.ntp_server, '\0', sizeof(settings_manager.settings.ntp_server));
+            memcpy(settings_manager.settings.ntp_server, args[0].data(), args[0].size());
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     switch (op) {
         case '?':
@@ -1235,6 +1501,78 @@ CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
             settings_manager.settings.mavlink_component_id = static_cast<uint8_t>(component_id);
             CPP_AT_SUCCESS();
             break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFilterAltitudeFtCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s,%ld,%ld", AltitudeFilterModeStr(settings_manager.settings.filter_altitude_mode),
+                              (long)settings_manager.settings.filter_altitude_a_ft,
+                              (long)settings_manager.settings.filter_altitude_b_ft);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            uint8_t mode = settings_manager.settings.filter_altitude_mode;
+            int32_t a_ft = settings_manager.settings.filter_altitude_a_ft;
+            int32_t b_ft = settings_manager.settings.filter_altitude_b_ft;
+            if (CPP_AT_HAS_ARG(0) && !ParseAltitudeFilterMode(args[0].data(), args[0].size(), mode)) {
+                CPP_AT_ERROR("Mode must be OFF, ABOVE, BELOW, BETWEEN or NEAR_RX.");
+            }
+            if (CPP_AT_HAS_ARG(1)) {
+                CPP_AT_TRY_ARG2NUM(1, a_ft);
+            }
+            if (CPP_AT_HAS_ARG(2)) {
+                CPP_AT_TRY_ARG2NUM(2, b_ft);
+            }
+            if (a_ft < kAltitudeFilterMinFt || a_ft > kAltitudeFilterMaxFt || b_ft < kAltitudeFilterMinFt ||
+                b_ft > kAltitudeFilterMaxFt) {
+                CPP_AT_ERROR("Altitudes must be %ld to %ld ft.", (long)kAltitudeFilterMinFt, (long)kAltitudeFilterMaxFt);
+            }
+            if (mode == kAltitudeFilterBetween && a_ft > b_ft) {
+                CPP_AT_ERROR("BETWEEN needs a <= b.");
+            }
+            if (mode == kAltitudeFilterNearRx && a_ft <= 0) {
+                CPP_AT_ERROR("NEAR_RX needs a > 0.");
+            }
+            settings_manager.settings.filter_altitude_mode = mode;
+            settings_manager.settings.filter_altitude_a_ft = a_ft;
+            settings_manager.settings.filter_altitude_b_ft = b_ft;
+            settings_manager.SyncToCoprocessors();  // The ESP32 filters its web UI, GDL90 and feeds too.
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFilterDistanceNMCallback) {
+    using Settings = SettingsManager::Settings;
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d,%lu.%lu", settings_manager.settings.filter_distance_enabled,
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm / 10),
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm % 10));
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            bool enabled = settings_manager.settings.filter_distance_enabled;
+            uint32_t deci_nm = settings_manager.settings.filter_distance_deci_nm;
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+            }
+            if (CPP_AT_HAS_ARG(1) && (!ParseDeciNm(args[1].data(), args[1].size(), deci_nm,
+                                                   Settings::kMaxFilterDistanceDeciNm) ||
+                                      deci_nm < Settings::kMinFilterDistanceDeciNm)) {
+                CPP_AT_ERROR("Distance must be 0.1 to 10000.0 nm, e.g. 50 or 12.5.");
+            }
+            settings_manager.settings.filter_distance_enabled = enabled;
+            settings_manager.settings.filter_distance_deci_nm = deci_nm;
+            settings_manager.SyncToCoprocessors();  // The ESP32 filters its web UI, GDL90 and feeds too.
+            CPP_AT_SUCCESS();
+            break;
+        }
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
@@ -1595,6 +1933,7 @@ static void PrintSettingsJSON() {
     const SettingsManager::Settings::CoreNetworkSettings& cns = s.core_network_settings;
 
     CPP_AT_PRINTF("SETTINGS={");
+    CPP_AT_PRINTF("\"ASTERIX_SAC_SIC\":[%u,%u],", s.asterix_sac, s.asterix_sic);
     CPP_AT_PRINTF("\"AUTO_UPDATE\":[%d],", s.auto_update_enabled);
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu,%lu],",
                   (unsigned long)s.baud_rates[SettingsManager::SerialInterface::kCommsUART],
@@ -1603,6 +1942,11 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"ETHERNET\":[%d],", cns.ethernet_enabled);
     CPP_AT_PRINTF("\"ESP32_ENABLE\":[%d],", esp32.IsEnabled());
     CPP_AT_PRINTF("\"FEED_ENABLE\":[%d],", s.feeds_enabled);
+    CPP_AT_PRINTF("\"FILTER_ALTITUDE_FT\":[\"%s\",%ld,%ld],", AltitudeFilterModeStr(s.filter_altitude_mode),
+                  (long)s.filter_altitude_a_ft, (long)s.filter_altitude_b_ft);
+    CPP_AT_PRINTF("\"FILTER_DISTANCE_NM\":[%d,%lu.%lu],", s.filter_distance_enabled,
+                  static_cast<unsigned long>(s.filter_distance_deci_nm / 10),
+                  static_cast<unsigned long>(s.filter_distance_deci_nm % 10));
     CPP_AT_PRINTF("\"GNSS\":[%d,\"%s\",%d],", s.gnss_enabled,
                   GNSSModuleTypeToStr(SettingsToGNSSModuleType(s.gnss_receiver_type)), s.gnss_notify);
     CPP_AT_PRINTF("\"HOSTNAME\":[\"%s\"],", JSONEscapeStr(cns.hostname, esc, sizeof(esc)));
@@ -1610,15 +1954,17 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("\"LED_ENABLE\":[%d],", s.led_enabled);
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
     CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
+    CPP_AT_PRINTF("\"NTP_SERVER\":[\"%s\"],", s.ntp_server);
     CPP_AT_PRINTF("\"PROTOCOL_OUT\":[\"%s\",\"%s\"],",
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kConsole]],
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kCommsUART]]);
-    CPP_AT_PRINTF("\"REMOTE_ID\":[%d,%u,\"0x%02X\"],", s.remote_id_rx_enabled, s.remote_id_transports,
-                  esp32_ll.remote_id_status);
+    CPP_AT_PRINTF("\"REMOTE_ID\":[%d,%u,\"0x%02X\",%d],", s.remote_id_rx_enabled, s.remote_id_transports,
+                  esp32_ll.remote_id_status, RemoteIDAllowedTransports());
     CPP_AT_PRINTF("\"REMOTE_ID_TX\":[%d,%u,\"%s\",", s.remote_id_tx_enabled, s.remote_id_tx_transports,
                   JSONEscapeStr(s.remote_id_tx_uas_id, esc, sizeof(esc)));
-    CPP_AT_PRINTF("%d,%d,\"%s\",\"0x%04X\"],", s.remote_id_tx_uas_id_type, s.remote_id_tx_ua_type,
-                  JSONEscapeStr(s.remote_id_tx_operator_id, esc, sizeof(esc)), esp32_ll.remote_id_status);
+    CPP_AT_PRINTF("%d,%d,\"%s\",\"0x%04X\",%d],", s.remote_id_tx_uas_id_type, s.remote_id_tx_ua_type,
+                  JSONEscapeStr(s.remote_id_tx_operator_id, esc, sizeof(esc)), esp32_ll.remote_id_status,
+                  RemoteIDAllowedTransports());
     CPP_AT_PRINTF("\"RX_ENABLE\":[%d,%d],", adsbee.Receiver1090IsEnabled(), s.subg_rx_enabled);
     CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\"],",
                   SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
@@ -1856,7 +2202,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
             if (CPP_AT_HAS_ARG(0)) {
                 CPP_AT_TRY_ARG2NUM(0, cns.wifi_ap_enabled);
                 CPP_AT_CMD_PRINTF(": wifi_ap_enabled=%d\r\n", cns.wifi_ap_enabled);
-                if (cns.wifi_ap_enabled) WarnIfWiFiPausesRemoteID();
+                if (cns.wifi_ap_enabled) WarnIfNetworkPausesRemoteID();
             }
             if (CPP_AT_HAS_ARG(1)) {
                 strncpy(cns.wifi_ap_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
@@ -1905,7 +2251,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
             if (CPP_AT_HAS_ARG(0)) {
                 CPP_AT_TRY_ARG2NUM(0, cns.wifi_sta_enabled);
                 CPP_AT_CMD_PRINTF(": wifi_sta_enabled=%d\r\n", cns.wifi_sta_enabled);
-                if (cns.wifi_sta_enabled) WarnIfWiFiPausesRemoteID();
+                if (cns.wifi_sta_enabled) WarnIfNetworkPausesRemoteID();
             }
             if (CPP_AT_HAS_ARG(1)) {
                 strncpy(cns.wifi_sta_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
@@ -1993,6 +2339,12 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTANetworkCallback) {
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command = "ASTERIX_SAC_SIC",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+ASTERIX_SAC_SIC=<sac>,<sic>\r\n\tSet the ASTERIX System Area Code and System Identification "
+                    "Code (0-255 each) sent in every ASTERIX record.\r\n\tAT+ASTERIX_SAC_SIC?\r\n\tQuery them.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATASTERIXSACSICCallback, comms_manager)},
     {.command = "AUTO_UPDATE",
      .min_args = 0,
      .max_args = 1,
@@ -2069,7 +2421,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
 #endif
     {.command = "FEED",
      .min_args = 0,
-     .max_args = 5,
+     .max_args = 6,
      .help_callback = ATFeedHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
     {.command = "FEED_ENABLE",
@@ -2079,6 +2431,27 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "all feeds, or 1 to allow feeds marked active. Does not change per-feed active flags set with "
                     "AT+FEED.\r\n\tAT+FEED_ENABLE?\r\n\tQuery whether outbound feeds are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedEnableCallback, comms_manager)},
+    {.command = "FILTER_ALTITUDE_FT",
+     .min_args = 0,
+     .max_args = 3,
+     .help_string = "AT+FILTER_ALTITUDE_FT=<mode>,<a_ft>,<b_ft>\r\n\tLeave aircraft outside an altitude band out of aircraft "
+                    "reports (aircraft JSON, the web UI's list and map, GDL90, MAVLink, CSBee). mode: OFF, ABOVE (at or above a), BELOW (at or below "
+                    "a), BETWEEN (a to b) or NEAR_RX (within a ft above or below the receiver, see AT+RX_POSITION; "
+                    "filters nothing without a receiver altitude), any case. Altitudes are -2000 to 100000 ft; "
+                    "aircraft altitude is barometric, else GNSS. Aircraft with no known altitude are always kept. Raw "
+                    "packets (Raw, Beast, MLAT and every feed of them) are never filtered. Empty arguments keep their value. Default: "
+                    "OFF,0,10000.\r\n\t"
+                    "AT+FILTER_ALTITUDE_FT?\r\n\tQuery the mode and its altitudes.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterAltitudeFtCallback, comms_manager)},
+    {.command = "FILTER_DISTANCE_NM",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+FILTER_DISTANCE_NM=<enabled [0 1]>,<distance_nm>\r\n\tLeave aircraft farther than distance_nm "
+                    "nautical miles (0.1 to 10000.0, 0.1 nm steps) from the receiver out of aircraft reports (aircraft JSON, the web UI's list and map, GDL90, MAVLink, CSBee). Raw "
+                    "packets (Raw, Beast, MLAT and every feed of them) are never filtered. Aircraft at an unknown distance (no position yet, or "
+                    "no receiver position, see AT+RX_POSITION) are always kept. Default: 0,100.0 (off).\r\n\t"
+                    "AT+FILTER_DISTANCE_NM?\r\n\tQuery whether the filter is enabled and its distance.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterDistanceNMCallback, comms_manager)},
     {.command = "GNSS",
      .min_args = 0,
      .max_args = 3,
@@ -2137,6 +2510,25 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
                     "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
+    {.command = "MQTT",
+     .min_args = 0,
+     .max_args = 9,
+     .help_string = "AT+MQTT=<host>,<port>,<username>,<password>,<tls>,<qos>,<topic_prefix>,<transport>,<path>\r\n\t"
+                    "Set the MQTT broker that all feeds with the MQTT transport publish to, over one connection. "
+                    "Empty arguments keep their value, \"-\" clears a string.\r\n\thost = hostname or IP address, "
+                    "port = [1-65535] (1883, 8883 with TLS), username and password = optional, tls = [0 1], qos = [0 1 "
+                    "2], topic_prefix = up to 31 characters (empty: adsbee), transport = [TCP WS] (WS: MQTT over "
+                    "WebSocket, for brokers behind web proxies), path = WebSocket path (empty: /mqtt).\r\n\tTopics are "
+                    "<topic_prefix>/<receiver ID>/<protocol>, plus status and metrics.\r\n\tAT+MQTT?\r\n\tPrint the "
+                    "broker settings (password redacted).",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMQTTCallback, comms_manager)},
+    {.command = "NTP_SERVER",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "AT+NTP_SERVER=<host>\r\n\tSet the Network Time Protocol server the ESP32 takes UTC from while an "
+                    "output uses ASTERIX and GNSS has no time (default pool.ntp.org).\r\n\tAT+NTP_SERVER?\r\n\tQuery "
+                    "it.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATNTPServerCallback, comms_manager)},
     {.command = "NETWORK_INFO",
      .min_args = 0,
      .max_args = 0,
@@ -2163,12 +2555,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string =
          "[EXPERIMENTAL] Remote ID is not yet a stable part of the system; its settings and behavior may change in "
          "future firmware.\r\n\t"
-         "AT+REMOTE_ID=<enabled>[,<transport_mask>]\r\n\tEnable/disable Broadcast Remote ID (drone) reception on the "
-         "ESP32.\r\n\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7).\r\n\tOn "
-         "hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID only runs when WiFi AP/STA are disabled "
-         "and Ethernet is up; with PSRAM it runs alongside WiFi (the WiFi beacon receiver then listens on the WiFi "
-         "channel only).\r\n\t"
-         "AT+REMOTE_ID?\r\n\tQuery Remote ID settings and the ESP32's live status bitfield.",
+         "AT+REMOTE_ID=<enabled>[,<transports [BT4 BT5_LR WIFI_BEACON] joined with +, ALL or NONE>]\r\n\t"
+         "Enable/disable Broadcast Remote ID (drone) reception on the ESP32, e.g. AT+REMOTE_ID=1,BT4+BT5_LR.\r\n\t"
+         "BT4 = Bluetooth 4 legacy, BT5_LR = Bluetooth 5 Long Range, WIFI_BEACON = WiFi beacon (default ALL).\r\n\t"
+         "On hardware whose ESP32 has no PSRAM (see AT+DEVICE_INFO?), Remote ID can't run with WiFi AP or WiFi Station "
+         "enabled, and with Ethernet enabled only its Bluetooth transports run; with PSRAM it runs alongside them (the "
+         "WiFi beacon receiver then listens on the WiFi channel only). Remote ID pauses while ESP32 free memory is below what the web server needs.\r\n\t"
+         "AT+REMOTE_ID?\r\n\tQuery Remote ID settings, the ESP32's live receive status and the transports this "
+         "hardware can run with the enabled network interfaces, e.g.\r\n\t"
+         "REMOTE_ID=1,BT4+BT5_LR(TRANSPORTS),BT_SCANNING+BT5_LR_SCANNING(ESP32_STATUS),BT4+BT5_LR(ALLOWED_TRANSPORTS)"
+         "\r\n\tStatus words: BT_SCANNING, BT5_LR_SCANNING, WIFI_BEACON_SCANNING, BLOCKED_NETWORK (no PSRAM and WiFi "
+         "or Ethernet on), BLOCKED_RAM, NOT_IN_BUILD, PAUSED_LOW_HEAP, or NONE.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRemoteIDCallback, comms_manager)},
     {.command = "REMOTE_ID_TX",
      .min_args = 0,

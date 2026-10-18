@@ -72,6 +72,12 @@ bool SettingsManager::Apply() {
     if (settings.rx_position.source >= RxPosition::kNumPositionSources) {
         settings.rx_position.source = RxPosition::kPositionSourceLowestAircraft;
     }
+    if (!AltitudeFilterIsValid(settings.filter_altitude_mode, settings.filter_altitude_a_ft,
+                               settings.filter_altitude_b_ft)) {
+        settings.filter_altitude_mode = kAltitudeFilterOff;
+        settings.filter_altitude_a_ft = Settings::kDefaultFilterAltitudeAFt;
+        settings.filter_altitude_b_ft = Settings::kDefaultFilterAltitudeBFt;
+    }
 
     // All of these can fail if the radio fails to open/close or the RX command can't be restarted; fold that
     // into the return value so boot/LOAD callers can see it.
@@ -127,6 +133,11 @@ bool SettingsManager::Load() {
     // was interrupted after the leading words leaves a blob that passes a version-only check on every
     // boot forever, and whose remaining fields are erased flash (0xFF).
     if (!settings.IsValid()) {
+        if (MigrateFromVersion5((const uint8_t*)kFlashSettingsStartAddr, settings)) {
+            CONSOLE_INFO("SettingsManager::Load", "Migrated settings from version 5 to %lu.",
+                         (unsigned long)kSettingsVersion);
+            return WriteSettingsToFlash(settings);
+        }
         CONSOLE_ERROR("SettingsManager::Load",
                       "Settings integrity check failed (magic 0x%08lx/0x%08lx, version %lu/%lu, crc "
                       "0x%08lx/0x%08lx). Resetting to defaults.",
@@ -244,6 +255,15 @@ void SettingsManager::Print() {
     // MAVLINK settings
     CONSOLE_PRINTF("\tMAVLink System ID: %u\r\n", settings.mavlink_system_id);
     CONSOLE_PRINTF("\tMAVLink Component ID: %u\r\n", settings.mavlink_component_id);
+    CONSOLE_PRINTF("\tDistance Filter: %s, %lu.%lu nm\r\n", settings.filter_distance_enabled ? "ENABLED" : "DISABLED",
+                   (unsigned long)(settings.filter_distance_deci_nm / 10),
+                   (unsigned long)(settings.filter_distance_deci_nm % 10));
+    CONSOLE_PRINTF("\tAltitude Filter: %s, %ld, %ld ft\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
+
+    // ASTERIX settings
+    CONSOLE_PRINTF("\tASTERIX SAC: %u\r\n", settings.asterix_sac);
+    CONSOLE_PRINTF("\tASTERIX SIC: %u\r\n", settings.asterix_sic);
 
     // Receiver position settings (live values, mirroring the AT+RX_POSITION? query).
     CONSOLE_PRINTF("\tReceiver Position:\r\n");
@@ -266,6 +286,15 @@ void SettingsManager::PrintAT() {
     // wipe the device boots at the default rate.
 
     // AT+DEVICE_INFO: Don't store this.
+
+    // AT+FILTER_DISTANCE_NM
+    CONSOLE_PRINTF("AT+FILTER_DISTANCE_NM=%d,%lu.%lu\r\n", settings.filter_distance_enabled,
+                   (unsigned long)(settings.filter_distance_deci_nm / 10),
+                   (unsigned long)(settings.filter_distance_deci_nm % 10));
+
+    // AT+FILTER_ALTITUDE_FT
+    CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%s,%ld,%ld\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
+                   (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
 
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);
@@ -321,4 +350,7 @@ void SettingsManager::PrintAT() {
 
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", adsbee.GetWatchdogTimeoutSec());
+
+    // AT+ASTERIX_SAC_SIC
+    CONSOLE_PRINTF("AT+ASTERIX_SAC_SIC=%u,%u\r\n", settings.asterix_sac, settings.asterix_sic);
 }

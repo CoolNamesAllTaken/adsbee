@@ -1,6 +1,7 @@
 #include <cstring>
 
 #include "gtest/gtest.h"
+#include "feed_ram_budget.hh"
 #include "settings.hh"
 #include "settings_migration.hh"
 #include "settings_versions.hh"
@@ -48,13 +49,9 @@ TEST(SettingsMigration, LayoutLockedSizes) {
               sizeof(SettingsManager::Settings::CoreNetworkSettings));
     EXPECT_EQ(sizeof(settings_v12::RxPosition), sizeof(SettingsManager::RxPosition));
 
-    EXPECT_EQ(sizeof(settings_v13::Settings), 1088u);
-    EXPECT_EQ(sizeof(settings_v13::CoreNetworkSettings),
-              sizeof(SettingsManager::Settings::CoreNetworkSettings));
-    EXPECT_EQ(sizeof(settings_v13::RxPosition), sizeof(SettingsManager::RxPosition));
-
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
-    EXPECT_EQ(sizeof(settings_v17::Settings), sizeof(SettingsManager::Settings));
+    EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1660u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -66,117 +63,7 @@ TEST(SettingsMigration, LayoutLockedSizes) {
               sizeof(SettingsManager::Settings::CoreNetworkSettings));
     EXPECT_EQ(sizeof(settings_v15::RxPosition), sizeof(SettingsManager::RxPosition));
 
-    EXPECT_EQ(sizeof(settings_v16::Settings), 1144u);
-    EXPECT_EQ(offsetof(settings_v16::Settings, ip_mode), offsetof(SettingsManager::Settings, ip_mode));
-}
-
-// Fills a v13 settings struct with distinctive, non-default values across every field, and gives it a valid-CRC
-// CoreNetworkSettings block. Shared by the v13 and v12 migration tests.
-static void PopulateV13(settings_v13::Settings& v13) {
-    v13 = settings_v13::Settings{};
-    v13.settings_version = 13;
-
-    SettingsManager::Settings::CoreNetworkSettings cns;  // Zero-fills strings in its constructor.
-    cns.esp32_enabled = true;
-    strncpy(cns.wifi_ap_ssid, "MigrateNet", sizeof(cns.wifi_ap_ssid));
-    strncpy(cns.wifi_ap_password, "supersecret", sizeof(cns.wifi_ap_password));
-    cns.wifi_ap_channel = 6;
-    cns.ethernet_enabled = true;
-    cns.UpdateCRC32();
-    ASSERT_EQ(sizeof(cns), sizeof(v13.core_network_settings));
-    memcpy(&v13.core_network_settings, &cns, sizeof(cns));
-
-    v13.r1090_rx_enabled = false;
-    v13.tl_offset_mv = 123;
-    v13.r1090_bias_tee_enabled = true;
-    v13.watchdog_timeout_sec = 42;
-    v13.log_level = SettingsManager::LogLevel::kInfo;
-    v13.reporting_protocols[0] = SettingsManager::ReportingProtocol::kCSBee;
-    v13.reporting_protocols[1] = SettingsManager::ReportingProtocol::kGDL90;
-    v13.reporting_protocols[2] = SettingsManager::ReportingProtocol::kAircraftJSON;
-    v13.baud_rates[0] = 1200;
-    v13.baud_rates[1] = 57600;
-    v13.baud_rates[2] = 4800;
-    v13.subg_enabled = SettingsManager::EnableState::kEnableStateDisabled;
-    v13.subg_rx_enabled = false;
-    v13.subg_bias_tee_enabled = true;
-    v13.subg_mode = SettingsManager::SubGHzRadioMode::kSubGHzRadioModeUATRx;
-    v13.remote_id_rx_enabled = true;
-    v13.remote_id_transports = SettingsManager::kRemoteIDTransportBLE5Long;
-
-    strncpy(v13.feed_uris[0], "myfeed.example.com", sizeof(v13.feed_uris[0]));
-    strncpy(v13.feed_uris[9], "feed.adsb.fi", sizeof(v13.feed_uris[9]));
-    v13.feed_ports[0] = 30005;
-    v13.feed_ports[9] = 30004;
-    v13.feed_is_active[0] = true;
-    v13.feed_is_active[9] = true;
-    v13.feed_protocols[0] = SettingsManager::ReportingProtocol::kBeast;
-    v13.feed_protocols[9] = SettingsManager::ReportingProtocol::kBeast;
-    v13.feed_receiver_ids[0][0] = 0xDE;
-    v13.feed_receiver_ids[0][7] = 0xAD;
-
-    v13.mavlink_system_id = 7;
-    v13.mavlink_component_id = 42;
-
-    v13.rx_position.source = 1;  // kPositionSourceFixed
-    v13.rx_position.latitude_deg = 37.5f;
-    v13.rx_position.longitude_deg = -122.3f;
-    v13.rx_position.gnss_altitude_ft = 111;
-    v13.rx_position.baro_altitude_ft = 222;
-    v13.rx_position.heading_deg = 90.0f;
-    v13.rx_position.speed_kts = 33;
-    v13.rx_position.icao_address = 0xABCDEF;
-}
-
-// Asserts that everything PopulateV13 set survived into the migrated live struct.
-static void ExpectV13FieldsPreserved(const SettingsManager::Settings& out) {
-    EXPECT_EQ(out.settings_version, kSettingsVersion);
-
-    SettingsManager::Settings::CoreNetworkSettings cns_out = out.core_network_settings;
-    EXPECT_TRUE(cns_out.IsValid());
-    EXPECT_STREQ(out.core_network_settings.wifi_ap_ssid, "MigrateNet");
-    EXPECT_STREQ(out.core_network_settings.wifi_ap_password, "supersecret");
-    EXPECT_EQ(out.core_network_settings.wifi_ap_channel, 6);
-    EXPECT_TRUE(out.core_network_settings.ethernet_enabled);
-
-    EXPECT_FALSE(out.r1090_rx_enabled);
-    EXPECT_EQ(out.tl_offset_mv, 123);
-    EXPECT_TRUE(out.r1090_bias_tee_enabled);
-    EXPECT_EQ(out.watchdog_timeout_sec, 42u);
-
-    EXPECT_EQ(out.log_level, SettingsManager::LogLevel::kInfo);
-    EXPECT_EQ(out.reporting_protocols[0], SettingsManager::ReportingProtocol::kCSBee);
-    EXPECT_EQ(out.reporting_protocols[1], SettingsManager::ReportingProtocol::kGDL90);
-    EXPECT_EQ(out.reporting_protocols[2], SettingsManager::ReportingProtocol::kAircraftJSON);
-    EXPECT_EQ(out.baud_rates[0], 1200u);
-    EXPECT_EQ(out.baud_rates[1], 57600u);
-    EXPECT_EQ(out.baud_rates[2], 4800u);
-
-    EXPECT_EQ(out.subg_enabled, SettingsManager::EnableState::kEnableStateDisabled);
-    EXPECT_FALSE(out.subg_rx_enabled);
-    EXPECT_TRUE(out.subg_bias_tee_enabled);
-
-    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
-    EXPECT_STREQ(out.feed_uris[9], "feed.adsb.fi");
-    EXPECT_EQ(out.feed_ports[0], 30005);
-    EXPECT_EQ(out.feed_ports[9], 30004);
-    EXPECT_TRUE(out.feed_is_active[0]);
-    EXPECT_TRUE(out.feed_is_active[9]);
-    EXPECT_EQ(out.feed_protocols[0], SettingsManager::ReportingProtocol::kBeast);
-    EXPECT_EQ(out.feed_receiver_ids[0][0], 0xDE);
-    EXPECT_EQ(out.feed_receiver_ids[0][7], 0xAD);
-
-    EXPECT_EQ(out.mavlink_system_id, 7);
-    EXPECT_EQ(out.mavlink_component_id, 42);
-
-    EXPECT_EQ(out.rx_position.source, SettingsManager::RxPosition::kPositionSourceFixed);
-    EXPECT_FLOAT_EQ(out.rx_position.latitude_deg, 37.5f);
-    EXPECT_FLOAT_EQ(out.rx_position.longitude_deg, -122.3f);
-    EXPECT_EQ(out.rx_position.gnss_altitude_ft, 111);
-    EXPECT_EQ(out.rx_position.baro_altitude_ft, 222);
-    EXPECT_FLOAT_EQ(out.rx_position.heading_deg, 90.0f);
-    EXPECT_EQ(out.rx_position.speed_kts, 33);
-    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+    EXPECT_EQ(offsetof(settings_v17::Settings, ip_mode), offsetof(SettingsManager::Settings, ip_mode));
 }
 
 // Fields new in v14 (Remote ID transmit, GNSS) and v15 (feeds_enabled) must land on their defaults when migrating from
@@ -194,23 +81,6 @@ static void ExpectV14TxDefaults(const SettingsManager::Settings& out) {
     EXPECT_EQ(out.remote_id_tx_ua_type, 2);
     EXPECT_STREQ(out.remote_id_tx_uas_id, "");
     EXPECT_STREQ(out.remote_id_tx_operator_id, "");
-}
-
-TEST(SettingsMigration, V13ToV14PreservesAllFields) {
-    settings_v13::Settings v13;
-    PopulateV13(v13);
-
-    uint8_t blob[sizeof(settings_v13::Settings)];
-    memcpy(blob, &v13, sizeof(v13));
-
-    SettingsManager::Settings out;
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 13, out));
-
-    ExpectV13FieldsPreserved(out);
-    // Remote ID receive settings carry over from v13 (unlike the transmit settings, which are new).
-    EXPECT_TRUE(out.remote_id_rx_enabled);
-    EXPECT_EQ(out.remote_id_transports, (uint8_t)SettingsManager::kRemoteIDTransportBLE5Long);
-    ExpectV14TxDefaults(out);
 }
 
 // Fills a v14 settings struct with distinctive, non-default values across every field (including the Remote ID
@@ -304,7 +174,7 @@ TEST(SettingsMigration, V14ToV15PreservesAllFieldsAndDefaultsFeedsEnabled) {
     EXPECT_FALSE(out.led_enabled);
 
     EXPECT_TRUE(out.feeds_enabled);  // New in v15.
-    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeDual);  // New in v16.
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeDual);  // New in v17 (added in the unshipped v16).
     EXPECT_TRUE(out.gnss_enabled);
     EXPECT_EQ(out.gnss_receiver_type, SettingsManager::kGNSSReceiverUBXMIA);
     EXPECT_TRUE(out.gnss_notify);
@@ -444,34 +314,6 @@ TEST(SettingsMigration, V15ToCurrentPreservesAllFieldsAndAddsEmptyWiFiNetworks) 
     }
 }
 
-TEST(SettingsMigration, V16ToV17PreservesIPModeAndAddsEmptyWiFiNetworks) {
-    // v16 is v15 plus ip_mode in what was tail padding: same size, same leading bytes.
-    settings_v15::Settings v15;
-    PopulateV15(v15);
-    settings_v16::Settings v16;
-    static_assert(sizeof(v15) == sizeof(v16));
-    memcpy(&v16, &v15, sizeof(v16));
-    v16.settings_version = 16;
-    v16.ip_mode = SettingsManager::kIPModeIPv6;
-
-    uint8_t blob[sizeof(settings_v16::Settings)];
-    memcpy(blob, &v16, sizeof(v16));
-
-    SettingsManager::Settings out;
-    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 16, out));
-    EXPECT_EQ(out.settings_version, kSettingsVersion);
-    EXPECT_EQ(memcmp(&out.core_network_settings, &v16.core_network_settings, sizeof(v16.core_network_settings)), 0);
-    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
-    EXPECT_FALSE(out.feeds_enabled);
-    EXPECT_EQ(out.baud_rates[2], 4800u);
-    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
-    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
-    for (uint16_t i = 0; i < SettingsManager::Settings::kWiFiSTANumExtraNetworks; i++) {
-        EXPECT_STREQ(out.wifi_sta_extra_networks[i].ssid, "");
-        EXPECT_STREQ(out.wifi_sta_extra_networks[i].password, "");
-    }
-}
-
 TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     settings_v15::Settings v15;
     PopulateV15(v15);
@@ -502,6 +344,305 @@ TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
     EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
 }
 
+TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesReportFiltersOff) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv6;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
+    v18.auto_update_enabled = true;
+
+    SettingsManager::Settings out;
+    out.filter_distance_enabled = true;
+    out.filter_distance_deci_nm = 12345;
+    out.filter_altitude_mode = kAltitudeFilterBetween;
+    out.filter_altitude_a_ft = 500;
+    out.filter_altitude_b_ft = 600;
+    ASSERT_TRUE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_FALSE(out.filter_distance_enabled);
+    EXPECT_EQ(out.filter_distance_deci_nm, SettingsManager::Settings::kDefaultFilterDistanceDeciNm);
+    EXPECT_EQ(out.FilterDistanceMeters(), 0u);
+    EXPECT_EQ(out.filter_altitude_mode, kAltitudeFilterOff);
+    EXPECT_EQ(out.filter_altitude_a_ft, 0);
+    EXPECT_EQ(out.filter_altitude_b_ft, 10000);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+
+    // A blob cut short of the v18 layout is rejected.
+    EXPECT_FALSE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18) - 1, 18, out));
+}
+
+TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
+    SettingsManager manager;
+    EXPECT_FALSE(manager.settings.filter_distance_enabled);
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);  // 100.0 nm.
+    EXPECT_EQ(manager.settings.FilterDistanceMeters(), 0u);      // Off.
+    manager.settings.filter_distance_enabled = true;
+    manager.settings.filter_distance_deci_nm = 355;  // 35.5 nm.
+    EXPECT_EQ(manager.settings.FilterDistanceMeters(), 65746u);
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    EXPECT_NE(dump.find("AT+FILTER_DISTANCE_NM=1,35.5\r\n"), std::string::npos);
+    EXPECT_FALSE(manager.Sanitize());
+
+    // Out-of-range distances and garbage booleans from flash are repaired.
+    manager.settings.filter_distance_deci_nm = 0;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);
+    manager.settings.filter_distance_deci_nm = 100001;
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.filter_distance_deci_nm, 1000u);
+    uint8_t raw = 0x5A;
+    memcpy(&manager.settings.filter_distance_enabled, &raw, 1);
+    EXPECT_TRUE(manager.Sanitize());
+}
+
+TEST(Settings, AltitudeFilterDefaultsOffAndRoundTrips) {
+    SettingsManager manager;
+    EXPECT_EQ(manager.settings.filter_altitude_mode, kAltitudeFilterOff);
+    EXPECT_EQ(manager.settings.filter_altitude_a_ft, 0);
+    EXPECT_EQ(manager.settings.filter_altitude_b_ft, 10000);
+    manager.settings.filter_altitude_mode = kAltitudeFilterBetween;
+    manager.settings.filter_altitude_a_ft = -1500;
+    manager.settings.filter_altitude_b_ft = 18000;
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    EXPECT_NE(dump.find("AT+FILTER_ALTITUDE_FT=BETWEEN,-1500,18000\r\n"), std::string::npos);
+    EXPECT_FALSE(manager.Sanitize());
+
+    // Invalid combinations from flash turn the filter off.
+    struct {
+        uint8_t mode;
+        int32_t a_ft, b_ft;
+    } invalid[] = {{5, 0, 10000},           {255, 0, 10000},     {kAltitudeFilterAbove, -2001, 0},
+                   {kAltitudeFilterBelow, 100001, 0}, {kAltitudeFilterBetween, 6000, 5000},
+                   {kAltitudeFilterBetween, 0, 100001}, {kAltitudeFilterNearRx, 0, 0},
+                   {kAltitudeFilterNearRx, -100, 0}, {kAltitudeFilterOff, 0, INT32_MIN}};
+    for (const auto& c : invalid) {
+        manager.settings.filter_altitude_mode = c.mode;
+        manager.settings.filter_altitude_a_ft = c.a_ft;
+        manager.settings.filter_altitude_b_ft = c.b_ft;
+        EXPECT_TRUE(manager.Sanitize()) << int(c.mode) << "," << c.a_ft << "," << c.b_ft;
+        EXPECT_EQ(manager.settings.filter_altitude_mode, kAltitudeFilterOff);
+        EXPECT_EQ(manager.settings.filter_altitude_a_ft, 0);
+        EXPECT_EQ(manager.settings.filter_altitude_b_ft, 10000);
+    }
+}
+
+TEST(SettingsMigration, V18ToCurrentKeepsFeedsOnTCP) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv4;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Hangar");
+    v18.auto_update_enabled = true;
+    uint8_t blob[sizeof(settings_v18::Settings)];
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
+    strcpy(out.mqtt_broker.username, "stale");
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv4);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Hangar");
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.feed_protocols[0], v15.feed_protocols[0]);
+    EXPECT_EQ(out.feed_ports[0], v15.feed_ports[0]);
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        EXPECT_EQ(out.feed_transports[i], SettingsManager::kFeedTransportTCP);
+    }
+    EXPECT_STREQ(out.mqtt_broker.host, "");
+    EXPECT_EQ(out.mqtt_broker.port, SettingsManager::kDefaultMQTTPort);
+    EXPECT_STREQ(out.mqtt_broker.username, "");
+    EXPECT_STREQ(out.mqtt_broker.password, "");
+    EXPECT_STREQ(out.mqtt_broker.topic_prefix, "");
+    EXPECT_STREQ(out.mqtt_broker.websocket_path, "");
+    EXPECT_FALSE(out.mqtt_broker.tls);
+    EXPECT_EQ(out.mqtt_broker.qos, 0);
+    EXPECT_EQ(out.mqtt_broker.transport, SettingsManager::kMQTTTransportTCP);
+}
+
+TEST(Settings, FeedTransportStrings) {
+    SettingsManager::FeedTransport transport = SettingsManager::kFeedTransportTCP;
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("udp", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportUDP);
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("MQTT", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportMQTT);
+    EXPECT_TRUE(SettingsManager::FeedTransportFromStr("TCP", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportTCP);
+    EXPECT_FALSE(SettingsManager::FeedTransportFromStr("WS", transport));
+    EXPECT_EQ(transport, SettingsManager::kFeedTransportTCP);
+    for (uint16_t i = 0; i < SettingsManager::kNumFeedTransports; i++) {
+        EXPECT_TRUE(SettingsManager::FeedTransportFromStr(SettingsManager::kFeedTransportStrs[i], transport));
+        EXPECT_EQ(transport, i);
+    }
+}
+
+TEST(Settings, DefaultFeedTransports) {
+    typedef SettingsManager S;
+    for (S::ReportingProtocol p : {S::kNoReports, S::kRaw, S::kBeast, S::kBeastNoUAT, S::kBeastNoUATUplink, S::kCSBee}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportTCP) << S::kReportingProtocolStrs[p];
+    }
+    for (S::ReportingProtocol p : {S::kGDL90, S::kGDL90NoUATUplink, S::kMAVLINK1, S::kMAVLINK2, S::kASTERIX}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportUDP) << S::kReportingProtocolStrs[p];
+    }
+    for (S::ReportingProtocol p : {S::kAircraftJSON, S::kAircraftJSONUATUplink}) {
+        EXPECT_EQ(S::DefaultFeedTransport(p), S::kFeedTransportMQTT) << S::kReportingProtocolStrs[p];
+    }
+}
+
+TEST(Settings, FeedTransportAndMQTTDumpReplaysOnOlderFirmware) {
+    SettingsManager manager;
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        EXPECT_EQ(manager.settings.feed_transports[i], SettingsManager::kFeedTransportTCP);
+    }
+    manager.settings.feed_transports[2] = SettingsManager::kFeedTransportUDP;
+    manager.settings.feed_transports[3] = SettingsManager::kFeedTransportMQTT;
+    SettingsManager::Settings::MQTTBroker& mqtt = manager.settings.mqtt_broker;
+    strcpy(mqtt.host, "broker.lan");
+    mqtt.port = 443;
+    strcpy(mqtt.topic_prefix, "home/adsb");
+    strcpy(mqtt.username, "bee");
+    strcpy(mqtt.password, "pollen");
+    mqtt.tls = true;
+    mqtt.qos = 1;
+    mqtt.transport = SettingsManager::kMQTTTransportWebSocket;
+
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    // The five-argument AT+FEED lines stay where older firmware expects them; the new commands come last, and every
+    // feed's transport is replayed because a five-argument AT+FEED keeps it.
+    EXPECT_NE(dump.find("AT+FEED=2,,0,0,NONE\r\n"), std::string::npos);
+    size_t filter = dump.find("AT+FILTER_DISTANCE_NM=");
+    size_t broker = dump.find("AT+MQTT=broker.lan,443,bee,pollen,1,1,home/adsb,WS,-\r\n");
+    size_t tcp = dump.find("AT+FEED=0,,,,,TCP\r\n");
+    size_t udp = dump.find("AT+FEED=2,,,,,UDP\r\n");
+    size_t mqtt_transport = dump.find("AT+FEED=3,,,,,MQTT\r\n");
+    ASSERT_NE(filter, std::string::npos);
+    ASSERT_NE(broker, std::string::npos);
+    ASSERT_NE(tcp, std::string::npos);
+    ASSERT_NE(udp, std::string::npos);
+    ASSERT_NE(mqtt_transport, std::string::npos);
+    EXPECT_LT(filter, broker);
+    EXPECT_LT(broker, tcp);
+
+    // Out-of-range values from a corrupted blob.
+    manager.settings.feed_transports[4] = static_cast<SettingsManager::FeedTransport>(7);
+    mqtt.qos = 9;
+    mqtt.transport = static_cast<SettingsManager::MQTTTransport>(5);
+    memset(mqtt.password, 'x', sizeof(mqtt.password));
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.feed_transports[4], SettingsManager::kFeedTransportTCP);
+    EXPECT_EQ(mqtt.qos, SettingsManager::Settings::kMQTTMaxQoS);
+    EXPECT_EQ(mqtt.transport, SettingsManager::kMQTTTransportTCP);
+    EXPECT_EQ(strlen(mqtt.password), SettingsManager::Settings::kMQTTPasswordMaxLen);
+    EXPECT_FALSE(manager.Sanitize());
+}
+
+TEST(SettingsMigration, V18ToCurrentKeepsEverythingAndDefaultsASTERIXNTPAndAltitudeFilter) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    // 0xFF past the v18 struct, as Load() reads erased EEPROM there.
+    uint8_t blob[sizeof(SettingsManager::Settings)];
+    memset(blob, 0xFF, sizeof(blob));
+    settings_v18::Settings v18;
+    memset(&v18, 0, sizeof(v18));
+    memcpy(&v18, &v15, sizeof(v15));
+    v18.settings_version = 18;
+    v18.ip_mode = SettingsManager::kIPModeIPv6;
+    strcpy(v18.wifi_sta_extra_networks[0].ssid, "Tower");
+    v18.auto_update_enabled = true;
+    memcpy(blob, &v18, sizeof(v18));
+
+    SettingsManager::Settings out;
+    out.asterix_sac = 0x55;
+    out.asterix_sic = 0x66;
+    strcpy(out.ntp_server, "stale.example.com");
+    out.filter_altitude_mode = kAltitudeFilterNearRx;
+    out.filter_altitude_a_ft = 300;
+    out.filter_altitude_b_ft = 400;
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 18, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_EQ(out.asterix_sac, 0);
+    EXPECT_EQ(out.asterix_sic, 0);
+    EXPECT_STREQ(out.ntp_server, "pool.ntp.org");
+    EXPECT_EQ(out.filter_altitude_mode, kAltitudeFilterOff);
+    EXPECT_EQ(out.filter_altitude_a_ft, 0);
+    EXPECT_EQ(out.filter_altitude_b_ft, 10000);
+    EXPECT_TRUE(out.auto_update_enabled);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v18.core_network_settings, sizeof(v18.core_network_settings)), 0);
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(settings_v18::Settings) - 1, 18, out));
+}
+
+TEST(FeedRAMBudget, CountsActiveFeedsAndTheSharedMQTTClientOnce) {
+    SettingsManager::Settings s;
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        s.feed_is_active[i] = false;
+    }
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), 0u);
+    s.feed_is_active[0] = true;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::kTCPFeedBytes);
+    s.feed_is_active[1] = true;
+    s.feed_transports[1] = SettingsManager::kFeedTransportUDP;
+    const uint32_t tcp_udp = FeedRAMBudget::kTCPFeedBytes + FeedRAMBudget::kUDPFeedBytes;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp);
+    for (uint16_t i = 2; i < 4; i++) {
+        s.feed_is_active[i] = true;
+        s.feed_transports[i] = SettingsManager::kFeedTransportMQTT;
+    }
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp + FeedRAMBudget::kMQTTClientBytes);
+    s.mqtt_broker.tls = true;
+    s.mqtt_broker.transport = SettingsManager::kMQTTTransportWebSocket;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), tcp_udp + FeedRAMBudget::kMQTTClientBytes + FeedRAMBudget::kMQTTTLSBytes +
+                                              FeedRAMBudget::kMQTTWebSocketBytes);
+    s.feeds_enabled = false;
+    EXPECT_EQ(FeedRAMBudget::UsedBytes(s), 0u);
+}
+
+TEST(FeedRAMBudget, BudgetDependsOnWiFiAndPSRAM) {
+    SettingsManager::Settings s;
+    s.core_network_settings.wifi_ap_enabled = false;
+    s.core_network_settings.wifi_sta_enabled = false;
+    const uint32_t ethernet = FeedRAMBudget::BudgetBytes(s, false);
+    s.core_network_settings.wifi_sta_enabled = true;
+    const uint32_t wifi = FeedRAMBudget::BudgetBytes(s, false);
+    EXPECT_LT(wifi, ethernet);
+    EXPECT_GT(FeedRAMBudget::BudgetBytes(s, true), wifi);
+}
+
+TEST(FeedRAMBudget, DefaultFeedsFitOnWiFiWithoutPSRAM) {
+    SettingsManager::Settings s;  // Four aggregator feeds over TCP.
+    s.core_network_settings.wifi_ap_enabled = true;
+    s.core_network_settings.wifi_sta_enabled = true;
+    EXPECT_LE(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::BudgetBytes(s, false));
+    // Three of them and a Home Assistant MQTT feed fit too.
+    s.feed_is_active[SettingsManager::Settings::kMaxNumFeeds - 1] = false;
+    s.feed_is_active[0] = true;
+    s.feed_transports[0] = SettingsManager::kFeedTransportMQTT;
+    EXPECT_LE(FeedRAMBudget::UsedBytes(s), FeedRAMBudget::BudgetBytes(s, false));
+}
+
 TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     SettingsManager manager;
     EXPECT_FALSE(manager.settings.auto_update_enabled);
@@ -517,19 +658,34 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t wifi = dump.find("AT+WIFI_STA=");
     size_t ip_mode = dump.find("AT+IP_MODE=");
     size_t auto_update = dump.find("AT+AUTO_UPDATE=1");
+    size_t filter_distance = dump.find("AT+FILTER_DISTANCE_NM=");
+    size_t filter_altitude = dump.find("AT+FILTER_ALTITUDE_FT=");
     ASSERT_NE(wifi, std::string::npos);
+    ASSERT_NE(filter_altitude, std::string::npos);
     ASSERT_NE(ip_mode, std::string::npos);
     ASSERT_NE(auto_update, std::string::npos);
+    ASSERT_NE(filter_distance, std::string::npos);
     EXPECT_LT(wifi, ip_mode);
     EXPECT_LT(ip_mode, auto_update);
-    EXPECT_EQ(dump.find("AT+", auto_update + 1), std::string::npos);
+    EXPECT_LT(auto_update, filter_distance);
+    // Then the MQTT broker and the feed transports (see FeedTransportAndMQTTDumpReplaysOnOlderFirmware), then ASTERIX.
+    EXPECT_EQ(dump.find("AT+", filter_distance + 1), dump.find("AT+MQTT="));
+    size_t asterix = dump.find("AT+ASTERIX_SAC_SIC=0,0");
+    ASSERT_NE(asterix, std::string::npos);
+    EXPECT_LT(dump.rfind("AT+FEED="), asterix);
+    size_t ntp = dump.find("AT+NTP_SERVER=pool.ntp.org");
+    ASSERT_NE(ntp, std::string::npos);
+    EXPECT_LT(asterix, ntp);
+    // The altitude filter comes last.
+    EXPECT_LT(ntp, filter_altitude);
+    EXPECT_EQ(dump.find("AT+", filter_altitude + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);
     EXPECT_TRUE(manager.Sanitize());
 }
 
-TEST(SettingsMigration, V15ToV16PreservesAllFieldsAndDefaultsIPMode) {
+TEST(SettingsMigration, V15ToCurrentPreservesAllFieldsAndDefaultsIPMode) {
     settings_v15::Settings v15 = settings_v15::Settings{};
     v15.settings_version = 15;
 
@@ -769,8 +925,10 @@ TEST(SettingsMigration, V14ShippedRc2BlobMigrates) {
 TEST(SettingsMigration, UnmigratableVersionReturnsFalse) {
     uint8_t blob[sizeof(settings_v12::Settings)] = {0};
     SettingsManager::Settings out;
-    // Pre-v12, unknown-future, and current version are all not migratable by this utility.
+    // Pre-v12, never shipped (13, 16), unknown-future, and current version are all not migratable by this utility.
     EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(blob), 11, out));
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(blob), 13, out));
+    EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(blob), 16, out));
     EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(blob), 999, out));
     EXPECT_FALSE(SettingsMigrator::Migrate(blob, sizeof(blob), kSettingsVersion, out));
     // A v12 version tag but a too-short blob must also be rejected.
@@ -875,12 +1033,12 @@ TEST(SettingsMigration, V12ToCurrentPreservesAllFields) {
     EXPECT_FALSE(out.subg_rx_enabled);
     EXPECT_TRUE(out.subg_bias_tee_enabled);
 
-    // Fields added after v12 take their defaults: Remote ID receive (new in v13)...
+    // Fields added after v12 take their defaults: Remote ID receive (from the unshipped v13)...
     EXPECT_FALSE(out.remote_id_rx_enabled);
     EXPECT_EQ(out.remote_id_transports, (uint8_t)(SettingsManager::kRemoteIDTransportBLE4 |
                                                   SettingsManager::kRemoteIDTransportBLE5Long |
                                                   SettingsManager::kRemoteIDTransportWiFiBeacon));
-    // ...and Remote ID transmit (new in v14). A v12 blob migrates through the full v12 -> v13 -> v14 chain.
+    // ...and Remote ID transmit (new in v14). Both arrive in the single v12 -> v14 step.
     ExpectV14TxDefaults(out);
 
     // Feed settings preserved.
@@ -1053,4 +1211,30 @@ TEST(SettingsManager, SanitizeDisablesGNSSWithoutReceiverType) {
     s.gnss_receiver_type = SettingsManager::kGNSSReceiverUBXMIA;
     EXPECT_FALSE(settings_manager.Sanitize());
     EXPECT_TRUE(s.gnss_enabled);
+}
+
+TEST(Settings, ProtocolInUseCountsSerialOutputsAndActiveFeeds) {
+    SettingsManager::Settings s;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+
+    s.reporting_protocols[SettingsManager::kCommsUART] = SettingsManager::kASTERIX;
+    EXPECT_TRUE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.reporting_protocols[SettingsManager::kCommsUART] = SettingsManager::kNoReports;
+
+    s.feed_protocols[2] = SettingsManager::kASTERIX;
+    s.feed_is_active[2] = false;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.feed_is_active[2] = true;
+    s.feeds_enabled = true;
+    EXPECT_TRUE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+    s.feeds_enabled = false;
+    EXPECT_FALSE(SettingsManager::ProtocolInUse(s, SettingsManager::kASTERIX));
+}
+
+TEST(Settings, NTPServerDefaultsToPoolAndIsSanitized) {
+    SettingsManager manager;
+    EXPECT_STREQ(manager.settings.ntp_server, "pool.ntp.org");
+    memset(manager.settings.ntp_server, 'a', sizeof(manager.settings.ntp_server));
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(strlen(manager.settings.ntp_server), SettingsManager::Settings::kNTPServerMaxLen);
 }

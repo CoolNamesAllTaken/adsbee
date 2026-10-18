@@ -24,6 +24,7 @@
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
+#include "unit_conversions.hh"  // ParseDeciNm
 #endif
 
 // For mapping cpp_at_printf
@@ -186,6 +187,30 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATASTERIXSACSICCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%u,%u", settings_manager.settings.asterix_sac, settings_manager.settings.asterix_sic);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
+                CPP_AT_ERROR("Requires two arguments: AT+ASTERIX_SAC_SIC=<sac>,<sic>.");
+            }
+            uint16_t sac, sic;
+            CPP_AT_TRY_ARG2NUM(0, sac);
+            CPP_AT_TRY_ARG2NUM(1, sic);
+            if (sac > 255 || sic > 255) {
+                CPP_AT_ERROR("SAC and SIC must be between 0 and 255.");
+            }
+            settings_manager.settings.asterix_sac = static_cast<uint8_t>(sac);
+            settings_manager.settings.asterix_sic = static_cast<uint8_t>(sic);
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     switch (op) {
         case '?':
@@ -213,6 +238,76 @@ CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
+CPP_AT_CALLBACK(CommsManager::ATFilterAltitudeFtCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s,%ld,%ld", AltitudeFilterModeStr(settings_manager.settings.filter_altitude_mode),
+                              (long)settings_manager.settings.filter_altitude_a_ft,
+                              (long)settings_manager.settings.filter_altitude_b_ft);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            uint8_t mode = settings_manager.settings.filter_altitude_mode;
+            int32_t a_ft = settings_manager.settings.filter_altitude_a_ft;
+            int32_t b_ft = settings_manager.settings.filter_altitude_b_ft;
+            if (CPP_AT_HAS_ARG(0) && !ParseAltitudeFilterMode(args[0].data(), args[0].size(), mode)) {
+                CPP_AT_ERROR("Mode must be OFF, ABOVE, BELOW, BETWEEN or NEAR_RX.");
+            }
+            if (CPP_AT_HAS_ARG(1)) {
+                CPP_AT_TRY_ARG2NUM(1, a_ft);
+            }
+            if (CPP_AT_HAS_ARG(2)) {
+                CPP_AT_TRY_ARG2NUM(2, b_ft);
+            }
+            if (a_ft < kAltitudeFilterMinFt || a_ft > kAltitudeFilterMaxFt || b_ft < kAltitudeFilterMinFt ||
+                b_ft > kAltitudeFilterMaxFt) {
+                CPP_AT_ERROR("Altitudes must be %ld to %ld ft.", (long)kAltitudeFilterMinFt, (long)kAltitudeFilterMaxFt);
+            }
+            if (mode == kAltitudeFilterBetween && a_ft > b_ft) {
+                CPP_AT_ERROR("BETWEEN needs a <= b.");
+            }
+            if (mode == kAltitudeFilterNearRx && a_ft <= 0) {
+                CPP_AT_ERROR("NEAR_RX needs a > 0.");
+            }
+            settings_manager.settings.filter_altitude_mode = mode;
+            settings_manager.settings.filter_altitude_a_ft = a_ft;
+            settings_manager.settings.filter_altitude_b_ft = b_ft;
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFilterDistanceNMCallback) {
+    using Settings = SettingsManager::Settings;
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d,%lu.%lu", settings_manager.settings.filter_distance_enabled,
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm / 10),
+                              static_cast<unsigned long>(settings_manager.settings.filter_distance_deci_nm % 10));
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            bool enabled = settings_manager.settings.filter_distance_enabled;
+            uint32_t deci_nm = settings_manager.settings.filter_distance_deci_nm;
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+            }
+            if (CPP_AT_HAS_ARG(1) && (!ParseDeciNm(args[1].data(), args[1].size(), deci_nm,
+                                                   Settings::kMaxFilterDistanceDeciNm) ||
+                                      deci_nm < Settings::kMinFilterDistanceDeciNm)) {
+                CPP_AT_ERROR("Distance must be 0.1 to 10000.0 nm, e.g. 50 or 12.5.");
+            }
+            settings_manager.settings.filter_distance_enabled = enabled;
+            settings_manager.settings.filter_distance_deci_nm = deci_nm;
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 
 CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     switch (op) {
@@ -879,8 +974,14 @@ static void PrintSettingsJSON() {
     }
 
     CPP_AT_PRINTF("SETTINGS={");
+    CPP_AT_PRINTF("\"ASTERIX_SAC_SIC\":[%u,%u],", s.asterix_sac, s.asterix_sic);
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu],", (unsigned long)comms_manager.GetBaudRate());
     CPP_AT_PRINTF("\"BOOTLOADER_PIN\":[%d],", CcfgBootloader::BackdoorEnabled(CcfgBootloader::ReadBlConfig()));
+    CPP_AT_PRINTF("\"FILTER_ALTITUDE_FT\":[\"%s\",%ld,%ld],", AltitudeFilterModeStr(s.filter_altitude_mode),
+                  (long)s.filter_altitude_a_ft, (long)s.filter_altitude_b_ft);
+    CPP_AT_PRINTF("\"FILTER_DISTANCE_NM\":[%d,%lu.%lu],", s.filter_distance_enabled,
+                  static_cast<unsigned long>(s.filter_distance_deci_nm / 10),
+                  static_cast<unsigned long>(s.filter_distance_deci_nm % 10));
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
     CPP_AT_PRINTF("\"LR_ENABLE\":[%d],", adsbee.LR2021IsEnabled());
     CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
@@ -1322,6 +1423,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxCWCallback) {
 #endif
 
 const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command = "ASTERIX_SAC_SIC",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+ASTERIX_SAC_SIC=<sac>,<sic>\r\n\tSet the ASTERIX System Area Code and System Identification "
+                    "Code (0-255 each) sent in every ASTERIX record.\r\n\tAT+ASTERIX_SAC_SIC?\r\n\tQuery them.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATASTERIXSACSICCallback, comms_manager)},
     {.command = "BAUD_RATE",
      .min_args = 0,
      .max_args = 2,
@@ -1362,6 +1469,27 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 5,  // TODO: check this value.
      .help_string = "AT+DEVICE_INFO?\r\n\tQuery device information.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATDeviceInfoCallback, comms_manager)},
+    {.command = "FILTER_ALTITUDE_FT",
+     .min_args = 0,
+     .max_args = 3,
+     .help_string = "AT+FILTER_ALTITUDE_FT=<mode>,<a_ft>,<b_ft>\r\n\tLeave aircraft outside an altitude band out of aircraft "
+                    "reports (aircraft JSON, GDL90, MAVLink, CSBee). mode: OFF, ABOVE (at or above a), BELOW (at or below "
+                    "a), BETWEEN (a to b) or NEAR_RX (within a ft above or below the receiver, see AT+RX_POSITION; "
+                    "filters nothing without a receiver altitude), any case. Altitudes are -2000 to 100000 ft; "
+                    "aircraft altitude is barometric, else GNSS. Aircraft with no known altitude are always kept. Raw "
+                    "packets (Raw, Beast, MLAT) are never filtered. Empty arguments keep their value. Default: "
+                    "OFF,0,10000.\r\n\t"
+                    "AT+FILTER_ALTITUDE_FT?\r\n\tQuery the mode and its altitudes.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterAltitudeFtCallback, comms_manager)},
+    {.command = "FILTER_DISTANCE_NM",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+FILTER_DISTANCE_NM=<enabled [0 1]>,<distance_nm>\r\n\tLeave aircraft farther than distance_nm "
+                    "nautical miles (0.1 to 10000.0, 0.1 nm steps) from the receiver out of aircraft reports (aircraft JSON, GDL90, MAVLink, CSBee). Raw "
+                    "packets (Raw, Beast, MLAT) are never filtered. Aircraft at an unknown distance (no position yet, or "
+                    "no receiver position, see AT+RX_POSITION) are always kept. Default: 0,100.0 (off).\r\n\t"
+                    "AT+FILTER_DISTANCE_NM?\r\n\tQuery whether the filter is enabled and its distance.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterDistanceNMCallback, comms_manager)},
     {.command = "LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,
