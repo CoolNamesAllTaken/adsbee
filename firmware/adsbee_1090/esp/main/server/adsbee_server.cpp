@@ -957,8 +957,12 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              (unsigned long)FeedRAMBudget::UsedBytes(settings_manager.settings),
              (unsigned long)FeedRAMBudget::BudgetBytes(settings_manager.settings, HardwareCapabilities::HasPSRAM()));
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
-             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
-             "}, \"device_status\": { ");
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "}}\n");
+    BroadcastNetworkMetrics(metrics_message);
+
+    // Device status goes in a second message, so neither can outgrow the buffer (ten 63-character feed URIs take
+    // about 700 bytes). Consumers read whichever top-level keys a message has.
+    snprintf(metrics_message, kNetworkMetricsMessageMaxLen, "{ \"device_status\": { ");
     // Device Status
     const ObjectDictionary::RP2040DeviceStatus& rp2040_status = object_dictionary.composite_device_status.rp2040;
     char gnss_utc_time[9] = "--:--:--";
@@ -1018,7 +1022,18 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
 
-    network_metrics.BroadcastMessage(metrics_message, strnlen(metrics_message, kNetworkMetricsMessageMaxLen));
+    BroadcastNetworkMetrics(metrics_message);
+}
+
+void ADSBeeServer::BroadcastNetworkMetrics(const char* message) {
+    size_t len = strnlen(message, kNetworkMetricsMessageMaxLen);
+    if (len >= kNetworkMetricsMessageMaxLen - 1) {
+        // snprintf cut the message short: it would not be valid JSON.
+        CONSOLE_WARNING("ADSBeeServer::BroadcastNetworkMetrics", "Metrics message longer than %d bytes, not sent.",
+                        kNetworkMetricsMessageMaxLen - 1);
+        return;
+    }
+    network_metrics.BroadcastMessage(message, len);
 }
 
 bool ADSBeeServer::TCPServerInit() {
