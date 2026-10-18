@@ -42,6 +42,23 @@ class FirmwareHashesTest(unittest.TestCase):
         uf2 += uf2_block(0x1002D000, app[0]) + uf2_block(0x1002D100, app[1])
         self.assertEqual(fh.uf2_rp2040_image(self.write("a.uf2", uf2)), app[0] + app[1])
 
+    def test_uf2_header_must_describe_its_image(self):
+        app = b"\x01" * 256 + b"\x02" * 100
+
+        def uf2(size, crc):
+            header = struct.pack("<5I", 0xAD5BEEE, 0, size, crc, 0xFFADFFFF)
+            return uf2_block(0x1002C000, header.ljust(256, b"\xff")) + uf2_block(0x1002D000, app[:256]) + uf2_block(
+                0x1002D100, app[256:].ljust(256, b"\0")
+            )
+
+        good = self.write("good.uf2", uf2(len(app), zlib.crc32(app)))
+        fh.check_uf2_header(good, fh.uf2_rp2040_image(good))
+        # Headers of another build.
+        for name, size, crc in (("crc.uf2", len(app), 0x1234), ("len.uf2", 1024, zlib.crc32(app))):
+            bad = self.write(name, uf2(size, crc))
+            with self.assertRaises(ValueError):
+                fh.check_uf2_header(bad, fh.uf2_rp2040_image(bad))
+
     def test_ota_images_by_partition(self):
         images = [b"zero" * 10, b"one" * 7]
         parts = [struct.pack("<5I", 0xAD5BEEE, 0, len(i), zlib.crc32(i), 0xFFFFFFFF) + i for i in images]
