@@ -55,3 +55,4 @@ code.copy { user-select: all; background: var(--bg); padding: .3rem .5rem; borde
 svg.bars { width: 100%; height: 70px; background: var(--card); border-radius: 4px; }
 svg.bars rect { fill: var(--accent); }
 .axis-t { display: flex; justify-content: space-between; color: var(--dim); font-size: .75em; }
+.warn { color: #b26a00; cursor: help; }

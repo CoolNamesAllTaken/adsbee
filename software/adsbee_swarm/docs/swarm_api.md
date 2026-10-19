@@ -40,6 +40,21 @@ The default server is `https://adsbee.aero`.
 | Bin | `band*36 + sector`. Sector = `floor(true bearing receiver→aircraft / 10°)`, 0 = north. |
 | Bands (ft, baro; geometric if no baro) | [0,1k) [1k,2k) [2k,4k) [4k,6k) [6k,10k) [10k,15k) [15k,20k) [20k,25k) [25k,30k) [30k,35k) [35k,40k) [40k,∞) |
 
+**Position guards.** `rx_position` and `range` go only with a FIXED position or a GNSS fix; 0,0
+counts as none. A position beyond the horizon for its band is dropped:
+`limit_km = 1.15 * 4.12 * (sqrt(h_rx_m) + sqrt(h_band_top_m)) + 20` (h_rx floored at 0; the top
+band uses 60k ft). When drops reach 10% of counted positions and 5 distinct aircraft, the period's
+map is withheld. Optional fields:
+
+| Field | Meaning |
+|---|---|
+| `range_withheld` | `"no_position"` or `"implausible"`: only when `range` is omitted for that reason |
+| `range_dropped` | positions dropped as beyond the horizon |
+
+The server applies the same limit to every bin (one `unit_m` of rounding allowed) and ignores the
+rest, counting them as `bins_ignored`. A device whose last report withheld its range, dropped
+positions or had bins ignored has `check_position: true` in the user API.
+
 A position counts after 2 consistent decodes of the aircraft. Report once per period (default 3600 s,
 ±60 s jitter); the first report goes 2–5 min after boot. On failure, max-merge new data into the
 pending map and retry with backoff, holding at most one map.

@@ -35,7 +35,7 @@
 <tbody>
 {% for d in rows %}
 <tr>
-  <td><a href="{% url 'adsbee_swarm:device' d.id %}">{{ d.label|default:"—" }}</a></td>
+  <td><a href="{% url 'adsbee_swarm:device' d.id %}">{{ d.label|default:"—" }}</a>{% if d.check_position %} <span class="warn" title="Check position: {% if d.range_withheld == 'no_position' %}the bee has no position, so it sent no range{% elif d.range_withheld == 'implausible' %}its range looked implausible, so it sent none{% else %}some aircraft were farther than possible from this position{% endif %}">⚠</span>{% endif %}</td>
   <td class="mono">{{ d.unique_id }}</td>
   <td>{{ d.product }}</td>
   <td class="mono">{{ d.version|default:"?" }}</td>

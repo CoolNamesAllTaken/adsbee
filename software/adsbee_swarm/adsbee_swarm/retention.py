@@ -20,7 +20,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import conf, ranges
-from .models import PEAK_STATS, STATS, Sample
+from .models import PEAK_STATS, STATS, WITHHELD, Sample
 
 FIELDS = ('reports', *STATS)
 
@@ -34,6 +34,7 @@ def rebuild_day(device_id: int, day: datetime, hours: list[Sample]) -> bool:
     totals = dict.fromkeys(FIELDS, 0)
     merged: ranges.Map = {}
     unit = 0
+    withheld = max((s.range_withheld or '' for s in hours), key=WITHHELD.index, default='')
     for sample in hours:
         totals['reports'] += sample.reports
         for name in STATS:
@@ -45,17 +46,17 @@ def rebuild_day(device_id: int, day: datetime, hours: list[Sample]) -> bool:
     with transaction.atomic():
         daily = Sample.objects.select_for_update().filter(device_id=device_id, start=day, span_s=Sample.DAY).first()
         expected = Sample(device_id=device_id, start=day, span_s=Sample.DAY, unit_m=unit or ranges.DEFAULT_UNIT_M,
-                          **totals)
+                          range_withheld=withheld, **totals)
         expected.set_ranges(merged)
         if daily is not None and all(getattr(daily, f) == getattr(expected, f) for f in FIELDS) \
-                and daily.ranges() == expected.ranges():
+                and daily.range_withheld == withheld and daily.ranges() == expected.ranges():
             return False
         if daily is None:
             daily = expected
         else:
             for name in FIELDS:
                 setattr(daily, name, getattr(expected, name))
-            daily.unit_m, daily.range_map = expected.unit_m, expected.range_map
+            daily.unit_m, daily.range_map, daily.range_withheld = expected.unit_m, expected.range_map, withheld
         daily.save()
         return True
 

@@ -30,7 +30,7 @@ def device_range(device: Device, since: datetime, until: datetime) -> ranges.Map
 
 def range_payload(device: Device, merged: ranges.Map) -> dict:
     return {'id': device.pk, 'label': device.label, 'unique_id': device.unique_id,
-            'position': device.position, 'max_m': ranges.matrix(merged),
+            'position': device.position, 'check_position': device.check_position, 'max_m': ranges.matrix(merged),
             'sector_max_m': ranges.sector_max(merged), 'bins': len(merged),
             'max_range_m': max(merged.values(), default=None)}
 

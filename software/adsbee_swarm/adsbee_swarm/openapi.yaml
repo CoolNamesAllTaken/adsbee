@@ -68,7 +68,9 @@ components:
             uat_uplink: {type: integer}
             aircraft_max: {type: integer}
             aircraft_unique: {type: integer}
-        range: {allOf: [{$ref: '#/components/schemas/Range'}], nullable: true, description: "Ignored without rx_position."}
+        range: {allOf: [{$ref: '#/components/schemas/Range'}], nullable: true, description: "Ignored without rx_position. Bins past their band's horizon limit are ignored."}
+        range_withheld: {type: string, enum: [no_position, implausible], description: "Only when range is omitted for that reason."}
+        range_dropped: {type: integer, minimum: 0, description: "Positions the bee dropped as beyond the horizon."}
     ReportAnswer:
       type: object
       properties:
@@ -97,6 +99,10 @@ components:
         last_report_at: {type: string, format: date-time, nullable: true}
         removed: {type: boolean}
         firmware_target: {type: object, nullable: true, properties: {tag: {type: string}, channel: {type: string}}}
+        range_withheld: {type: string, description: "Last report: '', no_position or implausible."}
+        range_dropped: {type: integer, description: "Last report: positions the bee dropped."}
+        bins_ignored: {type: integer, description: "Last report: bins past the horizon limit, ignored here."}
+        check_position: {type: boolean, description: "Any of the three above: show the user 'check position'."}
     DeviceEdit:
       type: object
       properties:
@@ -153,6 +159,8 @@ components:
               uat_uplink: {type: integer}
               aircraft_max: {type: integer}
               aircraft_unique: {type: integer}
+              range_dropped: {type: integer}
+              bins_ignored: {type: integer}
     RolloutNew:
       type: object
       required: [product, tag]

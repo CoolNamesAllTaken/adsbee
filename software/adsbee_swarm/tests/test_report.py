@@ -70,11 +70,11 @@ def test_a_widened_retry_replaces_the_stats_it_covers(client, owner, bee):
     assert post_report(client, owner.token, body).status_code == 200
     widened = {**body, 'period': {**body['period'], 'len_s': body['period']['len_s'] + 600},
                'stats': {**body['stats'], 'es_valid': 130}}
-    widened['range'] = dict(body['range'], **dict(zip(('changed', 'max'), ranges.encode({9: 300000}, 2000))))
+    widened['range'] = dict(body['range'], **dict(zip(('changed', 'max'), ranges.encode({405: 300000}, 2000))))
     assert post_report(client, owner.token, widened).status_code == 200
     sample = Sample.objects.get(span_s=Sample.HOUR)
     assert (sample.es_valid, sample.reports) == (130, 1)
-    assert sample.ranges()[9] == 300000
+    assert sample.ranges()[405] == 300000
     # The same seq and start with a SHORTER period is a stale copy: ignored.
     shorter = {**widened, 'period': body['period'], 'stats': {**body['stats'], 'es_valid': 1}}
     assert post_report(client, owner.token, shorter).status_code == 200
@@ -197,3 +197,83 @@ def test_the_same_bee_on_two_accounts_is_two_devices(client, owner, other, bee):
     assert post_report(client, owner.token, bee.report()).status_code == 200
     assert post_report(client, other.token, bee.report()).status_code == 200
     assert Device.objects.filter(unique_id=bee.unique_id).count() == 2
+
+
+# ─── Position guards ─────────────────────────────────────────────────────────
+
+def test_the_horizon_limit_per_band():
+    # 1.15 * 4.12 km * (sqrt(h_rx) + sqrt(h_top)) + 20 km; the top band uses 60k ft.
+    assert ranges.horizon_limit_m(0, 0) == pytest.approx((1.15 * 4.12 * (1000 * 0.3048) ** 0.5 + 20) * 1000)
+    assert ranges.horizon_limit_m(11, 100) == pytest.approx((1.15 * 4.12 * (10 + (60000 * 0.3048) ** 0.5) + 20) * 1000)
+    assert ranges.horizon_limit_m(3, -50) == ranges.horizon_limit_m(3, None) == ranges.horizon_limit_m(3, 0)
+
+
+def test_bins_past_the_horizon_are_ignored_and_counted(client, owner, bee):
+    body = bee.report()
+    body['rx_position']['alt_m'] = 0
+    low_limit = ranges.horizon_limit_m(0, 0)
+    values = {0: 20000, 1: int(low_limit) + 1000, 2: int(low_limit) + 5000, 400: 300000}
+    body['range'].update(zip(('changed', 'max'), ranges.encode(values, 2000)))
+    assert post_report(client, owner.token, body).status_code == 200
+    sample = Sample.objects.get(span_s=Sample.HOUR)
+    assert set(sample.ranges()) == {0, 1, 400}, "one unit of rounding is allowed; 5 km past is not"
+    assert sample.bins_ignored == 1
+    device = Device.objects.get()
+    assert device.bins_ignored == 1 and device.check_position
+
+
+@pytest.mark.parametrize('withheld', ['no_position', 'implausible'])
+def test_a_withheld_range_is_stored_and_flagged(client, owner, bee, withheld):
+    body = bee.report()
+    body.pop('range')
+    body.pop('rx_position')
+    body.update(range_withheld=withheld, range_dropped=14)
+    assert post_report(client, owner.token, body).status_code == 200
+    sample = Sample.objects.get(span_s=Sample.HOUR)
+    assert (sample.range_withheld, sample.range_dropped, sample.range_map) == (withheld, 14, None)
+    assert Sample.objects.get(span_s=Sample.DAY).range_withheld == withheld
+    device = Device.objects.get()
+    assert (device.range_withheld, device.range_dropped, device.check_position) == (withheld, 14, True)
+    body = bee.report()
+    assert post_report(client, owner.token, body).status_code == 200
+    device.refresh_from_db()
+    assert not device.check_position, "a clean report clears the warning"
+    assert Sample.objects.get(span_s=Sample.HOUR).range_withheld == withheld, "the hour keeps the most severe"
+
+
+def test_implausible_outranks_no_position_in_a_sample(client, owner, bee):
+    for withheld in ('implausible', 'no_position'):
+        body = bee.report()
+        body.pop('range')
+        body['range_withheld'] = withheld
+        assert post_report(client, owner.token, body).status_code == 200
+    assert Sample.objects.get(span_s=Sample.HOUR).range_withheld == 'implausible'
+
+
+def test_a_position_at_0_0_is_no_position(client, owner, bee):
+    body = bee.report()
+    body['rx_position'].update(lat=0, lon=0)
+    assert post_report(client, owner.token, body).status_code == 200
+    sample = Sample.objects.get(span_s=Sample.HOUR)
+    assert sample.range_map is None and sample.range_withheld == 'no_position'
+    assert Device.objects.get().rx_lat is None
+
+
+@pytest.mark.parametrize('field, value', [('range_withheld', 'gps_sad'), ('range_dropped', -1), ('range_dropped', 'x')])
+def test_bad_guard_fields_are_400(client, owner, bee, field, value):
+    body = bee.report()
+    body[field] = value
+    assert post_report(client, owner.token, body).status_code == 400
+
+
+def test_the_api_and_the_page_say_check_position(client, owner, bee):
+    body = bee.report()
+    body.pop('range')
+    body.update(range_withheld='implausible', range_dropped=9)
+    post_report(client, owner.token, body)
+    device = Device.objects.get()
+    api = client.get(f'/api/swarm/v1/devices/{device.pk}', HTTP_AUTHORIZATION=f'Bearer {owner.api_token}').json()
+    assert (api['range_withheld'], api['range_dropped'], api['check_position']) == ('implausible', 9, True)
+    client.login(username='alice', password='pw')
+    assert '⚠' in client.get('/').content.decode()
+    assert 'too many aircraft looked farther' in client.get(f'/devices/{device.pk}/').content.decode()

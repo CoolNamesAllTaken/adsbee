@@ -32,6 +32,25 @@ def bin_index(band: int, sector: int) -> int:
     return band * SECTORS + sector
 
 
+#: The top band's ceiling for the horizon limit.
+TOP_BAND_CEILING_FT = 60000
+FT_M = 0.3048
+
+
+def horizon_limit_m(band: int, rx_alt_m: float | None) -> float:
+    """The farthest a position in `band` can plausibly be (CONTRACT, position guards):
+    1.15 * 4.12 km * (sqrt(h_rx) + sqrt(h_band_top)) + 20 km, heights in meters, h_rx floored at 0."""
+    top_ft = BAND_FLOORS_FT[band + 1] if band + 1 < BANDS else TOP_BAND_CEILING_FT
+    return (1.15 * 4.12 * (math.sqrt(max(rx_alt_m or 0.0, 0.0)) + math.sqrt(top_ft * FT_M)) + 20) * 1000
+
+
+def within_horizon(values: Map, rx_alt_m: float | None, unit_m: int) -> tuple[Map, int]:
+    """(the bins inside their band's horizon limit, how many were not). A value is rounded up to
+    `unit_m` on the wire, so a bin up to one unit past the limit still counts."""
+    kept = {i: m for i, m in values.items() if m <= horizon_limit_m(i // SECTORS, rx_alt_m) + unit_m}
+    return kept, len(values) - len(kept)
+
+
 def band_edges_ft() -> list[list[int | None]]:
     return [[floor, BAND_FLOORS_FT[i + 1] if i + 1 < BANDS else None] for i, floor in enumerate(BAND_FLOORS_FT)]
 

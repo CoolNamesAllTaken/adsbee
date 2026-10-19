@@ -77,6 +77,11 @@ class Device(models.Model):
     #: The last report stored: [seq, start_uptime_s, len_s], its Sample's start and its stats, so a
     #: retry is recognized and a merged retry replaces what it widens.
     last_report = models.JSONField(default=dict, blank=True)
+    #: The last report's position guards (docs/swarm_api.md): why it sent no range ('' none,
+    #: 'no_position', 'implausible'), positions it dropped, bins the server ignored.
+    range_withheld = models.CharField(max_length=16, blank=True)
+    range_dropped = models.PositiveIntegerField(default=0)
+    bins_ignored = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['label', 'unique_id']
@@ -99,6 +104,11 @@ class Device(models.Model):
         return None
 
     @property
+    def check_position(self) -> bool:
+        """The last report says its position is missing or doubtful: worth a look."""
+        return bool(self.range_withheld or self.range_dropped or self.bins_ignored)
+
+    @property
     def version(self) -> str:
         from . import conf
 
@@ -106,7 +116,13 @@ class Device(models.Model):
         return str((self.versions or {}).get(key, ''))
 
 
-STATS = ('modes_valid', 'es_valid', 'uat_adsb', 'uat_uplink', 'aircraft_max', 'aircraft_unique')
+#: What a report's `stats` holds.
+REPORTED_STATS = ('modes_valid', 'es_valid', 'uat_adsb', 'uat_uplink', 'aircraft_max', 'aircraft_unique')
+#: Every count a sample keeps: the reported ones, positions the bee dropped as implausible
+#: (`range_dropped`) and bins past the horizon limit the server ignored (`bins_ignored`).
+STATS = (*REPORTED_STATS, 'range_dropped', 'bins_ignored')
+#: Why a report sent no range, least to most severe; a sample keeps the most severe.
+WITHHELD = ('', 'no_position', 'implausible')
 #: Stats that are a peak, not a count: merged by max rather than summed.
 PEAK_STATS = ('aircraft_max', 'aircraft_unique')
 
@@ -124,6 +140,9 @@ class Sample(models.Model):
     uat_uplink = models.BigIntegerField(default=0)
     aircraft_max = models.IntegerField(default=0)
     aircraft_unique = models.IntegerField(default=0)
+    range_dropped = models.BigIntegerField(default=0)
+    bins_ignored = models.BigIntegerField(default=0)
+    range_withheld = models.CharField(max_length=16, blank=True)
     unit_m = models.PositiveIntegerField(default=ranges.DEFAULT_UNIT_M)
     #: `ranges.pack`: 54-byte bitmap, then one byte per present bin.
     range_map = models.BinaryField(null=True, blank=True)

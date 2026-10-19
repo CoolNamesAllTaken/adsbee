@@ -112,7 +112,9 @@ def device_json(device: Device) -> dict:
             'auto_update': device.auto_update, 'uptime_s': device.uptime_s,
             'first_seen': device.first_seen.isoformat(),
             'last_report_at': device.last_report_at.isoformat() if device.last_report_at else None,
-            'removed': device.removed, 'firmware_target': rollouts.target(device)}
+            'removed': device.removed, 'firmware_target': rollouts.target(device),
+            'range_withheld': device.range_withheld, 'range_dropped': device.range_dropped,
+            'bins_ignored': device.bins_ignored, 'check_position': device.check_position}
 
 
 def rollout_json(rollout: Rollout) -> dict:
