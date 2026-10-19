@@ -673,6 +673,7 @@ body {
     cursor: pointer; font-size: 0.85rem; line-height: 1; min-width: 26px; padding: 4px 6px; }
 .rid-btn:hover:not(:disabled) { border-color: #ffcb00; }
 .rid-btn:disabled { cursor: default; opacity: 0.35; }
+.rid-btn svg { display: block; }
 .rid-input { font-family: monospace; font-size: 0.85rem; width: 17ch; padding: 3px 5px; }
 .rid-input.bad { outline: 2px solid #e5484d; }
 .rid-custom { color: #ffcb00; cursor: help; }

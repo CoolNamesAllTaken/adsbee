@@ -604,14 +604,19 @@ function ridEl(tag, className, text, title) {
     return el;
 }
 
-/** A ⧉ button that copies text() and shows ✓ for a second. */
+const RID_COPY_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" '
+    + 'stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/>'
+    + '<path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>';
+
+/** A copy button that copies text() and shows ✓ for a second. */
 function ridCopyButton(text, title) {
-    const b = ridEl('button', 'rid-btn', '⧉', title);
+    const b = ridEl('button', 'rid-btn rid-copy', undefined, title);
     b.type = 'button';
+    b.innerHTML = RID_COPY_ICON;
     b.onclick = async (ev) => {
         if (ev && ev.stopPropagation) ev.stopPropagation();
         b.textContent = (await copyText(text())) ? '✓' : '✗';
-        setTimeout(() => { b.textContent = '⧉'; }, 1000);
+        setTimeout(() => { b.innerHTML = RID_COPY_ICON; }, 1000);
     };
     return b;
 }

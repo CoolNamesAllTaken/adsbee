@@ -99,7 +99,7 @@ test('field shows hex and UUID, copies both, and marks a custom ID', async () =>
     field.setDefault(ID);
     assert.strictEqual(button(el, '↺').disabled, false);
     assert.ok(find(el, (e) => e.className === 'rid-custom').title.includes(ID));
-    const copies = all(el).filter((e) => e.textContent === '⧉');
+    const copies = all(el).filter((e) => e.className === 'rid-btn rid-copy');
     await copies[0].onclick({ stopPropagation() {} });
     await copies[1].onclick({ stopPropagation() {} });
     assert.deepStrictEqual(dom.copied, [CUSTOM, receiverIdUuid(CUSTOM)]);
