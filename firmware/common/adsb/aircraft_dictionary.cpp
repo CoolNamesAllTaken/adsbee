@@ -1505,6 +1505,7 @@ void AircraftDictionary::Init() {
 }
 
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
+    FleetProfileScope prof(3);
     // Check for overflow
     if (dictionary_overflowed) {
         CONSOLE_ERROR("AircraftDictionary",

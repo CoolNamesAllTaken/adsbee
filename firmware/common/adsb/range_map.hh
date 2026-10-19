@@ -4,6 +4,29 @@
 #include <cstdint>
 #include <cstring>
 
+// Bench profiling build only (t0623-profile branch).
+#ifdef ON_ESP32
+#include "esp_cpu.h"
+#define FLEET_CYCLES() esp_cpu_get_cycle_count()
+#else
+#define FLEET_CYCLES() 0
+#endif
+struct FleetProfile {
+    uint64_t cycles[4] = {0};  // RecordRange, MarkAircraft, AddSecond, whole AircraftDictionary::Update.
+    uint32_t calls[4] = {0};
+    uint32_t recorded = 0;     // RecordRange calls that reached the map.
+};
+inline FleetProfile fleet_profile;
+struct FleetProfileScope {
+    explicit FleetProfileScope(int i) : i_(i), start_(FLEET_CYCLES()) {}
+    ~FleetProfileScope() {
+        fleet_profile.cycles[i_] += (uint32_t)(FLEET_CYCLES() - start_);
+        fleet_profile.calls[i_]++;
+    }
+    int i_;
+    uint32_t start_;
+};
+
 /**
  * Range per direction and altitude band for fleet reports (AT+FLEET), as the fleet protocol v1 defines it: 36 sectors
  * of 10 degrees (0 = north) by 12 altitude bands, each holding the largest distance seen, in units of kUnitMeters.
@@ -90,9 +113,11 @@ class FleetRecorder {
 
     inline void RecordPosition(uint32_t distance_m, uint16_t bearing_bam16, int32_t altitude_ft) {
         if (record_range) range.Record(distance_m, bearing_bam16, altitude_ft);
+        fleet_profile.recorded++;
     }
 
     inline void MarkAircraft(uint32_t uid) {
+        FleetProfileScope prof(1);
         // MurmurHash3 finalizer: linear counting needs bits that look random, also for neighboring addresses.
         uid ^= uid >> 16;
         uid *= 0x85EBCA6Bu;
@@ -106,6 +131,7 @@ class FleetRecorder {
     // Once per dictionary update: that second's frame counts and the number of aircraft tracked.
     inline void AddSecond(uint32_t modes_valid, uint32_t es_valid, uint32_t uat_adsb, uint32_t uat_uplink,
                           uint16_t num_aircraft) {
+        FleetProfileScope prof(2);
         stats.modes_valid += modes_valid;
         stats.es_valid += es_valid;
         stats.uat_adsb += uat_adsb;

@@ -1601,6 +1601,7 @@ class AircraftDictionary {
     template <typename T>
     inline void RecordRange(const T &aircraft) {
         if constexpr (kRecordsRange<T>) {
+            FleetProfileScope prof(0);
             if (fleet_recorder_ == nullptr || aircraft.num_position_decodes < 2 ||
                 aircraft.distance_m == Aircraft::kDistanceUnknown) {
                 return;

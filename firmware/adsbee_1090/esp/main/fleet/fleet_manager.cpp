@@ -126,6 +126,21 @@ void FleetManager::Task() {
                  (unsigned long)(NowMs() - start_ms), (unsigned long)(delay_ms / 1000),
                  (unsigned)uxTaskGetStackHighWaterMark(NULL),
                  (unsigned)heap_caps_get_minimum_free_size(HardwareCapabilities::kInternalHeapCaps));
+    const FleetProfile& p = fleet_profile;
+    auto avg = [&](int i) { return p.calls[i] ? (unsigned long)(p.cycles[i] / p.calls[i]) : 0ul; };
+    CONSOLE_PRINTF("FLEET_PROFILE uptime_s=%lu record_calls=%lu record_avg_cyc=%lu record_total_cyc=%llu recorded=%lu "
+                   "mark_calls=%lu mark_avg_cyc=%lu mark_total_cyc=%llu second_calls=%lu second_avg_cyc=%lu\r\n",
+                   (unsigned long)(NowMs() / 1000), (unsigned long)p.calls[0], avg(0), (unsigned long long)p.cycles[0],
+                   (unsigned long)p.recorded, (unsigned long)p.calls[1], avg(1), (unsigned long long)p.cycles[1],
+                   (unsigned long)p.calls[2], avg(2));
+    CONSOLE_PRINTF("FLEET_PROFILE2 update_calls=%lu update_avg_cyc=%lu update_total_cyc=%llu sizeof_recorder=%u sizeof_reporter=%u "
+                   "sizeof_manager=%u body=%u free_heap=%u min_free_heap=%u stack_free=%u\r\n",
+                   (unsigned long)p.calls[3], avg(3),
+                   (unsigned long long)p.cycles[3], (unsigned)sizeof(FleetRecorder), (unsigned)sizeof(FleetReporter),
+                   (unsigned)sizeof(FleetManager), status.last_body_len,
+                   (unsigned)heap_caps_get_free_size(HardwareCapabilities::kInternalHeapCaps),
+                   (unsigned)heap_caps_get_minimum_free_size(HardwareCapabilities::kInternalHeapCaps),
+                   (unsigned)uxTaskGetStackHighWaterMark(NULL));
     next_report_timestamp_ms_ = NowMs() + delay_ms;
     task_ = nullptr;
 }
