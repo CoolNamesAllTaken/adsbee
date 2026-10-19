@@ -9,6 +9,8 @@
 #include "aircraftjson_utils.hh"
 #include "auto_update_manager.hh"
 #include "swarm_manager.hh"
+#include "esp_timer.h"
+#include "range_map.hh"
 #include "feed_ram_budget.hh"
 #include "network_time.hh"
 #include "gdl90/gdl90_utils.hh"
@@ -230,7 +232,47 @@ bool ADSBeeServer::Init() {
     return TCPServerInit();
 }
 
+// Bench profiling: times the main loop; prints and resets every 60 s.
+struct BenchLoopTimer {
+    int64_t start_us = esp_timer_get_time();
+    ~BenchLoopTimer() {
+        static int64_t last_end_us = 0, last_print_us = 0;
+        int64_t end_us = esp_timer_get_time();
+        int64_t len_us = end_us - start_us;
+        SwarmProfile& p = swarm_profile;
+        if (len_us > p.loop_max_us) p.loop_max_us = len_us;
+        if (last_end_us && start_us - last_end_us > p.loop_gap_max_us) p.loop_gap_max_us = start_us - last_end_us;
+        p.loop_total_us += len_us;
+        p.loops++;
+        last_end_us = end_us;
+        if (swarm_manager.Busy()) {
+            uint32_t f = heap_caps_get_free_size(HardwareCapabilities::kInternalHeapCaps);
+            uint32_t l = heap_caps_get_largest_free_block(HardwareCapabilities::kInternalHeapCaps);
+            if (f < p.tls_min_free) p.tls_min_free = f;
+            if (l < p.tls_min_largest) p.tls_min_largest = l;
+        }
+        if (end_us - last_print_us >= 60 * 1000000LL) {
+            last_print_us = end_us;
+            auto avg = [&](int i) { return p.calls[i] ? (unsigned long)(p.cycles[i] / p.calls[i]) : 0ul; };
+            CONSOLE_PRINTF(
+                "BENCH t=%lu swarm=%d loops=%lu loop_avg_us=%lu loop_max_us=%lu gap_max_us=%lu free=%u largest=%u "
+                "min_free=%u rec=%lu/%lu mark=%lu/%lu frames=%lu/%lu rec_cyc=%llu mark_cyc=%llu frames_cyc=%llu\r\n",
+                (unsigned long)(end_us / 1000000), settings_manager.settings.swarm_enabled, (unsigned long)p.loops,
+                (unsigned long)(p.loops ? p.loop_total_us / p.loops : 0), (unsigned long)p.loop_max_us,
+                (unsigned long)p.loop_gap_max_us,
+                (unsigned)heap_caps_get_free_size(HardwareCapabilities::kInternalHeapCaps),
+                (unsigned)heap_caps_get_largest_free_block(HardwareCapabilities::kInternalHeapCaps),
+                (unsigned)heap_caps_get_minimum_free_size(HardwareCapabilities::kInternalHeapCaps),
+                (unsigned long)p.calls[0], avg(0), (unsigned long)p.calls[1], avg(1), (unsigned long)p.calls[2], avg(2),
+                (unsigned long long)p.cycles[0], (unsigned long long)p.cycles[1], (unsigned long long)p.cycles[2]);
+            p.loop_max_us = p.loop_gap_max_us = p.loop_total_us = 0;
+            p.loops = 0;
+        }
+    }
+};
+
 bool ADSBeeServer::Update() {
+    BenchLoopTimer bench_loop_timer;
     bool ret = true;
     // Do NOT call pico.Update() from here since that's already taken care of by the SPIReceiveTask.
     // Update the LED here so it has better time resolution than it would in the SPI task, which blocks frequently.

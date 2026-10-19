@@ -4,6 +4,36 @@
 #include <cstdint>
 #include <cstring>
 
+// Bench profiling build only (t0623-prof2 branch).
+#ifdef ON_ESP32
+#include "esp_cpu.h"
+#define SWARM_CYCLES() esp_cpu_get_cycle_count()
+#else
+#define SWARM_CYCLES() 0
+#endif
+struct SwarmProfile {
+    uint64_t cycles[3] = {0};  // RecordRange, MarkAircraft, AddFrames + NoteAircraftCount.
+    uint32_t calls[3] = {0};
+    // Main loop (ADSBeeServer::Update), reset every 60 s.
+    int64_t loop_max_us = 0;
+    int64_t loop_gap_max_us = 0;
+    int64_t loop_total_us = 0;
+    uint32_t loops = 0;
+    // While a swarm report is in flight, reset per report.
+    uint32_t tls_min_free = UINT32_MAX;
+    uint32_t tls_min_largest = UINT32_MAX;
+};
+inline SwarmProfile swarm_profile;
+struct SwarmProfileScope {
+    explicit SwarmProfileScope(int i) : i_(i), start_(SWARM_CYCLES()) {}
+    ~SwarmProfileScope() {
+        swarm_profile.cycles[i_] += (uint32_t)(SWARM_CYCLES() - start_);
+        swarm_profile.calls[i_]++;
+    }
+    int i_;
+    uint32_t start_;
+};
+
 /**
  * Range per direction and altitude band for swarm reports (AT+SWARM), as the swarm protocol v1 defines it: 36 sectors
  * of 10 degrees (0 = north) by 12 altitude bands, each holding the largest distance seen, in units of kUnitMeters.
@@ -144,6 +174,7 @@ class SwarmRecorder {
     }
 
     inline void MarkAircraft(uint32_t uid) {
+        SwarmProfileScope prof(1);
         // MurmurHash3 finalizer: linear counting needs bits that look random, also for neighboring addresses.
         uid ^= uid >> 16;
         uid *= 0x85EBCA6Bu;
@@ -156,6 +187,7 @@ class SwarmRecorder {
 
     // Valid frame counts as the receiver reports them each second.
     inline void AddFrames(uint32_t modes_valid, uint32_t es_valid, uint32_t uat_adsb, uint32_t uat_uplink) {
+        SwarmProfileScope prof(2);
         stats.modes_valid += modes_valid;
         stats.es_valid += es_valid;
         stats.uat_adsb += uat_adsb;
@@ -164,6 +196,7 @@ class SwarmRecorder {
 
     // Once per dictionary update: the number of aircraft tracked.
     inline void NoteAircraftCount(uint16_t num_aircraft) {
+        SwarmProfileScope prof(2);
         if (num_aircraft > stats.aircraft_max) stats.aircraft_max = num_aircraft;
     }
 

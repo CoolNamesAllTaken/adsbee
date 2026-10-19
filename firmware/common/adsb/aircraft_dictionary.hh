@@ -1622,6 +1622,7 @@ class AircraftDictionary {
     template <typename T>
     inline void RecordRange(const T &aircraft) {
         if constexpr (kRecordsRange<T>) {
+            SwarmProfileScope prof(0);
             if (swarm_recorder_ == nullptr || aircraft.num_position_decodes < 2 ||
                 aircraft.distance_m == Aircraft::kDistanceUnknown || !IsDirectPosition(aircraft)) {
                 return;

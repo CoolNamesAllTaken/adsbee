@@ -93,6 +93,8 @@ endif()
 # after N seconds, and a CA file named auto_update_test_ca.pem to trust instead of the certificate bundle.
 #   idf.py -DAUTO_UPDATE_API_BASE=https://10.0.0.2:8443/api/fw/v1/ -DAUTO_UPDATE_FIRST_CHECK_S=60 \
 #          -DAUTO_UPDATE_TEST_CA=/path/to/auto_update_test_ca.pem build
+# Bench profiling branch only: trust the t0623 bench CA.
+set(AUTO_UPDATE_TEST_CA "${CMAKE_CURRENT_SOURCE_DIR}/auto_update_test_ca.pem")
 if(AUTO_UPDATE_API_BASE)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE AUTO_UPDATE_API_BASE="${AUTO_UPDATE_API_BASE}")
 endif()
