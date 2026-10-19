@@ -79,6 +79,23 @@ class RangeMap {
 class SwarmRecorder {
    public:
     static constexpr uint16_t kUniqueBits = 2048;  // Linear counting: a few % error up to ~3000 aircraft.
+    // A period's range map is withheld when at least this share of positions, from this many aircraft, were dropped.
+    static constexpr uint32_t kWithholdDroppedPercent = 10;
+    static constexpr uint8_t kWithholdDroppedAircraft = 5;
+
+    struct Guard {
+        uint32_t num_positions = 0;  // Positions offered to the range map.
+        uint32_t num_dropped = 0;    // Of those, beyond the horizon.
+        uint8_t num_dropped_aircraft = 0;  // Distinct aircraft dropped, counted up to kWithholdDroppedAircraft.
+        uint32_t dropped_uids[kWithholdDroppedAircraft] = {0};
+
+        void NoteDroppedAircraft(uint32_t uid) {
+            for (uint8_t i = 0; i < num_dropped_aircraft; i++) {
+                if (dropped_uids[i] == uid) return;
+            }
+            if (num_dropped_aircraft < kWithholdDroppedAircraft) dropped_uids[num_dropped_aircraft++] = uid;
+        }
+    };
 
     struct Stats {
         uint32_t modes_valid = 0;
@@ -88,8 +105,42 @@ class SwarmRecorder {
         uint16_t aircraft_max = 0;
     };
 
-    inline void RecordPosition(uint32_t distance_m, uint16_t bearing_bam16, int32_t altitude_ft) {
-        if (record_range) range.Record(distance_m, bearing_bam16, altitude_ft);
+    // Band tops for the radio horizon, in feet; the top band counts as 60,000 ft.
+    static constexpr int32_t kBandTopFt[RangeMap::kNumBands] = {1000,  2000,  4000,  6000,  10000, 15000,
+                                                                20000, 25000, 30000, 35000, 40000, 60000};
+    /**
+     * Sets the horizon limit per band from the antenna altitude: 1.15 * 4.12 km * (sqrt(h_rx) + sqrt(h_band_top)) + 20
+     * km, heights in meters (radio horizon with margin). Call when the receiver altitude changes, not per position.
+     */
+    void SetReceiverAltitude(int32_t altitude_m) {
+        if (altitude_m == receiver_altitude_m_) return;
+        receiver_altitude_m_ = altitude_m;
+        float rx = sqrtf(altitude_m > 0 ? static_cast<float>(altitude_m) : 0.0f);
+        for (uint16_t b = 0; b < RangeMap::kNumBands; b++) {
+            float top = sqrtf(kBandTopFt[b] * 0.3048f);
+            horizon_m_[b] = static_cast<uint32_t>((1.15f * 4.12f * (rx + top) + 20.0f) * 1000.0f);
+        }
+    }
+
+    /**
+     * A confirmed position heard directly. Positions beyond the radio horizon (a wrong receiver position, or a bad
+     * decode) are counted as dropped instead.
+     */
+    inline void RecordPosition(uint32_t distance_m, uint16_t bearing_bam16, int32_t altitude_ft, uint32_t uid) {
+        if (!record_range) return;
+        guard.num_positions++;
+        if (distance_m > horizon_m_[RangeMap::AltitudeBand(altitude_ft)]) {
+            guard.num_dropped++;
+            guard.NoteDroppedAircraft(uid);
+            return;
+        }
+        range.Record(distance_m, bearing_bam16, altitude_ft);
+    }
+
+    // Too many positions beyond the horizon: the receiver position is likely wrong, so the map is withheld.
+    bool RangeImplausible() const {
+        return guard.num_dropped * 100 >= kWithholdDroppedPercent * guard.num_positions &&
+               guard.num_dropped_aircraft >= kWithholdDroppedAircraft && guard.num_dropped > 0;
     }
 
     inline void MarkAircraft(uint32_t uid) {
@@ -133,18 +184,32 @@ class SwarmRecorder {
         stats.uat_uplink += later.stats.uat_uplink;
         if (later.stats.aircraft_max > stats.aircraft_max) stats.aircraft_max = later.stats.aircraft_max;
         for (uint16_t i = 0; i < sizeof(unique_bits_); i++) unique_bits_[i] |= later.unique_bits_[i];
+        guard.num_positions += later.guard.num_positions;
+        guard.num_dropped += later.guard.num_dropped;
+        for (uint8_t i = 0; i < later.guard.num_dropped_aircraft; i++) {
+            guard.NoteDroppedAircraft(later.guard.dropped_uids[i]);
+        }
     }
 
     void Clear() {
         range.Clear();
         stats = Stats();
+        guard = Guard();
         memset(unique_bits_, 0, sizeof(unique_bits_));
+    }
+
+    SwarmRecorder() {
+        receiver_altitude_m_ = INT32_MIN;
+        SetReceiverAltitude(0);
     }
 
     RangeMap range;
     Stats stats;
+    Guard guard;
     bool record_range = true;  // False while the receiver position isn't fixed or from GNSS.
 
    private:
     uint8_t unique_bits_[kUniqueBits / 8] = {0};
+    int32_t receiver_altitude_m_;
+    uint32_t horizon_m_[RangeMap::kNumBands];
 };

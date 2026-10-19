@@ -53,8 +53,9 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     void GetStatus(Status& status);
 
     /**
-     * Firmware the swarm account staged (SwarmManager), or nullptr for none. Installed instead of the recommendation,
-     * only while AUTO_UPDATE and AT+SWARM are on. A new target is checked within a minute. Kept in NVS.
+     * Firmware the swarm account staged (SwarmManager), or nullptr for none: called with every swarm answer. Installed
+     * instead of the recommendation, only while AUTO_UPDATE and AT+SWARM are on. RAM only: after a reboot the first
+     * check waits for the first swarm answer (AutoUpdater::SetTargetPending). A new target is checked within a minute.
      */
     void SetSwarmTarget(const char* tag);
 
@@ -90,7 +91,7 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     uint32_t next_run_timestamp_ms_ = 0;
     volatile bool low_memory_ = false;
     char swarm_target_[kVersionMaxLen + 16] = {0};
-    bool swarm_target_loaded_ = false;
+    volatile bool swarm_answered_ = false;  // A swarm answer since boot.
 
     HttpsClient http_;
 

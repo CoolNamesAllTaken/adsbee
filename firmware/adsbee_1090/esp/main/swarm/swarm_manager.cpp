@@ -70,8 +70,10 @@ void SwarmManager::Update() {
     // Aircraft-derived receiver positions move with the aircraft: no range map from them.
     const ObjectDictionary::RP2040DeviceStatus& rp2040 = object_dictionary.composite_device_status.rp2040;
     SettingsManager::RxPosition::PositionSource source = rp2040.rx_position.source;
-    bool range_valid = rp2040.rx_position_available && SettingsManager::RxPosition::MayBeTransmittedAsOwnPosition(source);
+    bool range_valid = SwarmReporter::UsablePosition(rp2040.rx_position_available, source,
+                                                     rp2040.rx_position.latitude_deg, rp2040.rx_position.longitude_deg);
     live_->record_range = range_valid;
+    if (range_valid) live_->SetReceiverAltitude(FeetToMeters(rp2040.rx_position.FilterAltitudeFt()));
 
     if (static_cast<int32_t>(now_ms - next_report_timestamp_ms_) < 0) return;
     if (auto_update_manager.Busy()) {
@@ -92,7 +94,7 @@ void SwarmManager::Update() {
 
     SwarmReporter::DeviceState state;
     state.auto_update = settings.auto_update_enabled;
-    state.rx_position_valid = rp2040.rx_position_available;
+    state.rx_position_valid = range_valid;
     state.latitude_deg = rp2040.rx_position.latitude_deg;
     state.longitude_deg = rp2040.rx_position.longitude_deg;
     state.altitude_m = FeetToMeters(rp2040.rx_position.FilterAltitudeFt());

@@ -21,7 +21,6 @@ const char AutoUpdateManager::kAPIBase[] = AUTO_UPDATE_API_BASE;
 
 static const char kNVSNamespace[] = "auto_update";
 static const char kNVSStateKey[] = "state";
-static const char kNVSSwarmTargetKey[] = "swarm_target";
 
 AutoUpdateManager auto_update_manager;
 
@@ -57,16 +56,6 @@ void AutoUpdateManager::Update() {
         }
         return;
     }
-    if (!swarm_target_loaded_) {
-        // Before the first check, so a reboot keeps the target until the next swarm report.
-        swarm_target_loaded_ = true;
-        nvs_handle_t handle;
-        if (nvs_open(kNVSNamespace, NVS_READONLY, &handle) == ESP_OK) {
-            size_t len = sizeof(swarm_target_);
-            if (nvs_get_str(handle, kNVSSwarmTargetKey, swarm_target_, &len) != ESP_OK) swarm_target_[0] = '\0';
-            nvs_close(handle);
-        }
-    }
     if (updater_ == nullptr) {
         char version[kVersionMaxLen + 1];
         RunningVersion(version, sizeof(version));
@@ -88,6 +77,16 @@ void AutoUpdateManager::Update() {
         CONSOLE_INFO("AutoUpdateManager::Update", "Automatic updates on, running %s.", version);
     }
     if (static_cast<int32_t>(now_ms - next_run_timestamp_ms_) < 0) return;
+    xSemaphoreTake(updater_mutex_, portMAX_DELAY);
+    updater_->SetTargetPending(settings_manager.settings.swarm_enabled && !swarm_answered_);
+    uint32_t target_wait_ms = updater_->TargetWaitMs();
+    xSemaphoreGive(updater_mutex_);
+    if (target_wait_ms > 0) {
+        // No task meanwhile: SetSwarmTarget() brings the check forward.
+        static constexpr uint32_t kTargetWaitStepMs = 30 * 1000;
+        next_run_timestamp_ms_ = now_ms + (target_wait_ms < kTargetWaitStepMs ? target_wait_ms : kTargetWaitStepMs);
+        return;
+    }
 
     // A check costs about 40 kB of internal RAM at its peak (task stack plus the TLS handshake). Without that much to
     // spare, WiFi and Ethernet allocations start failing, so wait for a better moment.
@@ -150,20 +149,13 @@ void AutoUpdateManager::GetStatus(Status& status) {
 void AutoUpdateManager::SetSwarmTarget(const char* tag) {
     if (tag == nullptr) tag = "";
     xSemaphoreTake(updater_mutex_, portMAX_DELAY);
-    swarm_target_loaded_ = true;  // Newer than what NVS holds.
-    bool changed = strncmp(swarm_target_, tag, sizeof(swarm_target_) - 1) != 0;
-    if (changed) {
-        strncpy(swarm_target_, tag, sizeof(swarm_target_) - 1);
-        swarm_target_[sizeof(swarm_target_) - 1] = '\0';
-    }
+    bool changed = strncmp(swarm_target_, tag, sizeof(swarm_target_) - 1) != 0 || !swarm_answered_;
+    strncpy(swarm_target_, tag, sizeof(swarm_target_) - 1);
+    swarm_target_[sizeof(swarm_target_) - 1] = '\0';
+    swarm_answered_ = true;
     xSemaphoreGive(updater_mutex_);
     if (!changed) return;
     CONSOLE_INFO("AutoUpdateManager::SetSwarmTarget", "Swarm firmware target: %s.", tag[0] ? tag : "none");
-    nvs_handle_t handle;
-    if (nvs_open(kNVSNamespace, NVS_READWRITE, &handle) == ESP_OK) {
-        if (nvs_set_str(handle, kNVSSwarmTargetKey, swarm_target_) == ESP_OK) nvs_commit(handle);
-        nvs_close(handle);
-    }
     static constexpr uint32_t kTargetCheckDelayMs = 30 * 1000;
     uint32_t soon_ms = NowMs() + kTargetCheckDelayMs;
     if (updater_ != nullptr && task_ == nullptr && static_cast<int32_t>(next_run_timestamp_ms_ - soon_ms) > 0) {

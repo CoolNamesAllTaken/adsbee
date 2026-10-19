@@ -24,9 +24,10 @@ A self-hosted server works the same: give its URL as `server`.
 ## What is sent
 
 * Unique ID, ESP32 MAC address, firmware versions, the Automatic Updates setting, uptime.
-* Receiver position and its source (`AT+RX_POSITION`).
+* Receiver position, only when its source is `FIXED` (not 0, 0) or `GNSS` with a fix.
 * Per period: valid Mode S, extended squitter and UAT messages, most and distinct aircraft.
-* Range: farthest aircraft per 10° sector and altitude band, in 2 km steps. Only with a `FIXED` or `GNSS` receiver position, and only for aircraft heard directly (no TIS-B or ADS-R) with 2 consistent position decodes.
+* Range: farthest aircraft per 10° sector and altitude band, in 2 km steps. Only with that position, and only for aircraft heard directly (no TIS-B or ADS-R) with 2 consistent position decodes.
+  Positions beyond the radio horizon of their altitude band are dropped and counted. If 10% or more of an hour's positions, from 5 or more aircraft, are dropped, that hour's range is withheld and the server shows "check position". This catches gross errors (a sign flip, a wrong country), not a position a few tens of km off.
 * OTA keys, to adsbee.aero only (to verify the unit is genuine).
 
 Needs WiFi station or Ethernet. The first report goes 2-5 minutes after power-up. A failed report is merged into the next one, so no period is lost.

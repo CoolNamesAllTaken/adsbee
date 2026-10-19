@@ -19,6 +19,8 @@ set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/
 target_link_libraries(host_test PRIVATE libgtest Threads::Threads)
 target_link_libraries(host_test_fpu PRIVATE libgtest Threads::Threads)
 target_compile_definitions(host_test_fpu PRIVATE HAS_FPU)
+target_compile_definitions(host_test PRIVATE SWARM_RECORDING)
+target_compile_definitions(host_test_fpu PRIVATE SWARM_RECORDING)
 # The second test binary also runs the geo math with the multiply the RP2040 (Cortex-M0+) uses.
 target_compile_definitions(host_test_fpu PRIVATE GEO_UTILS_SPLIT_MULTIPLY)
 target_compile_definitions(host_test PRIVATE SETTINGS_BLOBS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/settings_blobs")

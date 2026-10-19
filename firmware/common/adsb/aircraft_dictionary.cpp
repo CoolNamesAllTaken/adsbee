@@ -1591,7 +1591,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     }
 
     // Update aggregate statistics.
-    if (swarm_recorder_ != nullptr) {
+    if (kSwarmRecording && swarm_recorder_ != nullptr) {
         swarm_recorder_->NoteAircraftCount(metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
     }
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.

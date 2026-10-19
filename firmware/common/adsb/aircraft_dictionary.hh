@@ -1587,8 +1587,8 @@ class AircraftDictionary {
     template <typename T>
     void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before) {
         PositionSnapshot after = PositionSnapshot::Of(aircraft);
-        bool moved = after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg;
         if constexpr (kRecordsRange<T>) {
+            bool moved = after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg;
             if (!after.valid) {
                 aircraft.num_position_decodes = 0;
             } else if ((!before.valid || moved) && aircraft.num_position_decodes < 2) {
@@ -1598,14 +1598,21 @@ class AircraftDictionary {
         if (after.valid != before.valid || (after.valid && aircraft.distance_m == Aircraft::kDistanceUnknown)) {
             UpdateDistanceAndBearing(aircraft, after.valid);
             RecordRange(aircraft);
-        } else if (moved) {
+        } else if (after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg) {
             aircraft.distance_reference_epoch = kDistanceEpochStale;
         }
     }
 
-    // Mode S and UAT positions go into swarm range maps; Remote ID drones don't.
+    // Mode S and UAT positions go into swarm range maps; Remote ID drones don't. Only builds that report swarm
+    // metrics (the ESP32, host tests) define SWARM_RECORDING: elsewhere this compiles to nothing.
+#ifdef SWARM_RECORDING
+    static constexpr bool kSwarmRecording = true;
+#else
+    static constexpr bool kSwarmRecording = false;
+#endif
     template <typename T>
-    static constexpr bool kRecordsRange = std::is_same_v<T, ModeSAircraft> || std::is_same_v<T, UATAircraft>;
+    static constexpr bool kRecordsRange =
+        kSwarmRecording && (std::is_same_v<T, ModeSAircraft> || std::is_same_v<T, UATAircraft>);
 
     /**
      * Adds a freshly computed distance to the swarm range map, once the position is confirmed by a second decode (the
@@ -1627,7 +1634,7 @@ class AircraftDictionary {
             } else {
                 return;
             }
-            swarm_recorder_->RecordPosition(aircraft.distance_m, aircraft.bearing_bam16, altitude_ft);
+            swarm_recorder_->RecordPosition(aircraft.distance_m, aircraft.bearing_bam16, altitude_ft, aircraft.GetUID());
         }
     }
 

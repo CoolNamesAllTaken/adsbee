@@ -100,6 +100,7 @@ class AutoUpdater {
         uint8_t max_attempts = 3;
         uint32_t failure_retry_ms[2] = {15 * 60 * 1000, 60 * 60 * 1000};
         uint32_t token_lifetime_ms = 50 * 60 * 1000;  // The service issues 1 h tokens.
+        uint32_t target_wait_ms = 15 * 60 * 1000;     // Uptime until which a pending swarm target is waited for.
 
         uint32_t range_len_bytes = 4096;  // Per HTTP request. Also bounds the TLS record the ESP32 must buffer.
         // A download gives up after this long without receiving a byte.
@@ -143,6 +144,14 @@ class AutoUpdater {
      */
     void SetTarget(const char* version_or_tag);
     const char* target() const { return target_; }
+
+    /**
+     * True while a swarm server may still stage a target (AT+SWARM on, no answer yet since boot). The first check then
+     * waits up to Config::target_wait_ms of uptime, and falls back to the recommendation after that.
+     */
+    void SetTargetPending(bool pending) { target_pending_ = pending; }
+    // Milliseconds until a check may start because of SetTargetPending(), 0 if none.
+    uint32_t TargetWaitMs();
 
     State state() const { return state_; }
     // Version the state is about (the update target), or "".
@@ -213,4 +222,5 @@ class AutoUpdater {
     bool have_identity_ = false;
     AutoUpdatePlatform::Identity identity_;
     char target_[AutoUpdatePlatform::kVersionMaxLen + 1] = {0};
+    bool target_pending_ = false;
 };

@@ -236,11 +236,11 @@ TEST(SwarmReporter, ReportBodyFollowsProtocolV1) {
     SwarmRecorder live;
     AddSecond(live, 100, 200, 3, 4, 17);
     live.MarkAircraft(0xABCDEF);
-    live.RecordPosition(50000, DegToBam16(45.0f), 12000);
+    live.RecordPosition(50000, DegToBam16(45.0f), 12000, 1);
     platform.now_ms = 3700 * 1000;
     reporter.Restart(live, 100 * 1000);  // Period starts at uptime 100 s.
     AddSecond(live, 100, 200, 3, 4, 17);
-    live.RecordPosition(50000, DegToBam16(45.0f), 12000);
+    live.RecordPosition(50000, DegToBam16(45.0f), 12000, 1);
     reporter.TakePeriod(live, 3700 * 1000, FixedPosition());
     EXPECT_EQ(live.stats.modes_valid, 0u);  // The live period starts over.
 
@@ -276,27 +276,27 @@ TEST(SwarmReporter, ReportBodyFollowsProtocolV1) {
     EXPECT_FALSE(reporter.has_pending());
 }
 
-TEST(SwarmReporter, NoOTAKeysToOtherServersAndNoRangeWithoutAFixedPosition) {
+TEST(SwarmReporter, NoOTAKeysToOtherServersAndNoPositionFromAircraft) {
     FakeSwarmPlatform platform;
     SwarmReporter reporter(platform, "0.9.1-rc9");
     SwarmRecorder live;
-    live.RecordPosition(50000, 0, 0);
-    SwarmReporter::DeviceState state = FixedPosition();
-    state.rx_position_source = "lowest";
-    state.range_valid = false;
-    reporter.TakePeriod(live, 60000, state);
+    live.RecordPosition(50000, 0, 0, 1);
+    reporter.TakePeriod(live, 60000, FixedPosition());
     reporter.Send("http://192.168.1.10:8000", kToken);
     ASSERT_EQ(platform.bodies.size(), 1u);
     EXPECT_EQ(platform.urls[0], "http://192.168.1.10:8000/api/swarm/v1/report");
     EXPECT_EQ(platform.bodies[0].find("ota_keys"), std::string::npos);
-    EXPECT_EQ(platform.bodies[0].find("\"range\""), std::string::npos);
-    EXPECT_NE(platform.bodies[0].find("\"source\":\"lowest\""), std::string::npos);
+    EXPECT_NE(platform.bodies[0].find("\"range\":{"), std::string::npos);
 
-    // No receiver position at all: rx_position is null, stats still go.
+    // An aircraft-derived position (UsablePosition() false): no rx_position, no range, stats still go.
     reporter.TakePeriod(live, 120000, SwarmReporter::DeviceState());
     reporter.Send("http://192.168.1.10:8000", kToken);
-    EXPECT_NE(platform.bodies[1].find("\"rx_position\":null,\"stats\":{"), std::string::npos);
-    EXPECT_EQ(platform.bodies[1].find("\"range\""), std::string::npos);
+    const std::string& body = platform.bodies[1];
+    EXPECT_EQ(body.find("rx_position"), std::string::npos);
+    EXPECT_EQ(body.find("\"range\""), std::string::npos);
+    EXPECT_EQ(body.find("range_dropped"), std::string::npos);
+    EXPECT_NE(body.find("\"stats\":{"), std::string::npos);
+    EXPECT_NE(body.find(",\"range_withheld\":\"no_position\"}"), std::string::npos) << body;
 }
 
 TEST(SwarmReporter, FailedReportMergesWithSameSeqAndStart) {
@@ -305,7 +305,7 @@ TEST(SwarmReporter, FailedReportMergesWithSameSeqAndStart) {
     SwarmRecorder live;
     reporter.Restart(live, 200 * 1000);
     AddSecond(live, 10, 20, 0, 0, 5);
-    live.RecordPosition(10000, DegToBam16(5.0f), 500);   // bin 0: 5
+    live.RecordPosition(10000, DegToBam16(5.0f), 500, 1);   // bin 0: 5
     live.MarkAircraft(1);
     reporter.TakePeriod(live, 3800 * 1000, FixedPosition());
 
@@ -319,8 +319,8 @@ TEST(SwarmReporter, FailedReportMergesWithSameSeqAndStart) {
 
     // The next period merges into the pending report.
     AddSecond(live, 1, 2, 0, 0, 9);
-    live.RecordPosition(4000, DegToBam16(5.0f), 500);    // Smaller: bin 0 stays 5.
-    live.RecordPosition(30000, DegToBam16(15.0f), 500);  // bin 1: 15
+    live.RecordPosition(4000, DegToBam16(5.0f), 500, 1);    // Smaller: bin 0 stays 5.
+    live.RecordPosition(30000, DegToBam16(15.0f), 500, 1);  // bin 1: 15
     live.MarkAircraft(2);
     reporter.TakePeriod(live, 3860 * 1000, FixedPosition());
     platform.status = 503;
@@ -533,4 +533,166 @@ TEST(SwarmRecorder, OnlyDirectPositionsCountForRange) {
         UATAircraft uat(0xA00001 | (q << Aircraft::kAddressQualifierBitShift));
         EXPECT_EQ(AircraftDictionary::IsDirectPosition(uat), q == 0 || q == 1 || q == 4 || q == 5) << q;
     }
+}
+
+TEST(SwarmReporter, UsablePositionIsFixedOrGNSSAndReal) {
+    typedef SettingsManager::RxPosition P;
+    EXPECT_TRUE(SwarmReporter::UsablePosition(true, P::kPositionSourceFixed, 37.1f, -122.1f));
+    EXPECT_TRUE(SwarmReporter::UsablePosition(true, P::kPositionSourceGNSS, -33.9f, 151.2f));
+    EXPECT_TRUE(SwarmReporter::UsablePosition(true, P::kPositionSourceFixed, 0.0f, 10.0f));
+    EXPECT_FALSE(SwarmReporter::UsablePosition(false, P::kPositionSourceGNSS, 37.1f, -122.1f));  // No fix.
+    EXPECT_FALSE(SwarmReporter::UsablePosition(true, P::kPositionSourceLowestAircraft, 37.1f, -122.1f));
+    EXPECT_FALSE(SwarmReporter::UsablePosition(true, P::kPositionSourceAircraftMatchingICAO, 37.1f, -122.1f));
+    EXPECT_FALSE(SwarmReporter::UsablePosition(true, P::kPositionSourceNone, 37.1f, -122.1f));
+    EXPECT_FALSE(SwarmReporter::UsablePosition(true, P::kPositionSourceFixed, 0.0f, 0.0f));
+    EXPECT_FALSE(SwarmReporter::UsablePosition(true, P::kPositionSourceFixed, 91.0f, 0.0f));
+    EXPECT_FALSE(SwarmReporter::UsablePosition(true, P::kPositionSourceFixed, 10.0f, -181.0f));
+    EXPECT_FALSE(SwarmReporter::UsablePosition(true, P::kPositionSourceFixed, NAN, 1.0f));
+}
+
+namespace {
+
+// Horizon limit in km for a receiver at rx_m and a band top at top_ft, as the protocol defines it.
+double HorizonKm(double rx_m, double top_ft) {
+    return 1.15 * 4.12 * (sqrt(rx_m > 0 ? rx_m : 0) + sqrt(top_ft * 0.3048)) + 20;
+}
+
+// Great circle distance in meters and initial bearing in 1/65536 turns.
+void DistanceAndBearing(double lat1, double lon1, double lat2, double lon2, uint32_t& distance_m, uint16_t& bam) {
+    const double r = M_PI / 180;
+    double dlat = (lat2 - lat1) * r, dlon = (lon2 - lon1) * r;
+    double a = sin(dlat / 2) * sin(dlat / 2) + cos(lat1 * r) * cos(lat2 * r) * sin(dlon / 2) * sin(dlon / 2);
+    distance_m = static_cast<uint32_t>(6371000 * 2 * atan2(sqrt(a), sqrt(1 - a)));
+    double y = sin(dlon) * cos(lat2 * r), x = cos(lat1 * r) * sin(lat2 * r) - sin(lat1 * r) * cos(lat2 * r) * cos(dlon);
+    double deg = fmod(atan2(y, x) / r + 360, 360);
+    bam = static_cast<uint16_t>(deg / 360 * 65536);
+}
+
+// One hour of traffic around a receiver: mostly en route above 20,000 ft, a third low near airports. Positions are
+// within the radio horizon of the real receiver. Feeds the distances as seen from `rx`.
+void FeedTraffic(SwarmRecorder& recorder, double rx_lat, double rx_lon) {
+    const double true_lat = 37.0, true_lon = -122.0;
+    uint32_t seed = 12345;
+    auto rnd = [&]() { return (seed = seed * 1103515245u + 12345u) / 4294967296.0; };
+    for (uint32_t aircraft = 0; aircraft < 300; aircraft++) {
+        bool low = aircraft % 3 == 0;
+        int32_t alt_ft = low ? 500 + static_cast<int32_t>(rnd() * 5500) : 20000 + static_cast<int32_t>(rnd() * 19000);
+        double top_ft = SwarmRecorder::kBandTopFt[RangeMap::AltitudeBand(alt_ft)];
+        double max_km = low ? 60 : 300;  // Traffic density, not the horizon.
+        double range_km = rnd() * (max_km < HorizonKm(30, top_ft) - 20 ? max_km : HorizonKm(30, top_ft) - 20);
+        double brg = rnd() * 2 * M_PI;
+        double lat = true_lat + range_km / 111.2 * cos(brg);
+        double lon = true_lon + range_km / (111.2 * cos(true_lat * M_PI / 180)) * sin(brg);
+        for (int sample = 0; sample < 20; sample++) {
+            uint32_t distance_m;
+            uint16_t bam;
+            DistanceAndBearing(rx_lat, rx_lon, lat, lon, distance_m, bam);
+            recorder.RecordPosition(distance_m, bam, alt_ft, 0xA00000 + aircraft);
+        }
+    }
+}
+
+}  // namespace
+
+TEST(SwarmRecorder, HorizonLimitPerBand) {
+    for (int32_t rx_m : {-50, 0, 30, 100, 1000}) {
+        SwarmRecorder recorder;
+        recorder.SetReceiverAltitude(rx_m);
+        for (uint8_t band = 0; band < RangeMap::kNumBands; band++) {
+            uint32_t limit_m = static_cast<uint32_t>(HorizonKm(rx_m, SwarmRecorder::kBandTopFt[band]) * 1000);
+            int32_t alt_ft = band == 0 ? 0 : SwarmRecorder::kBandTopFt[band - 1];  // Bottom of the band.
+            recorder.Clear();
+            recorder.RecordPosition(limit_m - 100, 0, alt_ft, 1);
+            recorder.RecordPosition(limit_m + 100, 0, alt_ft, 2);
+            EXPECT_EQ(recorder.guard.num_positions, 2u) << rx_m << " m, band " << int(band);
+            EXPECT_EQ(recorder.guard.num_dropped, 1u) << rx_m << " m, band " << int(band);
+            EXPECT_EQ(recorder.range.bins[band * 36], RangeMap::DistanceValue(limit_m - 100));
+        }
+    }
+    // 30 m antenna, 0-1k ft band: 1.15 * 4.12 * (5.48 + 17.46) + 20 = 128.7 km.
+    SwarmRecorder recorder;
+    recorder.SetReceiverAltitude(30);
+    recorder.RecordPosition(128000, 0, 500, 1);
+    recorder.RecordPosition(129500, 0, 500, 2);
+    EXPECT_EQ(recorder.guard.num_dropped, 1u);
+}
+
+// The horizon guard catches gross position errors. A position 100 km off still sees most traffic inside each band's
+// horizon (129 km below 1,000 ft, 163 km below 2,000 ft, ...), so it is kept; 300 km off is withheld.
+TEST(SwarmRecorder, GrossPositionErrorWithholdsTheMap) {
+    SwarmRecorder right;
+    right.SetReceiverAltitude(30);
+    FeedTraffic(right, 37.0, -122.0);
+    EXPECT_EQ(right.guard.num_positions, 6000u);
+    EXPECT_EQ(right.guard.num_dropped, 0u);
+    EXPECT_FALSE(right.RangeImplausible());
+
+    SwarmRecorder off_100_km;  // 0.9 degrees north.
+    off_100_km.SetReceiverAltitude(30);
+    FeedTraffic(off_100_km, 37.9, -122.0);
+    EXPECT_LT(off_100_km.guard.num_dropped * 10, off_100_km.guard.num_positions);
+    EXPECT_FALSE(off_100_km.RangeImplausible());
+
+    SwarmRecorder off_300_km;  // 2.7 degrees north.
+    off_300_km.SetReceiverAltitude(30);
+    FeedTraffic(off_300_km, 39.7, -122.0);
+    EXPECT_GE(off_300_km.guard.num_dropped * 10, off_300_km.guard.num_positions) << off_300_km.guard.num_dropped;
+    EXPECT_EQ(off_300_km.guard.num_dropped_aircraft, SwarmRecorder::kWithholdDroppedAircraft);
+    EXPECT_TRUE(off_300_km.RangeImplausible());
+}
+
+TEST(SwarmRecorder, WithholdNeedsTenPercentFromFiveAircraft) {
+    SwarmRecorder recorder;
+    recorder.SetReceiverAltitude(0);
+    auto feed = [&](int good, int bad, int bad_aircraft) {
+        recorder.Clear();
+        for (int i = 0; i < good; i++) recorder.RecordPosition(10000, 0, 30000, 100 + i % 7);
+        for (int i = 0; i < bad; i++) recorder.RecordPosition(400000, 0, 500, 1 + i % bad_aircraft);
+    };
+    feed(90, 10, 5);  // 10 %, 5 aircraft.
+    EXPECT_TRUE(recorder.RangeImplausible());
+    feed(91, 9, 5);  // 9 %.
+    EXPECT_FALSE(recorder.RangeImplausible());
+    feed(10, 90, 4);  // One aircraft short.
+    EXPECT_FALSE(recorder.RangeImplausible());
+    feed(10, 0, 1);
+    EXPECT_FALSE(recorder.RangeImplausible());
+    feed(0, 0, 1);
+    EXPECT_FALSE(recorder.RangeImplausible());
+
+    // A merged retry sums the counts and joins the aircraft.
+    SwarmRecorder a, b;
+    a.SetReceiverAltitude(0);
+    b.SetReceiverAltitude(0);
+    for (int i = 0; i < 3; i++) a.RecordPosition(400000, 0, 500, 1 + i);
+    for (int i = 0; i < 3; i++) b.RecordPosition(400000, 0, 500, 3 + i);  // Aircraft 3 in both.
+    for (int i = 0; i < 20; i++) b.RecordPosition(1000, 0, 500, 9);
+    a.Merge(b);
+    EXPECT_EQ(a.guard.num_positions, 26u);
+    EXPECT_EQ(a.guard.num_dropped, 6u);
+    EXPECT_EQ(a.guard.num_dropped_aircraft, 5);
+    EXPECT_TRUE(a.RangeImplausible());
+}
+
+TEST(SwarmReporter, WithheldMapSaysWhyAndCountsDrops) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
+    live.SetReceiverAltitude(30);
+    for (int i = 0; i < 50; i++) live.RecordPosition(20000, 0, 30000, 100);
+    for (int i = 0; i < 10; i++) live.RecordPosition(300000, 0, 500, 1 + i);
+    reporter.TakePeriod(live, 60000, FixedPosition());
+    reporter.Send("https://adsbee.aero", kToken);
+    const std::string& body = platform.bodies[0];
+    EXPECT_NE(body.find("\"rx_position\":{"), std::string::npos);
+    EXPECT_NE(body.find(",\"range_withheld\":\"implausible\",\"range_dropped\":10}"), std::string::npos) << body;
+    EXPECT_EQ(body.find("\"range\""), std::string::npos);
+
+    // A clean period: the map, with its drop count.
+    for (int i = 0; i < 50; i++) live.RecordPosition(20000, 0, 30000, 100);
+    live.RecordPosition(300000, 0, 500, 1);
+    reporter.TakePeriod(live, 120000, FixedPosition());
+    reporter.Send("https://adsbee.aero", kToken);
+    EXPECT_NE(platform.bodies[1].find(",\"range_dropped\":1,\"range\":{"), std::string::npos) << platform.bodies[1];
+    EXPECT_EQ(platform.bodies[1].find("range_withheld"), std::string::npos);
 }

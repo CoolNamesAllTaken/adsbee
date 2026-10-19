@@ -205,8 +205,6 @@ size_t SwarmReporter::BuildBody(char* buf, size_t buf_size, const AutoUpdatePlat
                  state_.longitude_deg, (long)state_.altitude_m);
         w.Safe(state_.rx_position_source);
         w.Printf("\"},");
-    } else {
-        w.Printf("\"rx_position\":null,");
     }
     const SwarmRecorder::Stats& stats = pending_.stats;
     w.Printf(
@@ -214,7 +212,13 @@ size_t SwarmReporter::BuildBody(char* buf, size_t buf_size, const AutoUpdatePlat
         "\"aircraft_unique\":%u}",
         (unsigned long)stats.modes_valid, (unsigned long)stats.es_valid, (unsigned long)stats.uat_adsb,
         (unsigned long)stats.uat_uplink, (unsigned)stats.aircraft_max, (unsigned)pending_.UniqueAircraft());
-    if (state_.rx_position_valid && state_.range_valid) {
+    // Range only from a fixed or GNSS position that every merged period had, and not when too much was dropped.
+    if (!state_.rx_position_valid || !state_.range_valid) {
+        w.Printf(",\"range_withheld\":\"no_position\"");
+    } else if (pending_.RangeImplausible()) {
+        w.Printf(",\"range_withheld\":\"implausible\",\"range_dropped\":%lu", (unsigned long)pending_.guard.num_dropped);
+    } else {
+        w.Printf(",\"range_dropped\":%lu", (unsigned long)pending_.guard.num_dropped);
         uint8_t bitmap[RangeMap::kBitmapLenBytes];
         uint8_t values[RangeMap::kNumBins];
         uint16_t num_values = pending_.range.Encode(bitmap, values);

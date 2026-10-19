@@ -610,7 +610,13 @@ const char* AutoUpdater::Install(const Offer& offer) {
     return reason;
 }
 
+uint32_t AutoUpdater::TargetWaitMs() {
+    uint32_t now_ms = platform_.NowMs();
+    return target_pending_ && now_ms < config_.target_wait_ms ? config_.target_wait_ms - now_ms : 0;
+}
+
 uint32_t AutoUpdater::RunOnce() {
+    if (uint32_t wait_ms = TargetWaitMs()) return wait_ms;
     if (!platform_.Online()) return config_.offline_retry_ms;
 
     uint32_t now_ms = platform_.NowMs();

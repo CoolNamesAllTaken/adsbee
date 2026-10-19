@@ -682,3 +682,50 @@ TEST(AutoUpdater, SwarmTargetNotListedInstallsNothing) {
     EXPECT_THROW(updater.RunOnce(), FakePlatform::Reboot);
     EXPECT_STREQ(f.p.stored.pending, "0.9.1-rc9");
 }
+
+TEST(AutoUpdater, WaitsForTheSwarmTargetOnlyWhileSwarmIsOn) {
+    // AT+SWARM off: the first check happens at once, as before.
+    {
+        Fixture f;
+        f.p.now_ms = 3 * 60 * 1000;
+        f.p.recommended = "0.9.1-rc9";
+        f.p.reboot_on_boot = true;
+        AutoUpdater updater(f.p, "0.9.1-rc8");
+        updater.SetTargetPending(false);
+        EXPECT_EQ(updater.TargetWaitMs(), 0u);
+        EXPECT_THROW(updater.RunOnce(), FakePlatform::Reboot);
+        EXPECT_STREQ(f.p.stored.pending, "0.9.1-rc9");
+    }
+    // AT+SWARM on, the server stages a target in time: that target, never the recommendation.
+    {
+        Fixture f;
+        f.p.now_ms = 3 * 60 * 1000;
+        f.p.recommended = "0.9.1-rc7";
+        f.p.recommendation = "0.9.1-rc9";
+        f.p.reboot_on_boot = true;
+        AutoUpdater updater(f.p, "0.9.1-rc8");
+        updater.SetTargetPending(true);
+        EXPECT_EQ(updater.RunOnce(), 12 * 60 * 1000u);
+        EXPECT_TRUE(f.p.requests.empty());
+        updater.SetTarget("0.9.1-rc7");
+        updater.SetTargetPending(false);
+        EXPECT_THROW(updater.RunOnce(), FakePlatform::Reboot);
+        EXPECT_STREQ(f.p.stored.pending, "0.9.1-rc7");
+    }
+    // AT+SWARM on, no answer: after 15 min of uptime the recommendation, as without swarm.
+    {
+        Fixture f;
+        f.p.now_ms = 3 * 60 * 1000;
+        f.p.recommended = "0.9.1-rc9";
+        f.p.reboot_on_boot = true;
+        AutoUpdater updater(f.p, "0.9.1-rc8");
+        updater.SetTargetPending(true);
+        uint32_t wait_ms = updater.RunOnce();
+        EXPECT_EQ(wait_ms, 12 * 60 * 1000u);
+        EXPECT_TRUE(f.p.requests.empty());
+        f.p.now_ms += wait_ms;
+        EXPECT_EQ(updater.TargetWaitMs(), 0u);
+        EXPECT_THROW(updater.RunOnce(), FakePlatform::Reboot);
+        EXPECT_STREQ(f.p.stored.pending, "0.9.1-rc9");
+    }
+}

@@ -5,6 +5,7 @@
 
 #include "auto_updater.hh"  // AutoUpdatePlatform: HTTP types and device identity.
 #include "range_map.hh"
+#include "settings.hh"
 
 /**
  * What SwarmReporter needs from the device. The ESP32 implements it in esp/main/swarm; host tests use fakes.
@@ -49,7 +50,7 @@ class SwarmReporter {
         float longitude_deg = 0;
         int32_t altitude_m = 0;
         const char* rx_position_source = "";
-        bool range_valid = false;  // The receiver position is fixed or from GNSS, so the range map means something.
+        bool range_valid = false;  // UsablePosition() held all period, so the range map means something.
     };
 
     struct Status {
@@ -94,6 +95,19 @@ class SwarmReporter {
     uint32_t seq() const { return seq_; }
     const Status& status() const { return status_; }
     const SwarmRecorder& pending() const { return pending_; }
+
+    /**
+     * Whether a receiver position may go into reports: FIXED or GNSS (positions of received aircraft move with them),
+     * and a real coordinate (FIXED at 0, 0 means none was entered).
+     */
+    static bool UsablePosition(bool available, SettingsManager::RxPosition::PositionSource source, float latitude_deg,
+                               float longitude_deg) {
+        if (!available || !SettingsManager::RxPosition::MayBeTransmittedAsOwnPosition(source)) return false;
+        if (!(latitude_deg >= -90.0f && latitude_deg <= 90.0f && longitude_deg >= -180.0f && longitude_deg <= 180.0f)) {
+            return false;  // Also NaN.
+        }
+        return !(latitude_deg == 0.0f && longitude_deg == 0.0f);
+    }
 
     // True for https://adsbee.aero (any path): the only server that gets the OTA keys.
     static bool IsDefaultServer(const char* server);
