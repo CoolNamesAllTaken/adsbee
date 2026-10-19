@@ -409,6 +409,14 @@ TEST(SwarmReporter, ErrorAnswers) {
     EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), 600 * 1000u);
     EXPECT_TRUE(reporter.has_pending());
 
+    // 503 (keys can't be checked right now): Retry-After too, the report stays pending.
+    platform.status = 503;
+    platform.retry_after_s = 900;
+    EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), 900 * 1000u);
+    EXPECT_TRUE(reporter.has_pending());
+    EXPECT_FALSE(reporter.status().stopped);
+    platform.retry_after_s = 0;
+
     // 401: the report waits a period, still pending.
     platform.status = 401;
     EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), (3600u - 60) * 1000);

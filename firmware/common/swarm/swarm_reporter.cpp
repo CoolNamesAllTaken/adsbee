@@ -321,7 +321,8 @@ uint32_t SwarmReporter::Send(const char* server, const char* token) {
             break;
         default:
             if (num_failures_ < 255) num_failures_++;
-            next_ms = RetryMs(result == kRateLimited ? http.retry_after_s : 0);
+            // 429, and 5xx such as 503 while the server can't check keys: Retry-After when given, never a stop.
+            next_ms = RetryMs(result == kRateLimited || result == kServerError ? http.retry_after_s : 0);
             break;
     }
     delete reader;
