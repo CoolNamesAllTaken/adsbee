@@ -113,6 +113,7 @@ if (ON_EMBEDDED_DEVICE)
         mode_s_soft_demod.cc
         settings.cc
         tl_learner.cc
+        tl_tracker.cc
     )
 
     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})

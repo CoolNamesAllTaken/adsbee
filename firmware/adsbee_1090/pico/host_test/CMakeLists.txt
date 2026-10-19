@@ -91,6 +91,8 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_r1090_rssi.cc
         test_tl_learner.cc
         ${CMAKE_SOURCE_DIR}/application/tl_learner.cc
+        test_tl_tracker.cc
+        ${CMAKE_SOURCE_DIR}/application/tl_tracker.cc
     )
 
     target_include_directories(${_test_tgt} PRIVATE

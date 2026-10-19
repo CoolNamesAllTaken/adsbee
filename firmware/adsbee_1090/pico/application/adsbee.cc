@@ -729,6 +729,7 @@ bool ADSBee::SetTLOffsetMilliVolts(int tl_offset_mv) {
         return false;
     }
     tl_offset_mv_ = tl_offset_mv;
+    tl_auto_ = false;
     if (tl_learner_.IsActive()) {
         tl_learner_.Stop();
         CONSOLE_INFO("ADSBee::SetTLOffsetMilliVolts", "Trigger level learning stopped.");
@@ -737,8 +738,16 @@ bool ADSBee::SetTLOffsetMilliVolts(int tl_offset_mv) {
     return true;
 }
 
+void ADSBee::StartTLAuto() {
+    tl_learner_.Stop();
+    tl_offset_mv_ = tl_tracker_started_ ? tl_tracker_.Resume() : tl_tracker_.Start(tl_offset_mv_, {});
+    tl_tracker_started_ = true;
+    tl_auto_ = true;
+}
+
 void ADSBee::StartTLLearning(uint16_t tl_learning_num_cycles, uint16_t tl_learning_start_temperature_mv,
                              int tl_min_mv, int tl_max_mv) {
+    tl_auto_ = false;
     tl_offset_mv_ = tl_learner_.Start(tl_offset_mv_, {.num_cycles = tl_learning_num_cycles,
                                                       .start_temperature_mv = tl_learning_start_temperature_mv,
                                                       .min_offset_mv = MAX(tl_min_mv, kTLOffsetMinMV),
@@ -1095,6 +1104,10 @@ void ADSBee::SampleComparator() {
 }
 
 void ADSBee::UpdateTLLearning(uint32_t valid_frames) {
+    if (tl_auto_) {
+        tl_offset_mv_ = tl_tracker_.Update(valid_frames);
+        return;
+    }
     if (!tl_learner_.IsActive()) return;
     tl_offset_mv_ = tl_learner_.Update(valid_frames, get_rand_32(), get_rand_32());
     if (!tl_learner_.IsActive()) {

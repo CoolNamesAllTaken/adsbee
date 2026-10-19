@@ -2101,7 +2101,11 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
             // AT+TL_SET value query.
             int tl_mv = adsbee.GetTLOffsetMilliVolts();
             const TLLearner &learner = adsbee.GetTLLearner();
-            if (learner.IsActive()) {
+            if (adsbee.IsTLAuto()) {
+                // Offset in use this second (it probes around the tracked one), then the tracked offset.
+                CPP_AT_CMD_PRINTF("=%dmV (%d dBm),AUTO,%dmV\r\n", tl_mv, adsbee.AD8313MilliVoltsTodBm(tl_mv),
+                                  adsbee.GetTLTracker().GetOffsetMV());
+            } else if (learner.IsActive()) {
                 // Offset being tried, then learning progress and the best offset so far.
                 CPP_AT_CMD_PRINTF("=%dmV (%d dBm),LEARNING,%u/%u,%dmV\r\n", tl_mv, adsbee.AD8313MilliVoltsTodBm(tl_mv),
                                   learner.GetCycle(), learner.GetNumCycles(), learner.GetAcceptedOffsetMV());
@@ -2117,6 +2121,8 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
                 if (args[0].compare("LEARN") == 0) {
                     // Starting a new trigger level learning session.
                     adsbee.StartTLLearning();
+                } else if (args[0].compare("AUTO") == 0) {
+                    adsbee.StartTLAuto();
                 } else {
                     // Assigning trigger level manually.
                     uint16_t new_tl_offset_mv;

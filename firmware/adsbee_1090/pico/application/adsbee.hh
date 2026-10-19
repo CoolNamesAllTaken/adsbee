@@ -19,6 +19,7 @@
 #include "spi_coprocessor.hh"
 #include "stdint.h"
 #include "tl_learner.hh"
+#include "tl_tracker.hh"
 
 class ADSBee {
    public:
@@ -253,6 +254,14 @@ class ADSBee {
      * Trigger level learning state, for AT+TL_OFFSET? while learning.
      */
     const TLLearner &GetTLLearner() const { return tl_learner_; }
+
+    /**
+     * Keep the trigger level offset tuned in the background (TLTracker). Resumes from the tracked offset if tracking
+     * ran before. Setting an offset or starting learning stops it.
+     */
+    void StartTLAuto();
+    bool IsTLAuto() const { return tl_auto_; }
+    const TLTracker &GetTLTracker() const { return tl_tracker_; }
 
     /**
      * Comparator samples taken between demodulations since boot, and how many were high (the detector above the
@@ -580,6 +589,9 @@ class ADSBee {
     uint16_t tl_adc_counts_ = 0;
 
     TLLearner tl_learner_;
+    TLTracker tl_tracker_;
+    bool tl_auto_ = false;
+    bool tl_tracker_started_ = false;
     uint32_t comparator_samples_ = 0;
     uint32_t comparator_high_samples_ = 0;
 
