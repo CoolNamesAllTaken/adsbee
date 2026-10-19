@@ -15,11 +15,11 @@ function load(feed) {
     const sent = [];
     const get = (id) => (els[id] ||= {
         id, value: '', checked: false, style: {}, dataset: {}, textContent: '', innerHTML: '', className: '',
-        children: [], appendChild(child) { this.children.push(child); },
+        children: [], appendChild(child) { this.children.push(child); }, replaceChildren() {},
     });
     const ctx = vm.createContext({
         HOST_URI: 'adsbee.local',
-        document: { getElementById: get, createElement: () => ({ style: {} }) },
+        document: { getElementById: get, createElement: () => ({ style: {}, classList: { add() {}, remove() {} }, appendChild() {}, replaceChildren() {} }) },
         fetch: async () => ({ ok: true, json: async () => feed }),
         setTimeout: () => {},
         clearTimeout: () => {},
@@ -27,7 +27,8 @@ function load(feed) {
     });
     vm.runInContext(`${ADSBEE_SRC}\nthis.FeedEditor = FeedEditor; this.feedLabel = feedLabel;
         this.ConsoleWebSocket = ConsoleWebSocket; this.MetricsWebSocket = MetricsWebSocket;`, ctx);
-    ctx.consoleWebSocket = { sendAndCapture: async (cmd) => { sent.push(cmd.trim()); } };
+    // The editor's receiver ID query (feed_receiver_id.test.js) is left out of `sent`.
+    ctx.consoleWebSocket = { sendAndCapture: async (cmd) => { if (!cmd.startsWith('AT+FEED_RECEIVER_ID?')) sent.push(cmd.trim()); } };
     vm.runInContext('consoleWebSocket = this.consoleWebSocket;', ctx);
     // Fake <select>s take their value from the selected option written into innerHTML.
     for (const id of ['feed-protocol', 'feed-transport']) {

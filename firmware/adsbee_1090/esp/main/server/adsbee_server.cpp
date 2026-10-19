@@ -1019,8 +1019,19 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              ", \"sntp\": { \"enabled\": %s, \"server\": \"%s\", \"synced\": %s, \"last_sync_age_s\": %lu }",
              sntp.enabled ? "true" : "false", sntp.server, sntp.synced ? "true" : "false",
              static_cast<unsigned long>(sntp.last_sync_age_s));
+    // Receiver ID of each feed, for the feed cards.
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
-             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             " }, \"feed_receiver_id\": [");
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        char receiver_id[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
+        SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[i], receiver_id);
+        snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+                 kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "%s\"%s\"",
+                 i ? "," : "", receiver_id);
+    }
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "]}\n");
 
     BroadcastNetworkMetrics(metrics_message);
 }
