@@ -54,3 +54,13 @@ def test_simulated_reports_parse_and_look_like_a_receiver():
     high = max(m for i, m in report.ranges.items() if i >= 11 * 36)
     low = max((m for i, m in report.ranges.items() if i < 36), default=0)
     assert high > low and high <= 400_000
+
+
+@pytest.mark.django_db(transaction=True)
+def test_simulate_runs_outside_a_test_transaction():
+    """The command takes row locks; on Postgres they need its own transaction, not the test's."""
+    services.create_account('hal', password='pw')
+    call_command('swarm_simulate', 'hal', '--bees', '1', '--hours', '2', stdout=StringIO())
+    from adsbee_swarm.models import Sample
+
+    assert Sample.objects.count() >= 1

@@ -32,5 +32,5 @@ class Command(BaseCommand):
                 device.label = bee.label
                 device.save(update_fields=['label'])
             for hour in range(hours, 0, -1):
-                protocol.ingest(device, protocol.parse(bee.report(rng=rng)), now - timedelta(hours=hour - 1))
+                protocol.store(device, protocol.parse(bee.report(rng=rng)), now - timedelta(hours=hour - 1))
             self.stdout.write(f'{bee.label}: {bee.unique_id} {hours} h')
