@@ -2088,15 +2088,24 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
  * AT+TL_OFFSET Callback
  * AT+TL_OFFSET=<tl_offset_mv>
  *  tl_offset_mv = Trigger Level Offset, in milliVolts.
+ * AT+TL_OFFSET=LEARN
+ *  Learn the offset from the number of valid frames received (about 20 minutes). Setting an offset stops learning.
  * AT+TL_OFFSET?
- * +TL_OFFSET=
+ * +TL_OFFSET=<tl_offset_mv>mV (<dBm> dBm)[,LEARNING,<cycle>/<num_cycles>,<best_offset_mv>mV]
  */
 CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     switch (op) {
         case '?': {
             // AT+TL_SET value query.
             int tl_mv = adsbee.GetTLOffsetMilliVolts();
-            CPP_AT_CMD_PRINTF("=%dmV (%d dBm)\r\n", tl_mv, adsbee.AD8313MilliVoltsTodBm(tl_mv));
+            const TLLearner &learner = adsbee.GetTLLearner();
+            if (learner.IsActive()) {
+                // Offset being tried, then learning progress and the best offset so far.
+                CPP_AT_CMD_PRINTF("=%dmV (%d dBm),LEARNING,%u/%u,%dmV\r\n", tl_mv, adsbee.AD8313MilliVoltsTodBm(tl_mv),
+                                  learner.GetCycle(), learner.GetNumCycles(), learner.GetAcceptedOffsetMV());
+            } else {
+                CPP_AT_CMD_PRINTF("=%dmV (%d dBm)\r\n", tl_mv, adsbee.AD8313MilliVoltsTodBm(tl_mv));
+            }
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -2640,7 +2649,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .min_args = 0,
      .max_args = 1,
      .help_string = "Set minimum trigger level offset (trigger level distance above noise floor) for RF power "
-                    "detector.\r\n\tAT+TL_OFFSET=<tl_offset_mv>"
+                    "detector.\r\n\tAT+TL_OFFSET=<tl_offset_mv>\r\n"
+                    "\tLearn it from received traffic (about 20 minutes).\r\n\tAT+TL_OFFSET=LEARN\r\n"
                     "\tQuery trigger level offset.\r\n\tAT+TL_OFFSET?\r\n\t+TL_OFFSET=<tl_offset_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
     {.command = "UPTIME",

@@ -18,6 +18,7 @@
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "stdint.h"
+#include "tl_learner.hh"
 
 class ADSBee {
    public:
@@ -34,10 +35,8 @@ class ADSBee {
     static constexpr int kTLOffsetMinMV = 0;          // [mV]
     static constexpr uint32_t kStatusLEDOnMs = 1;
 
-    static constexpr uint32_t kTLLearningIntervalMs =
-        10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
     static constexpr uint16_t kTLLearningNumCycles =
-        100;  // Number of simulated annealing cycles for learning trigger level.
+        60;  // Number of simulated annealing cycles for learning trigger level (20 s each, see TLLearner).
     static constexpr uint16_t kTLLearningStartTemperatureMV =
         1000;  // [mV] Starting value for simulated annealing temperature when learning triger level. This corresponds
                // to the maximum value that the trigger level could be moved (up or down) when exploring a neighbor
@@ -248,7 +247,12 @@ class ADSBee {
      * learning has completed.
      * @retval Current temperature used for simulated annealing, in milliVolts.
      */
-    uint16_t GetTLLearningTemperatureMV();
+    uint16_t GetTLLearningTemperatureMV() { return tl_learner_.GetTemperatureMV(); }
+
+    /**
+     * Trigger level learning state, for AT+TL_OFFSET? while learning.
+     */
+    const TLLearner &GetTLLearner() const { return tl_learner_; }
 
     /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
@@ -422,7 +426,7 @@ class ADSBee {
     }
 
     /**
-     * Set the Minimum Trigger Level (TL) offset at the AD8313 output in milliVolts.
+     * Set the Minimum Trigger Level (TL) offset at the AD8313 output in milliVolts. Stops trigger level learning.
      * @param[in] tl_offset_mv Trigger level offset from the noise floor in milliVolts. Must be positive. Use a larger
      * value to decrease receiver sensitivity.
      * @retval True if succeeded, False if TL value was out of range.
@@ -452,7 +456,7 @@ class ADSBee {
 
     /**
      * Start learning the trigger level through Simulated Annealing. Will begin kTLLearningNumCycles annealing cycles
-     * with an annealing interval of kTLLearningIntervalMs milliseconds. Can be provided with maximum and minimum
+     * (about 20 minutes in all). Can be provided with maximum and minimum
      * trigger level bounds to allow a narrower search.
      * @param[in] tl_learning_num_cycles Number of cycles to use while annealing trigger level (sets the amount that the
      * annealing temperature is decreased each cycle). Optional, defaults to kTLLearningNumCycles.
@@ -464,7 +468,7 @@ class ADSBee {
      */
     void StartTLLearning(uint16_t tl_learning_num_cycles = kTLLearningNumCycles,
                          uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
-                         uint16_t tl_min_mv = kTLOffsetMinMV, uint16_t tl_max_mv = kTLOffsetMaxMV);
+                         int tl_min_mv = kTLOffsetMinMV, int tl_max_mv = kTLOffsetMaxMV);
 
     // Raw packet intake queues.
     PFBQueue<RawModeSPacket> raw_mode_s_packet_queue = PFBQueue<RawModeSPacket>(
@@ -492,7 +496,7 @@ class ADSBee {
     void Update1090LED();
     void UpdateNoiseFloor();
     void UpdateRxPosition();
-    void UpdateTLLearning();
+    void UpdateTLLearning(uint32_t valid_frames);
 
     ADSBeeConfig config_;
 
@@ -567,14 +571,7 @@ class ADSBee {
 
     uint16_t tl_adc_counts_ = 0;
 
-    uint32_t tl_learning_cycle_start_timestamp_ms_ = 0;
-    uint16_t tl_learning_temperature_mv_ = 0;  // Don't learn automatically.
-    int16_t tl_learning_temperature_step_mv_ = 0;
-    uint16_t tl_learning_max_offset_mv_ = kTLOffsetMaxMV;
-    uint16_t tl_learning_min_offset_mv_ = kTLOffsetMinMV;
-    int16_t tl_learning_num_valid_packets_ = 0;
-    int16_t tl_learning_prev_num_valid_packets_ = 1;  // Set to 1 to avoid dividing by 0.
-    uint16_t tl_learning_prev_tl_offset_mv_ = tl_offset_mv_;
+    TLLearner tl_learner_;
 
     volatile uint64_t mlat_counter_wraps_ = 0;  // Written by the SysTick wrap handler.
 

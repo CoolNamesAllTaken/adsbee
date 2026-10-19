@@ -89,6 +89,8 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_mode_s_soft_demod.cc
         ${CMAKE_SOURCE_DIR}/application/mode_s_soft_demod.cc
         test_r1090_rssi.cc
+        test_tl_learner.cc
+        ${CMAKE_SOURCE_DIR}/application/tl_learner.cc
     )
 
     target_include_directories(${_test_tgt} PRIVATE
