@@ -35,11 +35,11 @@ test('whereplaneMapUrl is null for other feeds', () => {
 function loadFeedEditor(feed) {
     const els = {};
     const get = (id) => (els[id] ||= {
-        id, value: '', checked: false, style: {}, textContent: '', innerHTML: '', href: '', appendChild() {},
+        id, value: '', checked: false, style: {}, textContent: '', innerHTML: '', href: '', appendChild() {}, replaceChildren() {},
     });
     const ctx = vm.createContext({
         HOST_URI: 'adsbee.local',
-        document: { getElementById: get, createElement: () => ({ style: {} }) },
+        document: { getElementById: get, createElement: () => ({ style: {}, classList: { add() {}, remove() {} }, appendChild() {}, replaceChildren() {} }) },
         fetch: async () => ({ ok: true, json: async () => feed }),
     });
     vm.runInContext(`${ADSBEE_SRC}\nthis.FeedEditor = FeedEditor;`, ctx);
