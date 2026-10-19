@@ -8605,6 +8605,37 @@ const SETTINGS_SCHEMA_1090 = [
         fields: [{ id: 'en', label: 'Enabled', type: 'bool' }],
     },
     {
+        cmd: 'FLEET', label: 'Fleet Reports', group: 'System',
+        help: '\u21E1 Hourly range map and stats to a fleet server.',
+        tip: 'Off by default. Needs internet over WiFi station or Ethernet. Sends the unique ID, MAC address, firmware versions, receiver position, range per direction and altitude, and message and aircraft counts. OTA keys go to adsbee.aero only. Range needs a Fixed or GNSS receiver position. With Automatic Updates on, installs the firmware the fleet account stages.',
+        fields: [
+            { id: 'en', label: 'Enabled', type: 'bool' },
+            {
+                id: 'server', label: 'Server', type: 'string', maxLen: 63, placeholder: 'https://adsbee.aero',
+                validate: v => (/^https?:\/\/\S+$/.test(v) ? '' : 'Start with https:// or http://.'),
+            },
+            {
+                id: 'token', label: 'Token', type: 'password', writeOnly: true, maxLen: 63,
+                placeholder: '(unchanged)', note: 'From the fleet account page.',
+                validate: v => (/^[A-Za-z0-9._-]*$/.test(v) ? '' : 'Letters, digits, - _ and . only.'),
+            },
+            { id: 'stored', label: 'Stored Token', type: 'display' },
+        ],
+        // FLEET=<en>(ENABLED),<server>(SERVER),<masked token>(TOKEN)
+        parse(lines) {
+            if (!lines[0]) return null;
+            const args = atSplitArgs(lines[0]).map(atStripAnnotation);
+            return this.parseJson(args);
+        },
+        parseJson(raw) {
+            return {
+                en: raw[0] === 1 || raw[0] === '1' || raw[0] === true,
+                server: String(raw[1] ?? ''),
+                stored: raw[2] ? `\u2713 \u2026${String(raw[2]).slice(-4)}` : '\u2014',
+            };
+        },
+    },
+    {
         cmd: 'WATCHDOG', label: 'Watchdog', group: 'System',
         help: 'Reboot automatically if the firmware locks up. 0 disables the watchdog.',
         fields: [{ id: 'timeout', label: 'Timeout (seconds)', type: 'int', min: 0, max: 65535 }],

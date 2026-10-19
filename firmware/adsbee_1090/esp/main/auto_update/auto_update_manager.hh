@@ -1,7 +1,7 @@
 #pragma once
 
 #include "auto_updater.hh"
-#include "esp_http_client.h"
+#include "https_client.hh"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/stream_buffer.h"
@@ -20,8 +20,6 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     // Task stack is internal SRAM. The TLS handshake is the deep part.
     static constexpr uint32_t kTaskStackSizeBytes = 8192;
     static constexpr UBaseType_t kTaskPriority = tskIDLE_PRIORITY;  // Same as the feed task: never ahead of SPI or feeds.
-    static constexpr uint32_t kHTTPTimeoutMs = 15000;
-    static constexpr uint16_t kHTTPBufferLenBytes = 1024;
     static constexpr uint16_t kConsoleRxBufLenBytes = 512;  // Holds replies only (see OnConsoleOutput).
     static constexpr uint32_t kIdentityTimeoutMs = 5000;
     // A manual AT+OTA seen this recently means an update is in progress.
@@ -54,6 +52,18 @@ class AutoUpdateManager : public AutoUpdatePlatform {
 
     void GetStatus(Status& status);
 
+    /**
+     * Firmware the fleet account staged (FleetManager), or nullptr for none. Installed instead of the recommendation,
+     * only while AUTO_UPDATE and AT+FLEET are on. A new target is checked within a minute. Kept in NVS.
+     */
+    void SetFleetTarget(const char* tag);
+
+    // Running firmware version, e.g. 0.9.1-rc9.
+    static void RunningVersion(char* buf, size_t buf_size);
+
+    // A check or install is running.
+    bool Busy() const { return task_ != nullptr; }
+
     void Task();
 
     // AutoUpdatePlatform
@@ -72,9 +82,6 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     void SaveState(const SavedState& state) override;
 
    private:
-    static esp_err_t HTTPEventHandler(esp_http_client_event_t* event);
-    bool HTTPPerform(const HttpRequest& request, BodySink* sink);
-    void HTTPClose();
     void NoteUserOTA(const char* buf, size_t len, const char* marker);
 
     TaskHandle_t task_ = nullptr;
@@ -82,12 +89,10 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     AutoUpdater* updater_ = nullptr;  // Exists while the setting is on.
     uint32_t next_run_timestamp_ms_ = 0;
     volatile bool low_memory_ = false;
+    char fleet_target_[kVersionMaxLen + 16] = {0};
+    bool fleet_target_loaded_ = false;
 
-    esp_http_client_handle_t client_ = nullptr;
-    BodySink* sink_ = nullptr;
-    bool aborted_ = false;
-    bool got_body_ = false;
-    uint32_t retry_after_s_ = 0;
+    HttpsClient http_;
 
     StreamBufferHandle_t console_rx_buf_ = nullptr;
     volatile bool capturing_ = false;  // The updater is reading the console.

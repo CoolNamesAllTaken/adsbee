@@ -51,7 +51,7 @@ TEST(SettingsMigration, LayoutLockedSizes) {
 
     EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
     EXPECT_EQ(sizeof(settings_v18::Settings), 1340u);
-    EXPECT_EQ(sizeof(SettingsManager::Settings), 1660u);
+    EXPECT_EQ(sizeof(SettingsManager::Settings), 1792u);
 
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
@@ -361,6 +361,9 @@ TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesReportFiltersOff) {
     out.filter_altitude_mode = kAltitudeFilterBetween;
     out.filter_altitude_a_ft = 500;
     out.filter_altitude_b_ft = 600;
+    out.fleet_enabled = true;
+    strcpy(out.fleet_server, "http://stale");
+    strcpy(out.fleet_token, "stale");
     ASSERT_TRUE(SettingsMigrator::Migrate(reinterpret_cast<const uint8_t*>(&v18), sizeof(v18), 18, out));
     EXPECT_EQ(out.settings_version, kSettingsVersion);
     EXPECT_FALSE(out.filter_distance_enabled);
@@ -369,6 +372,9 @@ TEST(SettingsMigration, V18ToCurrentKeepsAutoUpdateAndLeavesReportFiltersOff) {
     EXPECT_EQ(out.filter_altitude_mode, kAltitudeFilterOff);
     EXPECT_EQ(out.filter_altitude_a_ft, 0);
     EXPECT_EQ(out.filter_altitude_b_ft, 10000);
+    EXPECT_FALSE(out.fleet_enabled);
+    EXPECT_STREQ(out.fleet_server, "https://adsbee.aero");
+    EXPECT_STREQ(out.fleet_token, "");
     EXPECT_TRUE(out.auto_update_enabled);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
@@ -404,6 +410,28 @@ TEST(Settings, DistanceFilterDefaultsOffAndRoundTrips) {
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.filter_distance_enabled, &raw, 1);
     EXPECT_TRUE(manager.Sanitize());
+}
+
+TEST(Settings, FleetDefaultsOffAndDumpsItsToken) {
+    SettingsManager manager;
+    EXPECT_FALSE(manager.settings.fleet_enabled);
+    EXPECT_STREQ(manager.settings.fleet_server, "https://adsbee.aero");
+    EXPECT_STREQ(manager.settings.fleet_token, "");
+    manager.settings.fleet_enabled = true;
+    strcpy(manager.settings.fleet_server, "http://10.0.0.2:8000");
+    strcpy(manager.settings.fleet_token, "0123456789abcdef0123456789abcdef");
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    // The dump restores settings, so it carries the token.
+    EXPECT_NE(dump.find("AT+FLEET=1,http://10.0.0.2:8000,0123456789abcdef0123456789abcdef\r\n"), std::string::npos);
+    EXPECT_FALSE(manager.Sanitize());
+
+    uint8_t raw = 0x5A;
+    memcpy(&manager.settings.fleet_enabled, &raw, 1);
+    memset(manager.settings.fleet_token, 'x', sizeof(manager.settings.fleet_token));  // No terminator.
+    EXPECT_TRUE(manager.Sanitize());
+    EXPECT_EQ(manager.settings.fleet_token[sizeof(manager.settings.fleet_token) - 1], '\0');
 }
 
 TEST(Settings, AltitudeFilterDefaultsOffAndRoundTrips) {
@@ -586,6 +614,9 @@ TEST(SettingsMigration, V18ToCurrentKeepsEverythingAndDefaultsASTERIXNTPAndAltit
     EXPECT_EQ(out.filter_altitude_mode, kAltitudeFilterOff);
     EXPECT_EQ(out.filter_altitude_a_ft, 0);
     EXPECT_EQ(out.filter_altitude_b_ft, 10000);
+    EXPECT_FALSE(out.fleet_enabled);
+    EXPECT_STREQ(out.fleet_server, "https://adsbee.aero");
+    EXPECT_STREQ(out.fleet_token, "");
     EXPECT_TRUE(out.auto_update_enabled);
     EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv6);
     EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "Tower");
@@ -676,9 +707,12 @@ TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
     size_t ntp = dump.find("AT+NTP_SERVER=pool.ntp.org");
     ASSERT_NE(ntp, std::string::npos);
     EXPECT_LT(asterix, ntp);
-    // The altitude filter comes last.
+    // Then the altitude filter, then fleet reports last.
     EXPECT_LT(ntp, filter_altitude);
-    EXPECT_EQ(dump.find("AT+", filter_altitude + 1), std::string::npos);
+    size_t fleet = dump.find("AT+FLEET=0,https://adsbee.aero,-\r\n");
+    ASSERT_NE(fleet, std::string::npos);
+    EXPECT_EQ(dump.find("AT+", filter_altitude + 1), fleet);
+    EXPECT_EQ(dump.find("AT+", fleet + 1), std::string::npos);
 
     uint8_t raw = 0x5A;
     memcpy(&manager.settings.auto_update_enabled, &raw, 1);

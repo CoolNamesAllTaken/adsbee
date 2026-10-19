@@ -77,6 +77,7 @@ nav:
   - Guides:
       - Update Firmware: guides/update-firmware.md
       - Check a Unit's Configuration: guides/check-configuration.md
+      - Fleet Reports: guides/fleet-reports.md
       - Modify the Enclosure: guides/modify-enclosure.md
   - Community: community.md
   - Contributing to these docs: contributing.md

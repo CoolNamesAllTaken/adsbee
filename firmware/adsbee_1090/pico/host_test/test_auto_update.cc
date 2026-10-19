@@ -58,6 +58,7 @@ class FakePlatform : public AutoUpdatePlatform {
     // Service.
     std::string recommended = "0.9.1-rc8";
     bool recommended_null = false;
+    std::string recommendation;  // Listed as recommended instead of `recommended`, whose release stays listed.
     bool rollback = false;
     bool hold = false;
     bool tag_after_releases = false;
@@ -215,8 +216,9 @@ class FakePlatform : public AutoUpdatePlatform {
 
     std::string Listing() {
         std::string tag = "adsbee_1090-" + recommended;
-        std::string top = std::string("\"recommended\": ") + (recommended_null ? "null" : "\"" + recommended + "\"") +
-                          ", \"recommended_tag\": " + (recommended_null ? "null" : "\"" + tag + "\"") +
+        std::string rec = recommendation.empty() ? recommended : recommendation;
+        std::string top = std::string("\"recommended\": ") + (recommended_null ? "null" : "\"" + rec + "\"") +
+                          ", \"recommended_tag\": " + (recommended_null ? "null" : "\"adsbee_1090-" + rec + "\"") +
                           ", \"rollback\": " + (rollback ? "true" : "false") + ", \"reason\": \"rollout\", \"hold\": " +
                           (hold ? "true" : "false") + ", \"pinned\": false";
         std::string sha = listed_sha256.empty() ? Sha256Hex(file) : listed_sha256;
@@ -640,4 +642,43 @@ TEST(AutoUpdater, SilencesConsoleReportsAndRestoresThemOnFailure) {
     updater.RunOnce();
     EXPECT_EQ(f.p.commands.front(), "AT+PROTOCOL_OUT=CONSOLE,NONE");
     EXPECT_EQ(f.p.commands.back(), "AT+PROTOCOL_OUT=CONSOLE,BEAST");
+}
+
+TEST(AutoUpdater, FleetTargetReplacesTheRecommendation) {
+    Fixture f;
+    f.p.recommended = "0.9.1-rc7";        // Listed with its .ota file.
+    f.p.recommendation = "0.9.1-rc9";     // What the cohort is offered.
+    f.p.reboot_on_boot = true;
+    AutoUpdater updater(f.p, "0.9.1-rc8");
+    updater.SetTarget("adsbee_1090-0.9.1-rc7");
+    EXPECT_STREQ(updater.target(), "0.9.1-rc7");
+    EXPECT_THROW(updater.RunOnce(), FakePlatform::Reboot);  // Older, and installed: the fleet owner chose it.
+    f.ExpectFlashed();
+    EXPECT_STREQ(f.p.stored.pending, "0.9.1-rc7");
+    bool asked_rc = false;
+    for (const std::string& r : f.p.requests) asked_rc |= r == "GET releases?channel=rc";
+    EXPECT_TRUE(asked_rc);
+}
+
+TEST(AutoUpdater, FleetTargetNotListedInstallsNothing) {
+    Fixture f;
+    f.p.recommended = "0.9.1-rc9";
+    AutoUpdater updater(f.p, "0.9.1-rc8");
+    updater.SetTarget("0.9.3");
+    EXPECT_EQ(updater.RunOnce(), kDayMs);
+    EXPECT_EQ(updater.state(), AutoUpdater::kFailed);
+    EXPECT_STREQ(updater.detail(), "target not offered");
+    EXPECT_TRUE(f.p.commands.empty());
+
+    // The running version as target: nothing to do.
+    updater.SetTarget("0.9.1-rc8");
+    EXPECT_EQ(updater.RunOnce(), kDayMs);
+    EXPECT_EQ(updater.state(), AutoUpdater::kIdle);
+    EXPECT_TRUE(f.p.commands.empty());
+
+    // No target: the recommendation again.
+    updater.SetTarget(nullptr);
+    f.p.reboot_on_boot = true;
+    EXPECT_THROW(updater.RunOnce(), FakePlatform::Reboot);
+    EXPECT_STREQ(f.p.stored.pending, "0.9.1-rc9");
 }

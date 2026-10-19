@@ -1541,11 +1541,15 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
             }
             // Call UpdateMetrics on the underlying aircraft type, and catch up distances after the receiver moved.
             std::visit(
-                [this](auto& aircraft) {
+                [this, &it](auto& aircraft) {
                     aircraft.UpdateMetrics();
+                    using T = std::remove_reference_t<decltype(aircraft)>;
                     if (aircraft.distance_reference_epoch != reference_epoch_) {
-                        using T = std::remove_reference_t<decltype(aircraft)>;
                         UpdateDistanceAndBearing(aircraft, aircraft.HasBitFlag(T::kBitFlagPositionValid));
+                        RecordRange(aircraft);
+                    }
+                    if constexpr (kRecordsRange<T>) {
+                        if (fleet_recorder_ != nullptr) fleet_recorder_->MarkAircraft(it->first);
                     }
                 },
                 it->second);
@@ -1587,6 +1591,11 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     }
 
     // Update aggregate statistics.
+    if (fleet_recorder_ != nullptr) {
+        fleet_recorder_->AddSecond(metrics_counter_.valid_squitter_frames, metrics_counter_.valid_extended_squitter_frames,
+                                   metrics_counter_.valid_uat_adsb_frames, metrics_counter_.valid_uat_uplink_frames,
+                                   metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
+    }
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.
 }

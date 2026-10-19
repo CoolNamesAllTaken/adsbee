@@ -15,6 +15,7 @@
 #include "json_utils.hh"
 #include "macros.hh"
 #include "mode_s_packet.hh"
+#include "range_map.hh"
 #include "remote_id_packet.hh"
 #include "uat_packet.hh"
 
@@ -415,6 +416,7 @@ class ModeSAircraft : public Aircraft {
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
+    uint8_t num_position_decodes = 0;  // Accepted positions in a row, up to 2. Sits in padding.
     uint16_t squawk = ADSBTypes::kSquawkCodeNotYetReceived;  // Squawk digits as a decimal value, e.g. 7700.
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
     uint8_t emitter_category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
@@ -731,6 +733,7 @@ class UATAircraft : public Aircraft {
     uint16_t squawk = ADSBTypes::kSquawkCodeNotYetReceived;  // Squawk digits as a decimal value, e.g. 7700.
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
     uint8_t emitter_category_raw = 0;  // Non-enum category.
+    uint8_t num_position_decodes = 0;  // Accepted positions in a row, up to 2. Sits in padding.
     EmergencyPriorityStatus emergency_priority_status =
         kEmergencyPriorityStatusNone;  // Emergency priority status of the aircraft.
 
@@ -919,6 +922,9 @@ struct AircraftReportFilter {
 class AircraftDictionary {
    public:
     static constexpr uint16_t kMaxNumAircraft = kAircraftDictionaryMaxNumAircraft;
+
+    // Receives range, message and aircraft counts for fleet reports (AT+FLEET), or nullptr for none. ESP32 only.
+    void SetFleetRecorder(FleetRecorder *recorder) { fleet_recorder_ = recorder; }
     static constexpr uint16_t kMaxNumSources = 4;  // One per 1090 demodulator state machine.
 
 #ifdef FILTER_CPR_POSITIONS
@@ -1568,12 +1574,50 @@ class AircraftDictionary {
     template <typename T>
     void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before) {
         PositionSnapshot after = PositionSnapshot::Of(aircraft);
+        bool moved = after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg;
+        if constexpr (kRecordsRange<T>) {
+            if (!after.valid) {
+                aircraft.num_position_decodes = 0;
+            } else if ((!before.valid || moved) && aircraft.num_position_decodes < 2) {
+                aircraft.num_position_decodes++;
+            }
+        }
         if (after.valid != before.valid || (after.valid && aircraft.distance_m == Aircraft::kDistanceUnknown)) {
             UpdateDistanceAndBearing(aircraft, after.valid);
-        } else if (after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg) {
+            RecordRange(aircraft);
+        } else if (moved) {
             aircraft.distance_reference_epoch = kDistanceEpochStale;
         }
     }
+
+    // Mode S and UAT positions go into fleet range maps; Remote ID drones don't.
+    template <typename T>
+    static constexpr bool kRecordsRange = std::is_same_v<T, ModeSAircraft> || std::is_same_v<T, UATAircraft>;
+
+    /**
+     * Adds a freshly computed distance to the fleet range map, once the position is confirmed by a second decode (the
+     * first can be a CPR outlier). Altitude is barometric, else GNSS; aircraft without one are left out.
+     */
+    template <typename T>
+    inline void RecordRange(const T &aircraft) {
+        if constexpr (kRecordsRange<T>) {
+            if (fleet_recorder_ == nullptr || aircraft.num_position_decodes < 2 ||
+                aircraft.distance_m == Aircraft::kDistanceUnknown) {
+                return;
+            }
+            int32_t altitude_ft;
+            if (aircraft.HasBitFlag(T::kBitFlagBaroAltitudeValid)) {
+                altitude_ft = aircraft.baro_altitude_ft;
+            } else if (aircraft.HasBitFlag(T::kBitFlagGNSSAltitudeValid)) {
+                altitude_ft = aircraft.gnss_altitude_ft;
+            } else {
+                return;
+            }
+            fleet_recorder_->RecordPosition(aircraft.distance_m, aircraft.bearing_bam16, altitude_ft);
+        }
+    }
+
+    FleetRecorder *fleet_recorder_ = nullptr;
 
     void BumpReferenceEpoch();
 

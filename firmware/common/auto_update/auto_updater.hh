@@ -137,6 +137,13 @@ class AutoUpdater {
     // @retval Milliseconds until the next call.
     uint32_t RunOnce();
 
+    /**
+     * Firmware a fleet server staged for this device (a version such as 0.9.2, or a release tag), installed instead of
+     * the service's recommendation. nullptr or "" goes back to the recommendation.
+     */
+    void SetTarget(const char* version_or_tag);
+    const char* target() const { return target_; }
+
     State state() const { return state_; }
     // Version the state is about (the update target), or "".
     const char* version() const { return version_; }
@@ -205,4 +212,5 @@ class AutoUpdater {
     uint32_t window_start_ms_ = 0;     // Start of the current attempt window.
     bool have_identity_ = false;
     AutoUpdatePlatform::Identity identity_;
+    char target_[AutoUpdatePlatform::kVersionMaxLen + 1] = {0};
 };

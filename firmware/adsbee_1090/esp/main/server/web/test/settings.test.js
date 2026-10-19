@@ -44,7 +44,7 @@ const { SettingsEngine, SETTINGS_SCHEMA_1090 } = require('../settings.js');
 
 // The AT+SETTINGS?JSON line from an ADSBee 1090 running 0.9.1-rc9.
 const DUMP = 'SETTINGS={"ASTERIX_SAC_SIC":[0,0],"AUTO_UPDATE":[0],"BAUD_RATE":[115207,9600],"BIAS_TEE_ENABLE":[0,0],"ETHERNET":[1],"ESP32_ENABLE":[1],' +
-    '"FEED_ENABLE":[1],"FILTER_ALTITUDE_FT":["OFF",0,10000],"FILTER_DISTANCE_NM":[0,100.0],"GNSS":[0,"NONE",0],"HOSTNAME":["test-bee"],"IP_MODE":["DUAL"],"LED_ENABLE":[1],"LOG_LEVEL":["WARNINGS"],' +
+    '"FEED_ENABLE":[1],"FILTER_ALTITUDE_FT":["OFF",0,10000],"FILTER_DISTANCE_NM":[0,100.0],"FLEET":[0,"https://adsbee.aero",""],"GNSS":[0,"NONE",0],"HOSTNAME":["test-bee"],"IP_MODE":["DUAL"],"LED_ENABLE":[1],"LOG_LEVEL":["WARNINGS"],' +
     '"MAVLINK_ID":[1,156],"NTP_SERVER":["pool.ntp.org"],"PROTOCOL_OUT":["NONE","NONE"],"REMOTE_ID":[0,7,"0x00"],' +
     '"REMOTE_ID_TX":[0,7,"",1,2,"","0x0000"],"RX_ENABLE":[1,1],' +
     '"RX_POSITION":["LOWEST","OK",37.000000,-122.000000,-50,125,317.7,74,"000000"],"SUBG_ENABLE":["1"],' +
@@ -234,6 +234,35 @@ test('the altitude filter loads from the dump and saves mode and altitudes in ft
     input('FILTER_ALTITUDE_FT', 'b').value = '18000';
     await engine.save();
     assert.deepStrictEqual(t.sent.slice(1, 3), ['AT+FILTER_ALTITUDE_FT=BETWEEN,1000,18000', 'AT+SETTINGS=SAVE']);
+});
+
+test('fleet reports load from the dump and save without resending the token', async () => {
+    const t = makeTransport((cmd) => {
+        if (cmd === 'AT+SETTINGS?JSON') return [DUMP];
+        if (cmd === 'AT+FLEET=1,https://adsbee.aero,0123456789abcdef0123456789abcdef' ||
+            cmd === 'AT+FLEET=0,http://10.0.0.2:8000' || cmd === 'AT+SETTINGS=SAVE') return [];
+        throw new Error(`unexpected ${cmd}`);
+    });
+    const engine = makeEngine(t);
+    await engine.refresh();
+    assert.strictEqual(input('FLEET', 'en').checked, false);
+    assert.strictEqual(input('FLEET', 'server').value, 'https://adsbee.aero');
+    assert.strictEqual(input('FLEET', 'token').value, '');
+
+    input('FLEET', 'en').checked = true;
+    input('FLEET', 'token').value = '0123456789abcdef0123456789abcdef';
+    await engine.save();
+    assert.deepStrictEqual(t.sent.slice(1, 3), ['AT+FLEET=1,https://adsbee.aero,0123456789abcdef0123456789abcdef', 'AT+SETTINGS=SAVE']);
+
+    // An untouched token is left out, so the device keeps it.
+    input('FLEET', 'server').value = 'ftp://x';  // Rejected before anything is written.
+    const num_sent = t.sent.length;
+    await engine.save();
+    assert.strictEqual(t.sent.length, num_sent);
+    input('FLEET', 'server').value = 'http://10.0.0.2:8000';
+    input('FLEET', 'en').checked = false;
+    await engine.save();
+    assert.ok(t.sent.includes('AT+FLEET=0,http://10.0.0.2:8000'), t.sent.join(' | '));
 });
 
 test('a save whose re-read fails still reports the save', async () => {

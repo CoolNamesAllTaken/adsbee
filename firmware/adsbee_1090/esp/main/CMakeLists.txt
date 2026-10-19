@@ -7,6 +7,7 @@ idf_component_register(
         "${MODULES_DIR}/opendroneid-core-c/libopendroneid"  # Broadcast Remote ID decoder (opendroneid.c).
         "${COMMON_DIR}/adsb"
         "${COMMON_DIR}/auto_update"
+        "${COMMON_DIR}/fleet"
         "${COMMON_DIR}/adsb/nasa_cpr"
         "${COMMON_DIR}/adsb/nasa_cpr/airborne"
         "${COMMON_DIR}/adsb/nasa_cpr/coarse"
@@ -28,6 +29,7 @@ idf_component_register(
         "${COMMON_DIR}/settings"
         "auto_update"
         "comms"
+        "fleet"
         "peripherals/pico"
         "remote_id"
         "server"
@@ -38,6 +40,7 @@ idf_component_register(
         "${MODULES_DIR}/opendroneid-core-c/libopendroneid"  # opendroneid.h for Remote ID decode.
         "${COMMON_DIR}/adsb"
         "${COMMON_DIR}/auto_update"
+        "${COMMON_DIR}/fleet"
         "${COMMON_DIR}/adsb/nasa_cpr"
         "${COMMON_DIR}/comms"
         "${COMMON_DIR}/comms/aircraftjson"
@@ -57,6 +60,7 @@ idf_component_register(
         "${COMMON_DIR}/settings"
         "auto_update"
         "comms"
+        "fleet"
         "peripherals/pico"
         "remote_id"
         "server"

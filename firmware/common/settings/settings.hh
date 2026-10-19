@@ -227,6 +227,9 @@ class SettingsManager {
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
         static constexpr uint16_t kNTPServerMaxLen = 63;
+        static constexpr uint16_t kFleetServerMaxLen = 63;
+        static constexpr uint16_t kFleetTokenMaxLen = 63;
+        static constexpr const char* kDefaultFleetServer = "https://adsbee.aero";
 
         /**
          * Core Network Settings struct is used for storing network settings that should remain unchanged through most
@@ -429,6 +432,11 @@ class SettingsManager {
         int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
         int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
 
+        // Fleet reporting (AT+FLEET): the ESP32 posts range and reception stats to a fleet server. Off by default.
+        bool fleet_enabled = false;
+        char fleet_server[kFleetServerMaxLen + 1];  // Base URL, e.g. https://adsbee.aero.
+        char fleet_token[kFleetTokenMaxLen + 1];    // Enroll token from the fleet account.
+
         /**
          * Default constructor.
          */
@@ -443,6 +451,9 @@ class SettingsManager {
             mqtt_broker.port = kDefaultMQTTPort;
             memset(ntp_server, '\0', sizeof(ntp_server));
             strncpy(ntp_server, "pool.ntp.org", kNTPServerMaxLen);
+            memset(fleet_server, '\0', sizeof(fleet_server));
+            strncpy(fleet_server, kDefaultFleetServer, kFleetServerMaxLen);
+            memset(fleet_token, '\0', sizeof(fleet_token));
 
 #ifdef ON_PICO
             DeviceInfo device_info;
@@ -871,7 +882,7 @@ extern SettingsManager settings_manager;
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
 static_assert(kSettingsVersion == 19,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
-static_assert(sizeof(SettingsManager::Settings) == 1660,
+static_assert(sizeof(SettingsManager::Settings) == 1792,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
 static_assert(alignof(SettingsManager::Settings) == 4, "Settings alignment changed. See the comment above.");
 static_assert(sizeof(SettingsManager::Settings::CoreNetworkSettings) == 240,
@@ -904,5 +915,8 @@ static_assert(offsetof(SettingsManager::Settings, ntp_server) == 1586, "Settings
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_mode) == 1650, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_a_ft) == 1652, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_b_ft) == 1656, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, fleet_enabled) == 1660, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, fleet_server) == 1661, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, fleet_token) == 1725, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

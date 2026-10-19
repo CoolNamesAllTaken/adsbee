@@ -4,6 +4,7 @@ add_subdirectory(auto_update)
 add_subdirectory(comms)
 add_subdirectory(coprocessor)
 add_subdirectory(firmware_update)
+add_subdirectory(fleet)
 add_subdirectory(settings)
 add_subdirectory(utils)
 
