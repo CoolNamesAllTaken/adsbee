@@ -131,8 +131,8 @@ void SwarmManager::Task() {
     CONSOLE_PRINTF("BENCH_REPORT seq=%lu result=%s http=%d body=%u ms=%lu next_s=%lu tls_min_free=%u tls_min_largest=%u "
                    "stack_free=%u sizeof_recorder=%u sizeof_reporter=%u sizeof_manager=%u dropped=%lu/%lu\r\n",
                    (unsigned long)status.seq, status.result, status.last_http_status, status.last_body_len,
-                   (unsigned long)(NowMs() - start_ms), (unsigned long)(delay_ms / 1000), swarm_profile.tls_min_free,
-                   swarm_profile.tls_min_largest, (unsigned)uxTaskGetStackHighWaterMark(NULL),
+                   (unsigned long)(NowMs() - start_ms), (unsigned long)(delay_ms / 1000), (unsigned)swarm_profile.tls_min_free,
+                   (unsigned)swarm_profile.tls_min_largest, (unsigned)uxTaskGetStackHighWaterMark(NULL),
                    (unsigned)sizeof(SwarmRecorder), (unsigned)sizeof(SwarmReporter), (unsigned)sizeof(SwarmManager),
                    (unsigned long)reporter_->pending().guard.num_dropped,
                    (unsigned long)reporter_->pending().guard.num_positions);
