@@ -1,4 +1,4 @@
-#include "fleet_manager.hh"
+#include "swarm_manager.hh"
 
 #include <cctype>
 #include <cstring>
@@ -14,15 +14,15 @@
 #include "object_dictionary.hh"
 #include "settings.hh"
 
-FleetManager fleet_manager;
+SwarmManager swarm_manager;
 
-static void fleet_task(void* pvParameters) {
-    fleet_manager.Task();
+static void swarm_task(void* pvParameters) {
+    swarm_manager.Task();
     vTaskDelete(NULL);
 }
 
-void FleetManager::Stop() {
-    adsbee_server.aircraft_dictionary.SetFleetRecorder(nullptr);
+void SwarmManager::Stop() {
+    adsbee_server.aircraft_dictionary.SetSwarmRecorder(nullptr);
     xSemaphoreTake(mutex_, portMAX_DELAY);
     next_seq_ = reporter_->seq();
     delete reporter_;
@@ -33,11 +33,11 @@ void FleetManager::Stop() {
     low_memory_ = false;
 }
 
-void FleetManager::Update() {
+void SwarmManager::Update() {
     if (task_ != nullptr) return;  // A report is being sent; it owns the pending report.
     const SettingsManager::Settings& settings = settings_manager.settings;
     uint32_t now_ms = NowMs();
-    if (!settings.fleet_enabled) {
+    if (!settings.swarm_enabled) {
         if (reporter_ != nullptr) Stop();
         return;
     }
@@ -45,8 +45,8 @@ void FleetManager::Update() {
     if (reporter_ == nullptr) {
         char version[AutoUpdatePlatform::kVersionMaxLen + 1];
         AutoUpdateManager::RunningVersion(version, sizeof(version));
-        FleetRecorder* live = new (std::nothrow) FleetRecorder();
-        FleetReporter* reporter = new (std::nothrow) FleetReporter(*this, version, FleetReporter::Config(), next_seq_);
+        SwarmRecorder* live = new (std::nothrow) SwarmRecorder();
+        SwarmReporter* reporter = new (std::nothrow) SwarmReporter(*this, version, SwarmReporter::Config(), next_seq_);
         if (live == nullptr || reporter == nullptr) {
             delete live;
             delete reporter;
@@ -55,15 +55,15 @@ void FleetManager::Update() {
         live_ = live;
         reporter->Restart(*live_, now_ms);
         next_report_timestamp_ms_ = now_ms + reporter->FirstDelayMs(now_ms);
-        strncpy(token_seen_, settings.fleet_token, sizeof(token_seen_) - 1);
+        strncpy(token_seen_, settings.swarm_token, sizeof(token_seen_) - 1);
         xSemaphoreTake(mutex_, portMAX_DELAY);
         reporter_ = reporter;
         xSemaphoreGive(mutex_);
-        adsbee_server.aircraft_dictionary.SetFleetRecorder(live_);
-        CONSOLE_INFO("FleetManager::Update", "Fleet reports on, to %s.", settings.fleet_server);
+        adsbee_server.aircraft_dictionary.SetSwarmRecorder(live_);
+        CONSOLE_INFO("SwarmManager::Update", "Swarm reports on, to %s.", settings.swarm_server);
     }
-    if (strncmp(token_seen_, settings.fleet_token, sizeof(token_seen_) - 1) != 0) {
-        strncpy(token_seen_, settings.fleet_token, sizeof(token_seen_) - 1);
+    if (strncmp(token_seen_, settings.swarm_token, sizeof(token_seen_) - 1) != 0) {
+        strncpy(token_seen_, settings.swarm_token, sizeof(token_seen_) - 1);
         reporter_->ClearStop();  // A new token undoes a 410.
     }
 
@@ -81,7 +81,7 @@ void FleetManager::Update() {
     uint32_t free_bytes = HardwareCapabilities::GetInternalFreeBytes();
     if (free_bytes < kMinFreeHeapBytesToRun) {
         if (!low_memory_) {
-            CONSOLE_WARNING("FleetManager::Update", "Not sending fleet report: %lu Bytes of heap free, need %lu.",
+            CONSOLE_WARNING("SwarmManager::Update", "Not sending swarm report: %lu Bytes of heap free, need %lu.",
                             (unsigned long)free_bytes, (unsigned long)kMinFreeHeapBytesToRun);
         }
         low_memory_ = true;
@@ -90,7 +90,7 @@ void FleetManager::Update() {
     }
     low_memory_ = false;
 
-    FleetReporter::DeviceState state;
+    SwarmReporter::DeviceState state;
     state.auto_update = settings.auto_update_enabled;
     state.rx_position_valid = rp2040.rx_position_available;
     state.latitude_deg = rp2040.rx_position.latitude_deg;
@@ -105,21 +105,21 @@ void FleetManager::Update() {
     state.range_valid = range_valid;
     reporter_->TakePeriod(*live_, now_ms, state);
 
-    strncpy(server_, settings.fleet_server, sizeof(server_) - 1);
-    strncpy(token_, settings.fleet_token, sizeof(token_) - 1);
-    if (xTaskCreate(fleet_task, "fleet", kTaskStackSizeBytes, NULL, kTaskPriority, &task_) != pdPASS) {
+    strncpy(server_, settings.swarm_server, sizeof(server_) - 1);
+    strncpy(token_, settings.swarm_token, sizeof(token_) - 1);
+    if (xTaskCreate(swarm_task, "swarm", kTaskStackSizeBytes, NULL, kTaskPriority, &task_) != pdPASS) {
         task_ = nullptr;
         next_report_timestamp_ms_ = now_ms + kLowMemoryRetryMs;
-        CONSOLE_ERROR("FleetManager::Update", "Not enough memory for the fleet report task.");
+        CONSOLE_ERROR("SwarmManager::Update", "Not enough memory for the swarm report task.");
     }
 }
 
-void FleetManager::Task() {
+void SwarmManager::Task() {
     uint32_t start_ms = NowMs();
     uint32_t delay_ms = reporter_->Send(server_, token_);
     http_.Close();  // Hourly: not worth holding a TLS session's buffers.
-    const FleetReporter::Status& status = reporter_->status();
-    CONSOLE_INFO("FleetManager::Task",
+    const SwarmReporter::Status& status = reporter_->status();
+    CONSOLE_INFO("SwarmManager::Task",
                  "Report %lu: %s (HTTP %d, %u Bytes, %lu ms), next in %lu s. Stack headroom %u Bytes, lowest free heap "
                  "since boot %u Bytes.",
                  (unsigned long)status.seq, status.result, status.last_http_status, status.last_body_len,
@@ -130,13 +130,13 @@ void FleetManager::Task() {
     task_ = nullptr;
 }
 
-void FleetManager::GetStatus(Status& status) {
+void SwarmManager::GetStatus(Status& status) {
     status = Status();
-    status.enabled = settings_manager.settings.fleet_enabled;
+    status.enabled = settings_manager.settings.swarm_enabled;
     uint32_t now_s = NowMs() / 1000;
     xSemaphoreTake(mutex_, portMAX_DELAY);
     if (reporter_ != nullptr) {
-        const FleetReporter::Status& s = reporter_->status();
+        const SwarmReporter::Status& s = reporter_->status();
         status.result = low_memory_ ? "low memory" : task_ != nullptr ? "sending" : s.stopped ? "removed" : s.result;
         status.http_status = s.last_http_status;
         status.last_report_s_ago = s.last_ok_s ? now_s - s.last_ok_s : UINT32_MAX;
@@ -149,13 +149,13 @@ void FleetManager::GetStatus(Status& status) {
     xSemaphoreGive(mutex_);
 }
 
-uint32_t FleetManager::NowMs() { return get_time_since_boot_ms(); }
+uint32_t SwarmManager::NowMs() { return get_time_since_boot_ms(); }
 
-uint32_t FleetManager::Random() { return esp_random(); }
+uint32_t SwarmManager::Random() { return esp_random(); }
 
-bool FleetManager::Online() { return comms_manager.HasIP(); }
+bool SwarmManager::Online() { return comms_manager.HasIP(); }
 
-bool FleetManager::GetIdentity(AutoUpdatePlatform::Identity& identity) {
+bool SwarmManager::GetIdentity(AutoUpdatePlatform::Identity& identity) {
     if (auto_update_manager.Busy()) return false;  // It uses the same RP2040 request.
     bool ok = auto_update_manager.GetIdentity(identity);
     // Keep the OTA keys only as long as the report needs them (the updater keeps its own copy).
@@ -164,11 +164,11 @@ bool FleetManager::GetIdentity(AutoUpdatePlatform::Identity& identity) {
     return ok;
 }
 
-bool FleetManager::Http(const AutoUpdatePlatform::HttpRequest& request, AutoUpdatePlatform::HttpResult& result,
+bool SwarmManager::Http(const AutoUpdatePlatform::HttpRequest& request, AutoUpdatePlatform::HttpResult& result,
                         AutoUpdatePlatform::BodySink* sink) {
     return http_.Request(request.path, request, result, sink);
 }
 
-void FleetManager::SetFirmwareTarget(const char* tag, const char* channel) {
-    auto_update_manager.SetFleetTarget(tag);
+void SwarmManager::SetFirmwareTarget(const char* tag, const char* channel) {
+    auto_update_manager.SetSwarmTarget(tag);
 }

@@ -53,10 +53,10 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     void GetStatus(Status& status);
 
     /**
-     * Firmware the fleet account staged (FleetManager), or nullptr for none. Installed instead of the recommendation,
-     * only while AUTO_UPDATE and AT+FLEET are on. A new target is checked within a minute. Kept in NVS.
+     * Firmware the swarm account staged (SwarmManager), or nullptr for none. Installed instead of the recommendation,
+     * only while AUTO_UPDATE and AT+SWARM are on. A new target is checked within a minute. Kept in NVS.
      */
-    void SetFleetTarget(const char* tag);
+    void SetSwarmTarget(const char* tag);
 
     // Running firmware version, e.g. 0.9.1-rc9.
     static void RunningVersion(char* buf, size_t buf_size);
@@ -89,8 +89,8 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     AutoUpdater* updater_ = nullptr;  // Exists while the setting is on.
     uint32_t next_run_timestamp_ms_ = 0;
     volatile bool low_memory_ = false;
-    char fleet_target_[kVersionMaxLen + 16] = {0};
-    bool fleet_target_loaded_ = false;
+    char swarm_target_[kVersionMaxLen + 16] = {0};
+    bool swarm_target_loaded_ = false;
 
     HttpsClient http_;
 

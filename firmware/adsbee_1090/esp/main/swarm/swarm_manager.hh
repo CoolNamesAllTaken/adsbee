@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fleet_reporter.hh"
+#include "swarm_reporter.hh"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -8,10 +8,10 @@
 #include "settings.hh"
 
 /**
- * Runs FleetReporter (common/fleet) on the ESP32 for AT+FLEET: the live range map fed by the aircraft dictionary, and a
+ * Runs SwarmReporter (common/swarm) on the ESP32 for AT+SWARM: the live range map fed by the aircraft dictionary, and a
  * task per report for the HTTPS request. With the setting off nothing is allocated.
  */
-class FleetManager : public FleetPlatform {
+class SwarmManager : public SwarmPlatform {
    public:
     static constexpr uint32_t kTaskStackSizeBytes = 8192;  // Internal SRAM; the TLS handshake is the deep part.
     static constexpr UBaseType_t kTaskPriority = tskIDLE_PRIORITY;
@@ -48,7 +48,7 @@ class FleetManager : public FleetPlatform {
 
     void Task();
 
-    // FleetPlatform
+    // SwarmPlatform
     uint32_t NowMs() override;
     uint32_t Random() override;
     bool Online() override;
@@ -62,16 +62,16 @@ class FleetManager : public FleetPlatform {
 
     TaskHandle_t task_ = nullptr;
     SemaphoreHandle_t mutex_ = xSemaphoreCreateMutex();  // Guards reporter_ against GetStatus().
-    FleetRecorder* live_ = nullptr;
-    FleetReporter* reporter_ = nullptr;
+    SwarmRecorder* live_ = nullptr;
+    SwarmReporter* reporter_ = nullptr;
     uint32_t next_seq_ = 0;  // Survives turning the setting off and on.
     uint32_t next_report_timestamp_ms_ = 0;
     bool low_memory_ = false;
-    char token_seen_[SettingsManager::Settings::kFleetTokenMaxLen + 1] = {0};
+    char token_seen_[SettingsManager::Settings::kSwarmTokenMaxLen + 1] = {0};
     // The task's copies of the settings, which may change while it runs.
-    char server_[SettingsManager::Settings::kFleetServerMaxLen + 1] = {0};
-    char token_[SettingsManager::Settings::kFleetTokenMaxLen + 1] = {0};
+    char server_[SettingsManager::Settings::kSwarmServerMaxLen + 1] = {0};
+    char token_[SettingsManager::Settings::kSwarmTokenMaxLen + 1] = {0};
     HttpsClient http_;
 };
 
-extern FleetManager fleet_manager;
+extern SwarmManager swarm_manager;

@@ -644,7 +644,7 @@ TEST(AutoUpdater, SilencesConsoleReportsAndRestoresThemOnFailure) {
     EXPECT_EQ(f.p.commands.back(), "AT+PROTOCOL_OUT=CONSOLE,BEAST");
 }
 
-TEST(AutoUpdater, FleetTargetReplacesTheRecommendation) {
+TEST(AutoUpdater, SwarmTargetReplacesTheRecommendation) {
     Fixture f;
     f.p.recommended = "0.9.1-rc7";        // Listed with its .ota file.
     f.p.recommendation = "0.9.1-rc9";     // What the cohort is offered.
@@ -652,7 +652,7 @@ TEST(AutoUpdater, FleetTargetReplacesTheRecommendation) {
     AutoUpdater updater(f.p, "0.9.1-rc8");
     updater.SetTarget("adsbee_1090-0.9.1-rc7");
     EXPECT_STREQ(updater.target(), "0.9.1-rc7");
-    EXPECT_THROW(updater.RunOnce(), FakePlatform::Reboot);  // Older, and installed: the fleet owner chose it.
+    EXPECT_THROW(updater.RunOnce(), FakePlatform::Reboot);  // Older, and installed: the swarm owner chose it.
     f.ExpectFlashed();
     EXPECT_STREQ(f.p.stored.pending, "0.9.1-rc7");
     bool asked_rc = false;
@@ -660,7 +660,7 @@ TEST(AutoUpdater, FleetTargetReplacesTheRecommendation) {
     EXPECT_TRUE(asked_rc);
 }
 
-TEST(AutoUpdater, FleetTargetNotListedInstallsNothing) {
+TEST(AutoUpdater, SwarmTargetNotListedInstallsNothing) {
     Fixture f;
     f.p.recommended = "0.9.1-rc9";
     AutoUpdater updater(f.p, "0.9.1-rc8");

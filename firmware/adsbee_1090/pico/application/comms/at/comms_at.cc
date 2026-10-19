@@ -1191,29 +1191,29 @@ CPP_AT_CALLBACK(CommsManager::ATMQTTCallback) {
 }
 
 // Token with all but its last 4 characters masked, so it can be told apart without being shown.
-static void MaskFleetToken(const char* token, char* masked, size_t masked_size) {
+static void MaskSwarmToken(const char* token, char* masked, size_t masked_size) {
     size_t len = strnlen(token, masked_size - 1);
     for (size_t i = 0; i < len; i++) masked[i] = i + 4 < len ? '*' : token[i];
     masked[len] = '\0';
 }
 
-CPP_AT_CALLBACK(CommsManager::ATFleetCallback) {
+CPP_AT_CALLBACK(CommsManager::ATSwarmCallback) {
     typedef SettingsManager::Settings Settings;
     Settings& s = settings_manager.settings;
     switch (op) {
         case '?': {
-            char masked[Settings::kFleetTokenMaxLen + 1];
-            MaskFleetToken(s.fleet_token, masked, sizeof(masked));
-            CPP_AT_CMD_PRINTF("=%d(ENABLED),%s(SERVER),%s(TOKEN)", s.fleet_enabled, s.fleet_server, masked);
+            char masked[Settings::kSwarmTokenMaxLen + 1];
+            MaskSwarmToken(s.swarm_token, masked, sizeof(masked));
+            CPP_AT_CMD_PRINTF("=%d(ENABLED),%s(SERVER),%s(TOKEN)", s.swarm_enabled, s.swarm_server, masked);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
         case '=': {
-            bool enabled = s.fleet_enabled;
-            char server[Settings::kFleetServerMaxLen + 1];
-            char token[Settings::kFleetTokenMaxLen + 1];
-            strncpy(server, s.fleet_server, sizeof(server));
-            strncpy(token, s.fleet_token, sizeof(token));
+            bool enabled = s.swarm_enabled;
+            char server[Settings::kSwarmServerMaxLen + 1];
+            char token[Settings::kSwarmTokenMaxLen + 1];
+            strncpy(server, s.swarm_server, sizeof(server));
+            strncpy(token, s.swarm_token, sizeof(token));
             if (CPP_AT_HAS_ARG(0)) {
                 CPP_AT_TRY_ARG2NUM(0, enabled);
             }
@@ -1221,16 +1221,16 @@ CPP_AT_CALLBACK(CommsManager::ATFleetCallback) {
                 if (args[1] == "-") {
                     CPP_AT_ERROR("Server can't be empty.");
                 }
-                if (!SetATString(args[1], server, Settings::kFleetServerMaxLen)) {
-                    CPP_AT_ERROR("Server must be %d characters or fewer.", Settings::kFleetServerMaxLen);
+                if (!SetATString(args[1], server, Settings::kSwarmServerMaxLen)) {
+                    CPP_AT_ERROR("Server must be %d characters or fewer.", Settings::kSwarmServerMaxLen);
                 }
             }
             if (strncmp(server, "https://", 8) != 0 && strncmp(server, "http://", 7) != 0) {
                 CPP_AT_ERROR("Server must start with https:// or http://.");
             }
             for (size_t n = strlen(server); n > 0 && server[n - 1] == '/'; n--) server[n - 1] = '\0';
-            if (num_args > 2 && !SetATString(args[2], token, Settings::kFleetTokenMaxLen)) {
-                CPP_AT_ERROR("Token must be %d characters or fewer.", Settings::kFleetTokenMaxLen);
+            if (num_args > 2 && !SetATString(args[2], token, Settings::kSwarmTokenMaxLen)) {
+                CPP_AT_ERROR("Token must be %d characters or fewer.", Settings::kSwarmTokenMaxLen);
             }
             for (const char* c = token; *c; c++) {
                 if (!isalnum((unsigned char)*c) && *c != '-' && *c != '_' && *c != '.') {
@@ -1238,13 +1238,13 @@ CPP_AT_CALLBACK(CommsManager::ATFleetCallback) {
                 }
             }
             if (enabled && token[0] == '\0') {
-                CPP_AT_ERROR("Set a token to enable fleet reports.");
+                CPP_AT_ERROR("Set a token to enable swarm reports.");
             }
-            s.fleet_enabled = enabled;
-            memset(s.fleet_server, '\0', sizeof(s.fleet_server));
-            strncpy(s.fleet_server, server, Settings::kFleetServerMaxLen);
-            memset(s.fleet_token, '\0', sizeof(s.fleet_token));
-            strncpy(s.fleet_token, token, Settings::kFleetTokenMaxLen);
+            s.swarm_enabled = enabled;
+            memset(s.swarm_server, '\0', sizeof(s.swarm_server));
+            strncpy(s.swarm_server, server, Settings::kSwarmServerMaxLen);
+            memset(s.swarm_token, '\0', sizeof(s.swarm_token));
+            strncpy(s.swarm_token, token, Settings::kSwarmTokenMaxLen);
             settings_manager.SyncToCoprocessors();  // The ESP32 sends the reports.
             CPP_AT_SUCCESS();
             break;
@@ -2012,9 +2012,9 @@ static void PrintSettingsJSON() {
                   static_cast<unsigned long>(s.filter_distance_deci_nm / 10),
                   static_cast<unsigned long>(s.filter_distance_deci_nm % 10));
     {
-        char masked[SettingsManager::Settings::kFleetTokenMaxLen + 1];
-        MaskFleetToken(s.fleet_token, masked, sizeof(masked));
-        CPP_AT_PRINTF("\"FLEET\":[%d,\"%s\",\"%s\"],", s.fleet_enabled, JSONEscapeStr(s.fleet_server, esc, sizeof(esc)),
+        char masked[SettingsManager::Settings::kSwarmTokenMaxLen + 1];
+        MaskSwarmToken(s.swarm_token, masked, sizeof(masked));
+        CPP_AT_PRINTF("\"SWARM\":[%d,\"%s\",\"%s\"],", s.swarm_enabled, JSONEscapeStr(s.swarm_server, esc, sizeof(esc)),
                       masked);
     }
     CPP_AT_PRINTF("\"GNSS\":[%d,\"%s\",%d],", s.gnss_enabled,
@@ -2531,15 +2531,15 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "no receiver position, see AT+RX_POSITION) are always kept. Default: 0,100.0 (off).\r\n\t"
                     "AT+FILTER_DISTANCE_NM?\r\n\tQuery whether the filter is enabled and its distance.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFilterDistanceNMCallback, comms_manager)},
-    {.command = "FLEET",
+    {.command = "SWARM",
      .min_args = 0,
      .max_args = 3,
-     .help_string = "AT+FLEET=<enabled [0 1]>,<server>,<token>\r\n\tHourly reports to a fleet server over WiFi station "
+     .help_string = "AT+SWARM=<enabled [0 1]>,<server>,<token>\r\n\tHourly reports to a swarm server over WiFi station "
                     "or Ethernet: range per direction and altitude, message and aircraft counts, receiver position, "
-                    "unique ID and firmware versions (plus OTA keys to adsbee.aero only). token: from the fleet "
+                    "unique ID and firmware versions (plus OTA keys to adsbee.aero only). token: from the swarm "
                     "account page. Empty arguments keep their value. Default: 0,https://adsbee.aero,(none).\r\n\t"
-                    "AT+FLEET?\r\n\tQuery the setting; the token is masked.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFleetCallback, comms_manager)},
+                    "AT+SWARM?\r\n\tQuery the setting; the token is masked.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSwarmCallback, comms_manager)},
     {.command = "GNSS",
      .min_args = 0,
      .max_args = 3,

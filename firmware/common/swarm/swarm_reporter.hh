@@ -7,11 +7,11 @@
 #include "range_map.hh"
 
 /**
- * What FleetReporter needs from the device. The ESP32 implements it in esp/main/fleet; host tests use fakes.
+ * What SwarmReporter needs from the device. The ESP32 implements it in esp/main/swarm; host tests use fakes.
  */
-class FleetPlatform {
+class SwarmPlatform {
    public:
-    virtual ~FleetPlatform() {}
+    virtual ~SwarmPlatform() {}
     virtual uint32_t NowMs() = 0;
     virtual uint32_t Random() = 0;
     // WiFi station or Ethernet has an address.
@@ -20,15 +20,15 @@ class FleetPlatform {
     // One HTTP exchange; request.path is the full URL. False means no response.
     virtual bool Http(const AutoUpdatePlatform::HttpRequest& request, AutoUpdatePlatform::HttpResult& result,
                       AutoUpdatePlatform::BodySink* sink) = 0;
-    // Firmware the fleet account staged for this device, or nullptr for none. AUTO_UPDATE decides whether it installs.
+    // Firmware the swarm account staged for this device, or nullptr for none. AUTO_UPDATE decides whether it installs.
     virtual void SetFirmwareTarget(const char* tag, const char* channel) = 0;
 };
 
 /**
- * Fleet device protocol v1: one POST {server}/api/fleet/v1/report per period with the range map and counts. A report
+ * Swarm device protocol v1: one POST {server}/api/swarm/v1/report per period with the range map and counts. A report
  * that fails stays pending with its seq and start; later periods merge into it until the server takes it.
  */
-class FleetReporter {
+class SwarmReporter {
    public:
     struct Config {
         const char* product = "adsbee_1090";
@@ -66,8 +66,8 @@ class FleetReporter {
 
     static constexpr uint16_t kBodyMaxLen = 2048;
 
-    FleetReporter(FleetPlatform& platform, const char* version, const Config& config, uint32_t first_seq = 0);
-    FleetReporter(FleetPlatform& platform, const char* version) : FleetReporter(platform, version, Config()) {}
+    SwarmReporter(SwarmPlatform& platform, const char* version, const Config& config, uint32_t first_seq = 0);
+    SwarmReporter(SwarmPlatform& platform, const char* version) : SwarmReporter(platform, version, Config()) {}
 
     // Delay before the first report: 2-5 min after boot, or after uptime_ms if that is later.
     uint32_t FirstDelayMs(uint32_t uptime_ms);
@@ -76,7 +76,7 @@ class FleetReporter {
      * Ends the live period: moves it into the pending report (merging if one is waiting) and clears it. Call from the
      * task that feeds live, never while Send() runs.
      */
-    void TakePeriod(FleetRecorder& live, uint32_t now_ms, const DeviceState& state);
+    void TakePeriod(SwarmRecorder& live, uint32_t now_ms, const DeviceState& state);
 
     /**
      * Sends the pending report. Blocks while it works.
@@ -85,7 +85,7 @@ class FleetReporter {
     uint32_t Send(const char* server, const char* token);
 
     // Starts a new period at now_ms without reporting the data so far (e.g. while stopped).
-    void Restart(FleetRecorder& live, uint32_t now_ms);
+    void Restart(SwarmRecorder& live, uint32_t now_ms);
 
     // A new token undoes a 410.
     void ClearStop() { status_.stopped = false; }
@@ -93,7 +93,7 @@ class FleetReporter {
     bool has_pending() const { return have_pending_; }
     uint32_t seq() const { return seq_; }
     const Status& status() const { return status_; }
-    const FleetRecorder& pending() const { return pending_; }
+    const SwarmRecorder& pending() const { return pending_; }
 
     // True for https://adsbee.aero (any path): the only server that gets the OTA keys.
     static bool IsDefaultServer(const char* server);
@@ -111,11 +111,11 @@ class FleetReporter {
     uint32_t RetryMs(uint32_t retry_after_s);
     Result Finish(Result result, int http_status);
 
-    FleetPlatform& platform_;
+    SwarmPlatform& platform_;
     Config config_;
     char version_[AutoUpdatePlatform::kVersionMaxLen + 1] = {0};
 
-    FleetRecorder pending_;
+    SwarmRecorder pending_;
     bool have_pending_ = false;
     uint32_t seq_ = 0;
     uint32_t pending_start_s_ = 0;

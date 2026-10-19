@@ -1549,7 +1549,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
                         RecordRange(aircraft);
                     }
                     if constexpr (kRecordsRange<T>) {
-                        if (fleet_recorder_ != nullptr) fleet_recorder_->MarkAircraft(it->first);
+                        if (swarm_recorder_ != nullptr) swarm_recorder_->MarkAircraft(it->first);
                     }
                 },
                 it->second);
@@ -1591,8 +1591,8 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     }
 
     // Update aggregate statistics.
-    if (fleet_recorder_ != nullptr) {
-        fleet_recorder_->NoteAircraftCount(metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
+    if (swarm_recorder_ != nullptr) {
+        swarm_recorder_->NoteAircraftCount(metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
     }
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.

@@ -3,7 +3,7 @@ if (TARGET host_test OR TARGET host_test_fpu)
     foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         if (TARGET ${_test_tgt})
             target_sources(${_test_tgt} PRIVATE
-                fleet_reporter.cpp
+                swarm_reporter.cpp
             )
             target_include_directories(${_test_tgt} PRIVATE
                 .

@@ -6,7 +6,7 @@
 #include "comms.hh"
 #include "device_info.hh"
 #include "esp_random.h"
-#include "fleet_manager.hh"
+#include "swarm_manager.hh"
 #include "esp_heap_caps.h"
 #include "hal.hh"
 #include "hardware_capabilities.hh"
@@ -21,7 +21,7 @@ const char AutoUpdateManager::kAPIBase[] = AUTO_UPDATE_API_BASE;
 
 static const char kNVSNamespace[] = "auto_update";
 static const char kNVSStateKey[] = "state";
-static const char kNVSFleetTargetKey[] = "fleet_target";
+static const char kNVSSwarmTargetKey[] = "swarm_target";
 
 AutoUpdateManager auto_update_manager;
 
@@ -57,13 +57,13 @@ void AutoUpdateManager::Update() {
         }
         return;
     }
-    if (!fleet_target_loaded_) {
-        // Before the first check, so a reboot keeps the target until the next fleet report.
-        fleet_target_loaded_ = true;
+    if (!swarm_target_loaded_) {
+        // Before the first check, so a reboot keeps the target until the next swarm report.
+        swarm_target_loaded_ = true;
         nvs_handle_t handle;
         if (nvs_open(kNVSNamespace, NVS_READONLY, &handle) == ESP_OK) {
-            size_t len = sizeof(fleet_target_);
-            if (nvs_get_str(handle, kNVSFleetTargetKey, fleet_target_, &len) != ESP_OK) fleet_target_[0] = '\0';
+            size_t len = sizeof(swarm_target_);
+            if (nvs_get_str(handle, kNVSSwarmTargetKey, swarm_target_, &len) != ESP_OK) swarm_target_[0] = '\0';
             nvs_close(handle);
         }
     }
@@ -104,7 +104,7 @@ void AutoUpdateManager::Update() {
         return;
     }
     low_memory_ = false;
-    if (fleet_manager.Busy()) return;  // One TLS session at a time.
+    if (swarm_manager.Busy()) return;  // One TLS session at a time.
     if (xTaskCreate(auto_update_task, "auto_update", kTaskStackSizeBytes, NULL, kTaskPriority, &task_) != pdPASS) {
         task_ = nullptr;
         next_run_timestamp_ms_ = now_ms + kLowMemoryRetryMs;
@@ -118,7 +118,7 @@ void AutoUpdateManager::Task() {
     tap_line_len_ = 0;
     capturing_ = true;
     xSemaphoreTake(updater_mutex_, portMAX_DELAY);
-    updater_->SetTarget(settings_manager.settings.fleet_enabled ? fleet_target_ : nullptr);
+    updater_->SetTarget(settings_manager.settings.swarm_enabled ? swarm_target_ : nullptr);
     xSemaphoreGive(updater_mutex_);
     uint32_t delay_ms = updater_->RunOnce();
     capturing_ = false;
@@ -147,21 +147,21 @@ void AutoUpdateManager::GetStatus(Status& status) {
     xSemaphoreGive(updater_mutex_);
 }
 
-void AutoUpdateManager::SetFleetTarget(const char* tag) {
+void AutoUpdateManager::SetSwarmTarget(const char* tag) {
     if (tag == nullptr) tag = "";
     xSemaphoreTake(updater_mutex_, portMAX_DELAY);
-    fleet_target_loaded_ = true;  // Newer than what NVS holds.
-    bool changed = strncmp(fleet_target_, tag, sizeof(fleet_target_) - 1) != 0;
+    swarm_target_loaded_ = true;  // Newer than what NVS holds.
+    bool changed = strncmp(swarm_target_, tag, sizeof(swarm_target_) - 1) != 0;
     if (changed) {
-        strncpy(fleet_target_, tag, sizeof(fleet_target_) - 1);
-        fleet_target_[sizeof(fleet_target_) - 1] = '\0';
+        strncpy(swarm_target_, tag, sizeof(swarm_target_) - 1);
+        swarm_target_[sizeof(swarm_target_) - 1] = '\0';
     }
     xSemaphoreGive(updater_mutex_);
     if (!changed) return;
-    CONSOLE_INFO("AutoUpdateManager::SetFleetTarget", "Fleet firmware target: %s.", tag[0] ? tag : "none");
+    CONSOLE_INFO("AutoUpdateManager::SetSwarmTarget", "Swarm firmware target: %s.", tag[0] ? tag : "none");
     nvs_handle_t handle;
     if (nvs_open(kNVSNamespace, NVS_READWRITE, &handle) == ESP_OK) {
-        if (nvs_set_str(handle, kNVSFleetTargetKey, fleet_target_) == ESP_OK) nvs_commit(handle);
+        if (nvs_set_str(handle, kNVSSwarmTargetKey, swarm_target_) == ESP_OK) nvs_commit(handle);
         nvs_close(handle);
     }
     static constexpr uint32_t kTargetCheckDelayMs = 30 * 1000;

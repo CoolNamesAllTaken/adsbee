@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "aircraft_dictionary.hh"
-#include "fleet_reporter.hh"
+#include "swarm_reporter.hh"
 #include "geo_utils.hh"
 #include "gtest/gtest.h"
 #include "hal.hh"
@@ -46,7 +46,7 @@ long JsonNumber(const std::string& json, const std::string& key) {
     return strtol(json.c_str() + pos + key.size() + 3, nullptr, 10);
 }
 
-class FakeFleetPlatform : public FleetPlatform {
+class FakeSwarmPlatform : public SwarmPlatform {
    public:
     uint32_t now_ms = 0;
     bool online = true;
@@ -90,8 +90,8 @@ class FakeFleetPlatform : public FleetPlatform {
     }
 };
 
-FleetReporter::DeviceState FixedPosition() {
-    FleetReporter::DeviceState state;
+SwarmReporter::DeviceState FixedPosition() {
+    SwarmReporter::DeviceState state;
     state.auto_update = true;
     state.rx_position_valid = true;
     state.latitude_deg = 37.1f;
@@ -102,7 +102,7 @@ FleetReporter::DeviceState FixedPosition() {
     return state;
 }
 
-void AddSecond(FleetRecorder& r, uint32_t modes, uint32_t es, uint32_t uat, uint32_t uplink, uint16_t aircraft) {
+void AddSecond(SwarmRecorder& r, uint32_t modes, uint32_t es, uint32_t uat, uint32_t uplink, uint16_t aircraft) {
     r.AddFrames(modes, es, uat, uplink);
     r.NoteAircraftCount(aircraft);
 }
@@ -111,7 +111,7 @@ const char kToken[] = "0123456789abcdef0123456789abcdef";
 
 }  // namespace
 
-TEST(FleetRange, AltitudeBands) {
+TEST(SwarmRange, AltitudeBands) {
     struct {
         int32_t ft;
         uint8_t band;
@@ -122,7 +122,7 @@ TEST(FleetRange, AltitudeBands) {
     for (const auto& c : cases) EXPECT_EQ(RangeMap::AltitudeBand(c.ft), c.band) << c.ft << " ft";
 }
 
-TEST(FleetRange, SectorsAndDistanceValues) {
+TEST(SwarmRange, SectorsAndDistanceValues) {
     EXPECT_EQ(RangeMap::Sector(0), 0);
     EXPECT_EQ(RangeMap::Sector(DegToBam16(9.99f)), 0);
     EXPECT_EQ(RangeMap::Sector(DegToBam16(10.01f)), 1);
@@ -142,7 +142,7 @@ TEST(FleetRange, SectorsAndDistanceValues) {
     EXPECT_EQ(RangeMap::DistanceValue(UINT32_MAX), 255);
 }
 
-TEST(FleetRange, RecordKeepsTheMaximumPerBin) {
+TEST(SwarmRange, RecordKeepsTheMaximumPerBin) {
     RangeMap map;
     map.Record(50000, DegToBam16(45.0f), 12000);   // band 5, sector 4: 25
     map.Record(30000, DegToBam16(45.0f), 12000);   // smaller: kept 25
@@ -155,7 +155,7 @@ TEST(FleetRange, RecordKeepsTheMaximumPerBin) {
     EXPECT_EQ(num_set, 2);
 }
 
-TEST(FleetRange, EncodeBitmapIsLSBFirstInBinOrder) {
+TEST(SwarmRange, EncodeBitmapIsLSBFirstInBinOrder) {
     RangeMap map;
     map.bins[0] = 7;
     map.bins[9] = 200;
@@ -173,36 +173,36 @@ TEST(FleetRange, EncodeBitmapIsLSBFirstInBinOrder) {
     EXPECT_EQ(values[2], 3);
 }
 
-TEST(FleetRange, Base64MatchesTheStandardAlphabetWithPadding) {
+TEST(SwarmRange, Base64MatchesTheStandardAlphabetWithPadding) {
     char out[16];
-    EXPECT_EQ(FleetReporter::Base64Encode(reinterpret_cast<const uint8_t*>(""), 0, out), 0u);
+    EXPECT_EQ(SwarmReporter::Base64Encode(reinterpret_cast<const uint8_t*>(""), 0, out), 0u);
     EXPECT_STREQ(out, "");
-    FleetReporter::Base64Encode(reinterpret_cast<const uint8_t*>("f"), 1, out);
+    SwarmReporter::Base64Encode(reinterpret_cast<const uint8_t*>("f"), 1, out);
     EXPECT_STREQ(out, "Zg==");
-    FleetReporter::Base64Encode(reinterpret_cast<const uint8_t*>("fo"), 2, out);
+    SwarmReporter::Base64Encode(reinterpret_cast<const uint8_t*>("fo"), 2, out);
     EXPECT_STREQ(out, "Zm8=");
-    FleetReporter::Base64Encode(reinterpret_cast<const uint8_t*>("foobar"), 6, out);
+    SwarmReporter::Base64Encode(reinterpret_cast<const uint8_t*>("foobar"), 6, out);
     EXPECT_STREQ(out, "Zm9vYmFy");
     const uint8_t high[] = {0xFB, 0xFF, 0xBF};
-    FleetReporter::Base64Encode(high, 3, out);
+    SwarmReporter::Base64Encode(high, 3, out);
     EXPECT_STREQ(out, "+/+/");
 }
 
-TEST(FleetRecorder, UniqueAircraftEstimate) {
-    FleetRecorder recorder;
+TEST(SwarmRecorder, UniqueAircraftEstimate) {
+    SwarmRecorder recorder;
     EXPECT_EQ(recorder.UniqueAircraft(), 0);
     for (int repeat = 0; repeat < 3; repeat++) {
         for (uint32_t icao = 0xA00000; icao < 0xA00000 + 500; icao++) recorder.MarkAircraft(icao);
     }
     EXPECT_NEAR(recorder.UniqueAircraft(), 500, 25);
-    FleetRecorder later;
+    SwarmRecorder later;
     for (uint32_t icao = 0xA00000 + 250; icao < 0xA00000 + 1500; icao++) later.MarkAircraft(icao);
     recorder.Merge(later);  // Union: 1500 different aircraft.
     EXPECT_NEAR(recorder.UniqueAircraft(), 1500, 75);
 }
 
-TEST(FleetRecorder, MergeTakesMaximaAndSums) {
-    FleetRecorder a, b;
+TEST(SwarmRecorder, MergeTakesMaximaAndSums) {
+    SwarmRecorder a, b;
     AddSecond(a, 10, 20, 3, 4, 50);
     a.range.bins[7] = 10;
     AddSecond(b, 1, 2, 3, 4, 70);
@@ -219,21 +219,21 @@ TEST(FleetRecorder, MergeTakesMaximaAndSums) {
     EXPECT_EQ(a.range.bins[8], 9);
 }
 
-TEST(FleetReporter, DefaultServerOnly) {
-    EXPECT_TRUE(FleetReporter::IsDefaultServer("https://adsbee.aero"));
-    EXPECT_TRUE(FleetReporter::IsDefaultServer("https://ADSBee.aero/"));
-    EXPECT_TRUE(FleetReporter::IsDefaultServer("https://adsbee.aero:443"));
-    EXPECT_FALSE(FleetReporter::IsDefaultServer("http://adsbee.aero"));
-    EXPECT_FALSE(FleetReporter::IsDefaultServer("https://adsbee.aero.example.com"));
-    EXPECT_FALSE(FleetReporter::IsDefaultServer("https://adsbee.aero:8443"));
-    EXPECT_FALSE(FleetReporter::IsDefaultServer("https://evil.example/adsbee.aero"));
-    EXPECT_FALSE(FleetReporter::IsDefaultServer("https://fleet.example.com"));
+TEST(SwarmReporter, DefaultServerOnly) {
+    EXPECT_TRUE(SwarmReporter::IsDefaultServer("https://adsbee.aero"));
+    EXPECT_TRUE(SwarmReporter::IsDefaultServer("https://ADSBee.aero/"));
+    EXPECT_TRUE(SwarmReporter::IsDefaultServer("https://adsbee.aero:443"));
+    EXPECT_FALSE(SwarmReporter::IsDefaultServer("http://adsbee.aero"));
+    EXPECT_FALSE(SwarmReporter::IsDefaultServer("https://adsbee.aero.example.com"));
+    EXPECT_FALSE(SwarmReporter::IsDefaultServer("https://adsbee.aero:8443"));
+    EXPECT_FALSE(SwarmReporter::IsDefaultServer("https://evil.example/adsbee.aero"));
+    EXPECT_FALSE(SwarmReporter::IsDefaultServer("https://swarm.example.com"));
 }
 
-TEST(FleetReporter, ReportBodyFollowsProtocolV1) {
-    FakeFleetPlatform platform;
-    FleetReporter reporter(platform, "0.9.1-rc9");
-    FleetRecorder live;
+TEST(SwarmReporter, ReportBodyFollowsProtocolV1) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
     AddSecond(live, 100, 200, 3, 4, 17);
     live.MarkAircraft(0xABCDEF);
     live.RecordPosition(50000, DegToBam16(45.0f), 12000);
@@ -247,7 +247,7 @@ TEST(FleetReporter, ReportBodyFollowsProtocolV1) {
     platform.now_ms = 3701 * 1000;
     reporter.Send("https://adsbee.aero/", kToken);
     ASSERT_EQ(platform.bodies.size(), 1u);
-    EXPECT_EQ(platform.urls[0], "https://adsbee.aero/api/fleet/v1/report");
+    EXPECT_EQ(platform.urls[0], "https://adsbee.aero/api/swarm/v1/report");
     EXPECT_EQ(platform.tokens[0], kToken);
     const std::string& body = platform.bodies[0];
     EXPECT_EQ(body.rfind("{\"v\":1,\"product\":\"adsbee_1090\",\"unique_id\":\"E6614C311B5B6F2A\"", 0), 0u) << body;
@@ -276,33 +276,33 @@ TEST(FleetReporter, ReportBodyFollowsProtocolV1) {
     EXPECT_FALSE(reporter.has_pending());
 }
 
-TEST(FleetReporter, NoOTAKeysToOtherServersAndNoRangeWithoutAFixedPosition) {
-    FakeFleetPlatform platform;
-    FleetReporter reporter(platform, "0.9.1-rc9");
-    FleetRecorder live;
+TEST(SwarmReporter, NoOTAKeysToOtherServersAndNoRangeWithoutAFixedPosition) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
     live.RecordPosition(50000, 0, 0);
-    FleetReporter::DeviceState state = FixedPosition();
+    SwarmReporter::DeviceState state = FixedPosition();
     state.rx_position_source = "lowest";
     state.range_valid = false;
     reporter.TakePeriod(live, 60000, state);
     reporter.Send("http://192.168.1.10:8000", kToken);
     ASSERT_EQ(platform.bodies.size(), 1u);
-    EXPECT_EQ(platform.urls[0], "http://192.168.1.10:8000/api/fleet/v1/report");
+    EXPECT_EQ(platform.urls[0], "http://192.168.1.10:8000/api/swarm/v1/report");
     EXPECT_EQ(platform.bodies[0].find("ota_keys"), std::string::npos);
     EXPECT_EQ(platform.bodies[0].find("\"range\""), std::string::npos);
     EXPECT_NE(platform.bodies[0].find("\"source\":\"lowest\""), std::string::npos);
 
     // No receiver position at all: rx_position is null, stats still go.
-    reporter.TakePeriod(live, 120000, FleetReporter::DeviceState());
+    reporter.TakePeriod(live, 120000, SwarmReporter::DeviceState());
     reporter.Send("http://192.168.1.10:8000", kToken);
     EXPECT_NE(platform.bodies[1].find("\"rx_position\":null,\"stats\":{"), std::string::npos);
     EXPECT_EQ(platform.bodies[1].find("\"range\""), std::string::npos);
 }
 
-TEST(FleetReporter, FailedReportMergesWithSameSeqAndStart) {
-    FakeFleetPlatform platform;
-    FleetReporter reporter(platform, "0.9.1-rc9");
-    FleetRecorder live;
+TEST(SwarmReporter, FailedReportMergesWithSameSeqAndStart) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
     reporter.Restart(live, 200 * 1000);
     AddSecond(live, 10, 20, 0, 0, 5);
     live.RecordPosition(10000, DegToBam16(5.0f), 500);   // bin 0: 5
@@ -361,12 +361,12 @@ TEST(FleetReporter, FailedReportMergesWithSameSeqAndStart) {
     EXPECT_NE(platform.bodies[3].find("\"max\":\"\""), std::string::npos);
 }
 
-TEST(FleetReporter, RangeStaysOutIfAnyMergedPeriodLackedAFixedPosition) {
-    FakeFleetPlatform platform;
+TEST(SwarmReporter, RangeStaysOutIfAnyMergedPeriodLackedAFixedPosition) {
+    FakeSwarmPlatform platform;
     platform.answer = false;
-    FleetReporter reporter(platform, "0.9.1-rc9");
-    FleetRecorder live;
-    FleetReporter::DeviceState no_fix = FixedPosition();
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
+    SwarmReporter::DeviceState no_fix = FixedPosition();
     no_fix.range_valid = false;
     reporter.TakePeriod(live, 3600 * 1000, no_fix);
     reporter.Send("https://adsbee.aero", kToken);
@@ -376,10 +376,10 @@ TEST(FleetReporter, RangeStaysOutIfAnyMergedPeriodLackedAFixedPosition) {
     EXPECT_EQ(platform.bodies[1].find("\"range\""), std::string::npos);
 }
 
-TEST(FleetReporter, ResponseSetsPeriodAndFirmwareTarget) {
-    FakeFleetPlatform platform;
-    FleetReporter reporter(platform, "0.9.1-rc9");
-    FleetRecorder live;
+TEST(SwarmReporter, ResponseSetsPeriodAndFirmwareTarget) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
     platform.response = "{\"next_report_s\": 60, \"firmware\": {\"tag\": \"0.9.2\", \"channel\": \"stable\"}}";
     reporter.TakePeriod(live, 1000, FixedPosition());
     EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), 0u + 60 * 1000 - 30 * 1000);  // Jitter at most half.
@@ -397,10 +397,10 @@ TEST(FleetReporter, ResponseSetsPeriodAndFirmwareTarget) {
     EXPECT_EQ(platform.target, "");
 }
 
-TEST(FleetReporter, ErrorAnswers) {
-    FakeFleetPlatform platform;
-    FleetReporter reporter(platform, "0.9.1-rc9");
-    FleetRecorder live;
+TEST(SwarmReporter, ErrorAnswers) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
 
     // 429: Retry-After when longer than the backoff.
     platform.status = 429;
@@ -439,33 +439,33 @@ TEST(FleetReporter, ErrorAnswers) {
     EXPECT_STREQ(reporter.status().result, "ok");
 }
 
-TEST(FleetReporter, FirstReportTwoToFiveMinutesAfterBoot) {
-    FakeFleetPlatform platform;
-    FleetReporter reporter(platform, "0.9.1-rc9");
+TEST(SwarmReporter, FirstReportTwoToFiveMinutesAfterBoot) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
     EXPECT_EQ(reporter.FirstDelayMs(0), 120 * 1000u);  // Random() == 0.
     EXPECT_EQ(reporter.FirstDelayMs(100 * 1000), 20 * 1000u);
     EXPECT_EQ(reporter.FirstDelayMs(400 * 1000), 120 * 1000u);  // Turned on later: 2-5 min from now.
 }
 
-TEST(FleetReporter, FullBodyFits) {
-    FakeFleetPlatform platform;
-    FleetReporter reporter(platform, "0.9.1-rc9");
-    FleetRecorder live;
+TEST(SwarmReporter, FullBodyFits) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
     for (int i = 0; i < RangeMap::kNumBins; i++) live.range.bins[i] = 255;
     AddSecond(live, UINT32_MAX / 2, UINT32_MAX / 2, UINT32_MAX / 2, UINT32_MAX / 2, UINT16_MAX);
     reporter.TakePeriod(live, 4000000000u, FixedPosition());
     reporter.Send("https://adsbee.aero", kToken);
     ASSERT_EQ(platform.bodies.size(), 1u);
     EXPECT_GT(platform.bodies[0].size(), 1000u);
-    EXPECT_LT(platform.bodies[0].size(), FleetReporter::kBodyMaxLen);
+    EXPECT_LT(platform.bodies[0].size(), SwarmReporter::kBodyMaxLen);
     EXPECT_EQ(Base64Decode(JsonString(platform.bodies[0], "max")).size(), 432u);
 }
 
 // Positions reach the range map once an aircraft has two accepted decodes.
-TEST(FleetRecorder, DictionaryRecordsConfirmedPositions) {
+TEST(SwarmRecorder, DictionaryRecordsConfirmedPositions) {
     AircraftDictionary dictionary;
-    FleetRecorder recorder;
-    dictionary.SetFleetRecorder(&recorder);
+    SwarmRecorder recorder;
+    dictionary.SetSwarmRecorder(&recorder);
     dictionary.SetReferencePosition(48.0f, 18.0f);
     auto ingest = [&](const char* hex) {
         DecodedModeSPacket packet = DecodedModeSPacket((char*)hex);
@@ -503,7 +503,7 @@ TEST(FleetRecorder, DictionaryRecordsConfirmedPositions) {
     EXPECT_EQ(recorder.UniqueAircraft(), 1);
 
     // Without a recorder nothing is touched.
-    dictionary.SetFleetRecorder(nullptr);
+    dictionary.SetSwarmRecorder(nullptr);
     recorder.Clear();
     ingest("8DBEE001589B803335F17E3806C1");
     ingest("8DBEE001589B87A9D1D79C757A00");
@@ -512,7 +512,7 @@ TEST(FleetRecorder, DictionaryRecordsConfirmedPositions) {
     EXPECT_EQ(recorder.stats.aircraft_max, 0);
 }
 
-TEST(FleetRecorder, OnlyDirectPositionsCountForRange) {
+TEST(SwarmRecorder, OnlyDirectPositionsCountForRange) {
     ModeSAircraft mode_s(0xA46E6A);
     const ModeSAircraft::AddressType direct[] = {ModeSAircraft::kAddressTypeADSBICAO,
                                                  ModeSAircraft::kAddressTypeADSBICAONonTransponder,

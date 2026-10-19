@@ -227,9 +227,9 @@ class SettingsManager {
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
         static constexpr uint16_t kNTPServerMaxLen = 63;
-        static constexpr uint16_t kFleetServerMaxLen = 63;
-        static constexpr uint16_t kFleetTokenMaxLen = 63;
-        static constexpr const char* kDefaultFleetServer = "https://adsbee.aero";
+        static constexpr uint16_t kSwarmServerMaxLen = 63;
+        static constexpr uint16_t kSwarmTokenMaxLen = 63;
+        static constexpr const char* kDefaultSwarmServer = "https://adsbee.aero";
 
         /**
          * Core Network Settings struct is used for storing network settings that should remain unchanged through most
@@ -432,10 +432,10 @@ class SettingsManager {
         int32_t filter_altitude_a_ft = kDefaultFilterAltitudeAFt;
         int32_t filter_altitude_b_ft = kDefaultFilterAltitudeBFt;
 
-        // Fleet reporting (AT+FLEET): the ESP32 posts range and reception stats to a fleet server. Off by default.
-        bool fleet_enabled = false;
-        char fleet_server[kFleetServerMaxLen + 1];  // Base URL, e.g. https://adsbee.aero.
-        char fleet_token[kFleetTokenMaxLen + 1];    // Enroll token from the fleet account.
+        // Swarm reporting (AT+SWARM): the ESP32 posts range and reception stats to a swarm server. Off by default.
+        bool swarm_enabled = false;
+        char swarm_server[kSwarmServerMaxLen + 1];  // Base URL, e.g. https://adsbee.aero.
+        char swarm_token[kSwarmTokenMaxLen + 1];    // Enroll token from the swarm account.
 
         /**
          * Default constructor.
@@ -451,9 +451,9 @@ class SettingsManager {
             mqtt_broker.port = kDefaultMQTTPort;
             memset(ntp_server, '\0', sizeof(ntp_server));
             strncpy(ntp_server, "pool.ntp.org", kNTPServerMaxLen);
-            memset(fleet_server, '\0', sizeof(fleet_server));
-            strncpy(fleet_server, kDefaultFleetServer, kFleetServerMaxLen);
-            memset(fleet_token, '\0', sizeof(fleet_token));
+            memset(swarm_server, '\0', sizeof(swarm_server));
+            strncpy(swarm_server, kDefaultSwarmServer, kSwarmServerMaxLen);
+            memset(swarm_token, '\0', sizeof(swarm_token));
 
 #ifdef ON_PICO
             DeviceInfo device_info;
@@ -915,8 +915,8 @@ static_assert(offsetof(SettingsManager::Settings, ntp_server) == 1586, "Settings
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_mode) == 1650, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_a_ft) == 1652, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, filter_altitude_b_ft) == 1656, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, fleet_enabled) == 1660, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, fleet_server) == 1661, "Settings layout changed. See above.");
-static_assert(offsetof(SettingsManager::Settings, fleet_token) == 1725, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, swarm_enabled) == 1660, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, swarm_server) == 1661, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, swarm_token) == 1725, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

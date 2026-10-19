@@ -5,7 +5,7 @@
 #include <cstring>
 
 /**
- * Range per direction and altitude band for fleet reports (AT+FLEET), as the fleet protocol v1 defines it: 36 sectors
+ * Range per direction and altitude band for swarm reports (AT+SWARM), as the swarm protocol v1 defines it: 36 sectors
  * of 10 degrees (0 = north) by 12 altitude bands, each holding the largest distance seen, in units of kUnitMeters.
  */
 class RangeMap {
@@ -74,9 +74,9 @@ class RangeMap {
 };
 
 /**
- * What a fleet report covers: the range map plus message and aircraft counts. The aircraft dictionary feeds it.
+ * What a swarm report covers: the range map plus message and aircraft counts. The aircraft dictionary feeds it.
  */
-class FleetRecorder {
+class SwarmRecorder {
    public:
     static constexpr uint16_t kUniqueBits = 2048;  // Linear counting: a few % error up to ~3000 aircraft.
 
@@ -125,7 +125,7 @@ class FleetRecorder {
     }
 
     // Adds a later period: max for the range and peak aircraft, sums for counts, union for unique aircraft.
-    void Merge(const FleetRecorder& later) {
+    void Merge(const SwarmRecorder& later) {
         range.Merge(later.range);
         stats.modes_valid += later.stats.modes_valid;
         stats.es_valid += later.stats.es_valid;

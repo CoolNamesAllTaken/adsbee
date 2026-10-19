@@ -4,7 +4,7 @@
 #include "esp_http_client.h"
 
 /**
- * esp_http_client wrapper for the automatic updater and fleet reports: one kept-alive connection, the response body
+ * esp_http_client wrapper for the automatic updater and swarm reports: one kept-alive connection, the response body
  * streamed to a BodySink, server certificates checked against the built-in CA bundle. http:// URLs work too.
  */
 class HttpsClient {

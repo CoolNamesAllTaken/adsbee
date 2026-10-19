@@ -1239,9 +1239,9 @@ const SETTINGS_SCHEMA_1090 = [
         fields: [{ id: 'en', label: 'Enabled', type: 'bool' }],
     },
     {
-        cmd: 'FLEET', label: 'Fleet Reports', group: 'System',
-        help: '\u21E1 Hourly range map and stats to a fleet server.',
-        tip: 'Off by default. Needs internet over WiFi station or Ethernet. Sends the unique ID, MAC address, firmware versions, receiver position, range per direction and altitude, and message and aircraft counts. OTA keys go to adsbee.aero only. Range needs a Fixed or GNSS receiver position. With Automatic Updates on, installs the firmware the fleet account stages.',
+        cmd: 'SWARM', label: 'Swarm Reports', group: 'System',
+        help: '\u21E1 Hourly range map and stats to a swarm server.',
+        tip: 'Off by default. Needs internet over WiFi station or Ethernet. Sends the unique ID, MAC address, firmware versions, receiver position, range per direction and altitude, and message and aircraft counts. OTA keys go to adsbee.aero only. Range needs a Fixed or GNSS receiver position. With Automatic Updates on, installs the firmware the swarm account stages.',
         fields: [
             { id: 'en', label: 'Enabled', type: 'bool' },
             {
@@ -1250,12 +1250,12 @@ const SETTINGS_SCHEMA_1090 = [
             },
             {
                 id: 'token', label: 'Token', type: 'password', writeOnly: true, maxLen: 63,
-                placeholder: '(unchanged)', note: 'From the fleet account page.',
+                placeholder: '(unchanged)', note: 'From the swarm account page.',
                 validate: v => (/^[A-Za-z0-9._-]*$/.test(v) ? '' : 'Letters, digits, - _ and . only.'),
             },
             { id: 'stored', label: 'Stored Token', type: 'display' },
         ],
-        // FLEET=<en>(ENABLED),<server>(SERVER),<masked token>(TOKEN)
+        // SWARM=<en>(ENABLED),<server>(SERVER),<masked token>(TOKEN)
         parse(lines) {
             if (!lines[0]) return null;
             const args = atSplitArgs(lines[0]).map(atStripAnnotation);

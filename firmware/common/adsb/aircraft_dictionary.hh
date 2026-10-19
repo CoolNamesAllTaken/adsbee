@@ -923,8 +923,8 @@ class AircraftDictionary {
    public:
     static constexpr uint16_t kMaxNumAircraft = kAircraftDictionaryMaxNumAircraft;
 
-    // Receives range, message and aircraft counts for fleet reports (AT+FLEET), or nullptr for none. ESP32 only.
-    void SetFleetRecorder(FleetRecorder *recorder) { fleet_recorder_ = recorder; }
+    // Receives range, message and aircraft counts for swarm reports (AT+SWARM), or nullptr for none. ESP32 only.
+    void SetSwarmRecorder(SwarmRecorder *recorder) { swarm_recorder_ = recorder; }
 
     // Heard directly: TIS-B and ADS-R positions say where a ground station hears the aircraft, not this receiver.
     static inline bool IsDirectPosition(const ModeSAircraft &aircraft) {
@@ -1603,19 +1603,19 @@ class AircraftDictionary {
         }
     }
 
-    // Mode S and UAT positions go into fleet range maps; Remote ID drones don't.
+    // Mode S and UAT positions go into swarm range maps; Remote ID drones don't.
     template <typename T>
     static constexpr bool kRecordsRange = std::is_same_v<T, ModeSAircraft> || std::is_same_v<T, UATAircraft>;
 
     /**
-     * Adds a freshly computed distance to the fleet range map, once the position is confirmed by a second decode (the
+     * Adds a freshly computed distance to the swarm range map, once the position is confirmed by a second decode (the
      * first can be a CPR outlier). Only positions heard directly; altitude is barometric, else GNSS, and aircraft
      * without one are left out.
      */
     template <typename T>
     inline void RecordRange(const T &aircraft) {
         if constexpr (kRecordsRange<T>) {
-            if (fleet_recorder_ == nullptr || aircraft.num_position_decodes < 2 ||
+            if (swarm_recorder_ == nullptr || aircraft.num_position_decodes < 2 ||
                 aircraft.distance_m == Aircraft::kDistanceUnknown || !IsDirectPosition(aircraft)) {
                 return;
             }
@@ -1627,11 +1627,11 @@ class AircraftDictionary {
             } else {
                 return;
             }
-            fleet_recorder_->RecordPosition(aircraft.distance_m, aircraft.bearing_bam16, altitude_ft);
+            swarm_recorder_->RecordPosition(aircraft.distance_m, aircraft.bearing_bam16, altitude_ft);
         }
     }
 
-    FleetRecorder *fleet_recorder_ = nullptr;
+    SwarmRecorder *swarm_recorder_ = nullptr;
 
     void BumpReferenceEpoch();
 

@@ -1,4 +1,4 @@
-#include "fleet_reporter.hh"
+#include "swarm_reporter.hh"
 
 #include <cstdarg>
 #include <cstdio>
@@ -62,7 +62,7 @@ class Writer {
 }  // namespace
 
 // Reads {"next_report_s": N, "firmware": {"tag": "..", "channel": ".."} | null}.
-class FleetReporter::ResponseReader : public AutoUpdatePlatform::BodySink, public JsonScanner::Handler {
+class SwarmReporter::ResponseReader : public AutoUpdatePlatform::BodySink, public JsonScanner::Handler {
    public:
     bool OnBody(int status, const uint8_t* data, size_t len) override {
         if (status == 200) scanner_.Feed(reinterpret_cast<const char*>(data), len);
@@ -93,19 +93,19 @@ class FleetReporter::ResponseReader : public AutoUpdatePlatform::BodySink, publi
     bool in_firmware_ = false;
 };
 
-FleetReporter::FleetReporter(FleetPlatform& platform, const char* version, const Config& config, uint32_t first_seq)
+SwarmReporter::SwarmReporter(SwarmPlatform& platform, const char* version, const Config& config, uint32_t first_seq)
     : platform_(platform), config_(config), seq_(first_seq), period_s_(config.period_s) {
     CopyStr(version_, sizeof(version_), version);
     status_.seq = seq_;
 }
 
-const char* FleetReporter::ResultToStr(Result result) {
+const char* SwarmReporter::ResultToStr(Result result) {
     static const char* const kStrs[] = {"ok",       "no answer",    "no identity", "rejected",
                                         "slow down", "server error", "removed",     "bad request"};
     return result < sizeof(kStrs) / sizeof(kStrs[0]) ? kStrs[result] : "?";
 }
 
-bool FleetReporter::IsDefaultServer(const char* server) {
+bool SwarmReporter::IsDefaultServer(const char* server) {
     static const char kScheme[] = "https://";
     static const char kHost[] = "adsbee.aero";
     if (strncasecmp(server, kScheme, sizeof(kScheme) - 1) != 0) return false;
@@ -115,7 +115,7 @@ bool FleetReporter::IsDefaultServer(const char* server) {
     return host_len == sizeof(kHost) - 1 && strncasecmp(host, kHost, host_len) == 0;
 }
 
-size_t FleetReporter::Base64Encode(const uint8_t* data, size_t len, char* dest) {
+size_t SwarmReporter::Base64Encode(const uint8_t* data, size_t len, char* dest) {
     static const char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     size_t n = 0;
     for (size_t i = 0; i < len; i += 3) {
@@ -131,20 +131,20 @@ size_t FleetReporter::Base64Encode(const uint8_t* data, size_t len, char* dest) 
     return n;
 }
 
-uint32_t FleetReporter::Jittered(uint32_t s) {
+uint32_t SwarmReporter::Jittered(uint32_t s) {
     uint32_t jitter_s = config_.jitter_s < s ? config_.jitter_s : s / 2;
     uint32_t span_ms = 2 * jitter_s * 1000 + 1;
     return s * 1000 - jitter_s * 1000 + platform_.Random() % span_ms;
 }
 
-uint32_t FleetReporter::FirstDelayMs(uint32_t uptime_ms) {
+uint32_t SwarmReporter::FirstDelayMs(uint32_t uptime_ms) {
     uint32_t span_ms = (config_.first_max_s - config_.first_min_s) * 1000 + 1;
     uint32_t at_ms = config_.first_min_s * 1000 + platform_.Random() % span_ms;
     // Turned on later than that: the same delay from now, so the first period isn't empty.
     return at_ms > uptime_ms ? at_ms - uptime_ms : at_ms;
 }
 
-uint32_t FleetReporter::RetryMs(uint32_t retry_after_s) {
+uint32_t SwarmReporter::RetryMs(uint32_t retry_after_s) {
     uint32_t s = config_.retry_min_s;
     for (uint8_t i = 1; i < num_failures_ && s < period_s_; i++) s *= 2;
     if (s > period_s_) s = period_s_;
@@ -152,12 +152,12 @@ uint32_t FleetReporter::RetryMs(uint32_t retry_after_s) {
     return s * 1000 + platform_.Random() % (s * 250 + 1);  // Up to +25 %.
 }
 
-void FleetReporter::Restart(FleetRecorder& live, uint32_t now_ms) {
+void SwarmReporter::Restart(SwarmRecorder& live, uint32_t now_ms) {
     live.Clear();
     live_start_s_ = now_ms / 1000;
 }
 
-void FleetReporter::TakePeriod(FleetRecorder& live, uint32_t now_ms, const DeviceState& state) {
+void SwarmReporter::TakePeriod(SwarmRecorder& live, uint32_t now_ms, const DeviceState& state) {
     bool range_valid = state.range_valid;
     if (!have_pending_) {
         pending_ = live;
@@ -175,7 +175,7 @@ void FleetReporter::TakePeriod(FleetRecorder& live, uint32_t now_ms, const Devic
     Restart(live, now_ms);
 }
 
-size_t FleetReporter::BuildBody(char* buf, size_t buf_size, const AutoUpdatePlatform::Identity& identity,
+size_t SwarmReporter::BuildBody(char* buf, size_t buf_size, const AutoUpdatePlatform::Identity& identity,
                                 bool include_ota_keys, uint32_t uptime_s) const {
     Writer w(buf, buf_size);
     w.Printf("{\"v\":1,\"product\":\"");
@@ -208,7 +208,7 @@ size_t FleetReporter::BuildBody(char* buf, size_t buf_size, const AutoUpdatePlat
     } else {
         w.Printf("\"rx_position\":null,");
     }
-    const FleetRecorder::Stats& stats = pending_.stats;
+    const SwarmRecorder::Stats& stats = pending_.stats;
     w.Printf(
         "\"stats\":{\"modes_valid\":%lu,\"es_valid\":%lu,\"uat_adsb\":%lu,\"uat_uplink\":%lu,\"aircraft_max\":%u,"
         "\"aircraft_unique\":%u}",
@@ -229,14 +229,14 @@ size_t FleetReporter::BuildBody(char* buf, size_t buf_size, const AutoUpdatePlat
     return w.len();
 }
 
-FleetReporter::Result FleetReporter::Finish(Result result, int http_status) {
+SwarmReporter::Result SwarmReporter::Finish(Result result, int http_status) {
     status_.result = ResultToStr(result);
     status_.last_http_status = http_status;
     status_.seq = seq_;
     return result;
 }
 
-uint32_t FleetReporter::Send(const char* server, const char* token) {
+uint32_t SwarmReporter::Send(const char* server, const char* token) {
     status_.last_attempt_s = platform_.NowMs() / 1000;
     if (status_.stopped) {
         have_pending_ = false;  // Nobody takes it.
@@ -261,7 +261,7 @@ uint32_t FleetReporter::Send(const char* server, const char* token) {
         status_.last_body_len = static_cast<uint16_t>(len);
         size_t server_len = strlen(server);
         while (server_len > 0 && server[server_len - 1] == '/') server_len--;
-        snprintf(url, server_len + 32, "%.*s/api/fleet/v1/report", (int)server_len, server);
+        snprintf(url, server_len + 32, "%.*s/api/swarm/v1/report", (int)server_len, server);
         AutoUpdatePlatform::HttpRequest request;
         request.method = "POST";
         request.path = url;

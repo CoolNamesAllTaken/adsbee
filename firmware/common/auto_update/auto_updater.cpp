@@ -468,7 +468,7 @@ AutoUpdater::Reply AutoUpdater::GetOffer(Offer& offer) {
         if (reply != kReplyOK) return reply;
         if (!offer.parsed) return kReplyError;
         CopyStr(offer.recommended, sizeof(offer.recommended), target_);
-        offer.rollback = true;  // The fleet owner chose this version, older or not.
+        offer.rollback = true;  // The swarm owner chose this version, older or not.
         return kReplyOK;
     }
     char path[48];
@@ -660,7 +660,7 @@ uint32_t AutoUpdater::RunOnce() {
         return NextCheckMs();
     }
     if (target_[0] && !offer.has_asset && strcmp(target_, running_version_) != 0) {
-        // Never falls back to the recommendation: the fleet asked for this version.
+        // Never falls back to the recommendation: the swarm asked for this version.
         CopyStr(detail_, sizeof(detail_), "target not offered");
         SetState(kFailed, target_);
         return NextCheckMs();

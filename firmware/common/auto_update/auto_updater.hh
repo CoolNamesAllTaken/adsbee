@@ -138,7 +138,7 @@ class AutoUpdater {
     uint32_t RunOnce();
 
     /**
-     * Firmware a fleet server staged for this device (a version such as 0.9.2, or a release tag), installed instead of
+     * Firmware a swarm server staged for this device (a version such as 0.9.2, or a release tag), installed instead of
      * the service's recommendation. nullptr or "" goes back to the recommendation.
      */
     void SetTarget(const char* version_or_tag);
