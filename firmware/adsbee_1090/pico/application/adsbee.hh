@@ -255,6 +255,13 @@ class ADSBee {
     const TLLearner &GetTLLearner() const { return tl_learner_; }
 
     /**
+     * Comparator samples taken between demodulations since boot, and how many were high (the detector above the
+     * trigger level). Diagnostics.
+     */
+    uint32_t GetComparatorSamples() const { return comparator_samples_; }
+    uint32_t GetComparatorHighSamples() const { return comparator_high_samples_; }
+
+    /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
      * @retval TL in milliVolts.
      */
@@ -495,6 +502,7 @@ class ADSBee {
     void PruneAircraftDictionary();
     void Update1090LED();
     void UpdateNoiseFloor();
+    void SampleComparator();
     void UpdateRxPosition();
     void UpdateTLLearning(uint32_t valid_frames);
 
@@ -572,6 +580,8 @@ class ADSBee {
     uint16_t tl_adc_counts_ = 0;
 
     TLLearner tl_learner_;
+    uint32_t comparator_samples_ = 0;
+    uint32_t comparator_high_samples_ = 0;
 
     volatile uint64_t mlat_counter_wraps_ = 0;  // Written by the SysTick wrap handler.
 

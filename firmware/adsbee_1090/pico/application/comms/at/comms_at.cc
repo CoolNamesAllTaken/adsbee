@@ -2077,7 +2077,9 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
         case '?':
             // Read command.
             int tl_mv = adsbee.ReadTLMilliVolts();
-            CPP_AT_CMD_PRINTF("=%dmV (%d dBm)\r\n", tl_mv, adsbee.DetectorMilliVoltsTodBm(tl_mv));
+            CPP_AT_CMD_PRINTF("=%dmV (%d dBm),NF=%dmV,CMP=%lu/%lu\r\n", tl_mv, adsbee.DetectorMilliVoltsTodBm(tl_mv),
+                              adsbee.GetNoiseFloorMilliVolts(), adsbee.GetComparatorHighSamples(),
+                              adsbee.GetComparatorSamples());
             CPP_AT_SILENT_SUCCESS();
             break;
     }

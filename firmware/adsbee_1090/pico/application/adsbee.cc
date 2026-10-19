@@ -256,6 +256,8 @@ bool ADSBee::Update() {
 
     UpdateNoiseFloor();
 
+    SampleComparator();
+
     // Update sub-GHz radio.
     if (config_.has_subg && subg_radio.IsEnabled()) {
         bool subg_link_was_down = subg_radio.IsLinkDown();
@@ -1083,6 +1085,13 @@ void ADSBee::UpdateNoiseFloor() {
     }
     noise_floor_mv_ = noise_floor_mv_fp_ >> kNoiseFloorFixedPointShift;
     noise_floor_last_accepted_timestamp_ms_ = timestamp_ms;
+}
+
+void ADSBee::SampleComparator() {
+    uint32_t pins = gpio_get_all();
+    if (pins & demod_pins_mask_) return;
+    comparator_samples_++;
+    if (pins & (1u << config_.pulses_pin)) comparator_high_samples_++;
 }
 
 void ADSBee::UpdateTLLearning(uint32_t valid_frames) {
