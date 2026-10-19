@@ -12,9 +12,9 @@
 #define FLEET_CYCLES() 0
 #endif
 struct FleetProfile {
-    uint64_t cycles[4] = {0};  // RecordRange, MarkAircraft, AddSecond, whole AircraftDictionary::Update.
+    uint64_t cycles[4] = {0};  // RecordRange, MarkAircraft, AddFrames+NoteAircraftCount, whole Update.
     uint32_t calls[4] = {0};
-    uint32_t recorded = 0;     // RecordRange calls that reached the map.
+    uint32_t recorded = 0;
 };
 inline FleetProfile fleet_profile;
 struct FleetProfileScope {
@@ -128,14 +128,18 @@ class FleetRecorder {
         unique_bits_[bit / 8] |= 1 << (bit % 8);
     }
 
-    // Once per dictionary update: that second's frame counts and the number of aircraft tracked.
-    inline void AddSecond(uint32_t modes_valid, uint32_t es_valid, uint32_t uat_adsb, uint32_t uat_uplink,
-                          uint16_t num_aircraft) {
+    // Valid frame counts as the receiver reports them each second.
+    inline void AddFrames(uint32_t modes_valid, uint32_t es_valid, uint32_t uat_adsb, uint32_t uat_uplink) {
         FleetProfileScope prof(2);
         stats.modes_valid += modes_valid;
         stats.es_valid += es_valid;
         stats.uat_adsb += uat_adsb;
         stats.uat_uplink += uat_uplink;
+    }
+
+    // Once per dictionary update: the number of aircraft tracked.
+    inline void NoteAircraftCount(uint16_t num_aircraft) {
+        FleetProfileScope prof(2);
         if (num_aircraft > stats.aircraft_max) stats.aircraft_max = num_aircraft;
     }
 

@@ -102,6 +102,11 @@ FleetReporter::DeviceState FixedPosition() {
     return state;
 }
 
+void AddSecond(FleetRecorder& r, uint32_t modes, uint32_t es, uint32_t uat, uint32_t uplink, uint16_t aircraft) {
+    r.AddFrames(modes, es, uat, uplink);
+    r.NoteAircraftCount(aircraft);
+}
+
 const char kToken[] = "0123456789abcdef0123456789abcdef";
 
 }  // namespace
@@ -198,10 +203,10 @@ TEST(FleetRecorder, UniqueAircraftEstimate) {
 
 TEST(FleetRecorder, MergeTakesMaximaAndSums) {
     FleetRecorder a, b;
-    a.AddSecond(10, 20, 3, 4, 50);
+    AddSecond(a, 10, 20, 3, 4, 50);
     a.range.bins[7] = 10;
-    b.AddSecond(1, 2, 3, 4, 70);
-    b.AddSecond(1, 2, 3, 4, 60);
+    AddSecond(b, 1, 2, 3, 4, 70);
+    AddSecond(b, 1, 2, 3, 4, 60);
     b.range.bins[7] = 5;
     b.range.bins[8] = 9;
     a.Merge(b);
@@ -229,12 +234,12 @@ TEST(FleetReporter, ReportBodyFollowsProtocolV1) {
     FakeFleetPlatform platform;
     FleetReporter reporter(platform, "0.9.1-rc9");
     FleetRecorder live;
-    live.AddSecond(100, 200, 3, 4, 17);
+    AddSecond(live, 100, 200, 3, 4, 17);
     live.MarkAircraft(0xABCDEF);
     live.RecordPosition(50000, DegToBam16(45.0f), 12000);
     platform.now_ms = 3700 * 1000;
     reporter.Restart(live, 100 * 1000);  // Period starts at uptime 100 s.
-    live.AddSecond(100, 200, 3, 4, 17);
+    AddSecond(live, 100, 200, 3, 4, 17);
     live.RecordPosition(50000, DegToBam16(45.0f), 12000);
     reporter.TakePeriod(live, 3700 * 1000, FixedPosition());
     EXPECT_EQ(live.stats.modes_valid, 0u);  // The live period starts over.
@@ -299,7 +304,7 @@ TEST(FleetReporter, FailedReportMergesWithSameSeqAndStart) {
     FleetReporter reporter(platform, "0.9.1-rc9");
     FleetRecorder live;
     reporter.Restart(live, 200 * 1000);
-    live.AddSecond(10, 20, 0, 0, 5);
+    AddSecond(live, 10, 20, 0, 0, 5);
     live.RecordPosition(10000, DegToBam16(5.0f), 500);   // bin 0: 5
     live.MarkAircraft(1);
     reporter.TakePeriod(live, 3800 * 1000, FixedPosition());
@@ -313,7 +318,7 @@ TEST(FleetReporter, FailedReportMergesWithSameSeqAndStart) {
     EXPECT_STREQ(reporter.status().result, "no answer");
 
     // The next period merges into the pending report.
-    live.AddSecond(1, 2, 0, 0, 9);
+    AddSecond(live, 1, 2, 0, 0, 9);
     live.RecordPosition(4000, DegToBam16(5.0f), 500);    // Smaller: bin 0 stays 5.
     live.RecordPosition(30000, DegToBam16(15.0f), 500);  // bin 1: 15
     live.MarkAircraft(2);
@@ -439,7 +444,7 @@ TEST(FleetReporter, FirstReportTwoToFiveMinutesAfterBoot) {
     FleetReporter reporter(platform, "0.9.1-rc9");
     EXPECT_EQ(reporter.FirstDelayMs(0), 120 * 1000u);  // Random() == 0.
     EXPECT_EQ(reporter.FirstDelayMs(100 * 1000), 20 * 1000u);
-    EXPECT_EQ(reporter.FirstDelayMs(400 * 1000), 0u);
+    EXPECT_EQ(reporter.FirstDelayMs(400 * 1000), 120 * 1000u);  // Turned on later: 2-5 min from now.
 }
 
 TEST(FleetReporter, FullBodyFits) {
@@ -447,7 +452,7 @@ TEST(FleetReporter, FullBodyFits) {
     FleetReporter reporter(platform, "0.9.1-rc9");
     FleetRecorder live;
     for (int i = 0; i < RangeMap::kNumBins; i++) live.range.bins[i] = 255;
-    live.AddSecond(UINT32_MAX / 2, UINT32_MAX / 2, UINT32_MAX / 2, UINT32_MAX / 2, UINT16_MAX);
+    AddSecond(live, UINT32_MAX / 2, UINT32_MAX / 2, UINT32_MAX / 2, UINT32_MAX / 2, UINT16_MAX);
     reporter.TakePeriod(live, 4000000000u, FixedPosition());
     reporter.Send("https://adsbee.aero", kToken);
     ASSERT_EQ(platform.bodies.size(), 1u);
@@ -478,7 +483,7 @@ TEST(FleetRecorder, DictionaryRecordsConfirmedPositions) {
     ingest("8DBEE001589B87A9D1D79C757A00");
     dictionary.Update(get_time_since_boot_ms());
     EXPECT_EQ(num_bins(), 0);
-    EXPECT_EQ(recorder.stats.es_valid, 2u);
+    EXPECT_EQ(recorder.stats.es_valid, 0u);  // Frame counts come from the RP2040, not the dictionary.
     EXPECT_EQ(recorder.stats.aircraft_max, 1);
     EXPECT_EQ(recorder.UniqueAircraft(), 1);
 
@@ -495,7 +500,6 @@ TEST(FleetRecorder, DictionaryRecordsConfirmedPositions) {
     ASSERT_EQ(num_bins(), 1);
     uint8_t band = RangeMap::AltitudeBand(aircraft->baro_altitude_ft);
     EXPECT_EQ(recorder.range.bins[band * 36 + 1], 24);  // 46897 m at 18.41 deg.
-    EXPECT_EQ(recorder.stats.es_valid, 6u);
     EXPECT_EQ(recorder.UniqueAircraft(), 1);
 
     // Without a recorder nothing is touched.
@@ -505,5 +509,5 @@ TEST(FleetRecorder, DictionaryRecordsConfirmedPositions) {
     ingest("8DBEE001589B87A9D1D79C757A00");
     dictionary.Update(get_time_since_boot_ms());
     EXPECT_EQ(num_bins(), 0);
-    EXPECT_EQ(recorder.stats.es_valid, 0u);
+    EXPECT_EQ(recorder.stats.aircraft_max, 0);
 }

@@ -1593,9 +1593,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
 
     // Update aggregate statistics.
     if (fleet_recorder_ != nullptr) {
-        fleet_recorder_->AddSecond(metrics_counter_.valid_squitter_frames, metrics_counter_.valid_extended_squitter_frames,
-                                   metrics_counter_.valid_uat_adsb_frames, metrics_counter_.valid_uat_uplink_frames,
-                                   metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
+        fleet_recorder_->NoteAircraftCount(metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
     }
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.
