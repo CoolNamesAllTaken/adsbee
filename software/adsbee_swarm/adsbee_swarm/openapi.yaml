@@ -200,6 +200,7 @@ paths:
         '403': {$ref: '#/components/responses/Error'}
         '410': {$ref: '#/components/responses/Error'}
         '429': {description: Slow down, headers: {Retry-After: {schema: {type: integer}}}}
+        '503': {description: "The device verifier cannot decide now (unavailable): back off and retry", headers: {Retry-After: {schema: {type: integer}}}}
   /api/swarm/v1/account:
     get:
       summary: Who is asking

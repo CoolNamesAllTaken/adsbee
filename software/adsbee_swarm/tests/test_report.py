@@ -277,3 +277,29 @@ def test_the_api_and_the_page_say_check_position(client, owner, bee):
     client.login(username='alice', password='pw')
     assert '⚠' in client.get('/').content.decode()
     assert 'too many aircraft looked farther' in client.get(f'/devices/{device.pk}/').content.decode()
+
+
+def unavailable(request, report, account):
+    from adsbee_swarm import VerifierUnavailable
+
+    raise VerifierUnavailable('no keys loaded')
+
+
+def unavailable_soon(request, report, account):
+    from adsbee_swarm import VerifierUnavailable
+
+    raise VerifierUnavailable(retry_after=120)
+
+
+@override_settings(ADSBEE_SWARM_DEVICE_VERIFIER='tests.test_report.unavailable')
+def test_a_verifier_that_cannot_decide_answers_503_with_retry_after(client, owner, bee):
+    response = post_report(client, owner.token, bee.report())
+    assert response.status_code == 503 and response.json() == {'error': 'unavailable', 'detail': 'no keys loaded'}
+    assert response['Retry-After'] == '3600'
+    assert not Device.objects.exists(), "nothing is stored while undecided"
+
+
+@override_settings(ADSBEE_SWARM_DEVICE_VERIFIER='tests.test_report.unavailable_soon')
+def test_the_verifier_may_name_its_own_retry_after(client, owner, bee):
+    response = post_report(client, owner.token, bee.report())
+    assert response.status_code == 503 and response['Retry-After'] == '120'

@@ -81,6 +81,7 @@ when `AT+AUTO_UPDATE=1`, downloading from the adsbee.aero firmware API.
 | 403 | `bad_key` | Key check failed (adsbee.aero only) |
 | 410 | `removed` | Stop until the token changes |
 | 429 | `rate_limited` | Wait `Retry-After` seconds |
+| 503 | `unavailable` | The server cannot check keys right now: back off `Retry-After` seconds (default 3600), retry |
 
 A removed bee is accepted again once its owner restores it or rotates the enroll token.
 

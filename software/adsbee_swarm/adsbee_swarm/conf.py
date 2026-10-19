@@ -19,8 +19,10 @@ DEFAULTS = {
     #: Privileges a new account gets unless told otherwise.
     'DEFAULT_PRIVILEGES': ['swarm'],
     #: Dotted path to `verify(request, report: dict, account) -> bool`; None accepts every device.
-    #: False answers 403 bad_key.
+    #: False answers 403 bad_key; raising adsbee_swarm.VerifierUnavailable answers 503.
     'DEVICE_VERIFIER': None,
+    #: Retry-After (seconds) when the verifier raises VerifierUnavailable without its own.
+    'VERIFIER_RETRY_AFTER_S': 3600,
     #: Dotted path to `validate_tag(product, tag) -> str | None` (an error), for rollout targets.
     'TAG_VALIDATOR': None,
     #: Seconds between reports, told to every device.

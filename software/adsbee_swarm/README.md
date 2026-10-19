@@ -46,6 +46,7 @@ INSTALLED_APPS += ['adsbee_swarm']
 urlpatterns += [path('', include('adsbee_swarm.api_urls')),          # device + user API
                 path('swarm/', include('adsbee_swarm.urls'))]         # reference UI (optional)
 ADSBEE_SWARM_DEVICE_VERIFIER = 'myapp.keys.verify_swarm_report'      # (request, report, account) -> bool
+# The verifier raises adsbee_swarm.VerifierUnavailable when it cannot decide (no keys): 503, Retry-After.
 ```
 
 `adsbee_swarm.services` has what staff pages need: `create_account`, `grant`, `revoke`,

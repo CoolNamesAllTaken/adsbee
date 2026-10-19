@@ -1,8 +1,8 @@
 """
 POST /api/swarm/v1/report: what a bee sends every period (docs/swarm_api.md, "Device report").
 
-401 bad_token, 403 bad_key (the DEVICE_VERIFIER said no), 410 removed, 429 rate_limited
-(Retry-After), 400 bad_request. Errors are {"error": code, "detail"?: text}.
+401 bad_token, 403 bad_key (the DEVICE_VERIFIER said no), 503 unavailable (it could not decide;
+Retry-After), 410 removed, 429 rate_limited (Retry-After), 400 bad_request. Errors are {"error": code, "detail"?: text}.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import conf, protocol, ratelimit, rollout, services
+from . import VerifierUnavailable, conf, protocol, ratelimit, rollout, services
 from .models import Device
 
 log = logging.getLogger('adsbee_swarm.report')
@@ -61,7 +61,13 @@ def report(request):
         return error(400, 'bad_request', str(exc)[:200])
 
     verifier = conf.hook('DEVICE_VERIFIER')
-    if verifier is not None and not verifier(request, data, account):
+    try:
+        genuine = verifier is None or verifier(request, data, account)
+    except VerifierUnavailable as exc:
+        log.warning('verifier unavailable: %s', exc.detail)
+        return error(503, 'unavailable', exc.detail,
+                     retry_after=exc.retry_after or conf.get('VERIFIER_RETRY_AFTER_S'))
+    if not genuine:
         log.info('bad_key account=%s device=%s:%s', account.pk, parsed.product, parsed.unique_id)
         return error(403, 'bad_key')
 
