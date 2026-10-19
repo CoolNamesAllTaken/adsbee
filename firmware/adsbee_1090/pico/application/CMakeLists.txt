@@ -112,6 +112,7 @@ if (ON_EMBEDDED_DEVICE)
         adsbee.cc
         mode_s_soft_demod.cc
         settings.cc
+        tl_learner.cc
     )
 
     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})

@@ -254,8 +254,6 @@ bool ADSBee::Update() {
         decoder.decoded_mode_s_packet_out_queue_overflowed_ = false;
     }
 
-    UpdateTLLearning();
-
     UpdateNoiseFloor();
 
     // Update sub-GHz radio.
@@ -447,7 +445,6 @@ void ADSBee::UpdateRxPosition() {
     }
 }
 
-uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
 void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     // Read MLAT counter at the beginning to reduce jitter after interrupt.
@@ -730,15 +727,20 @@ bool ADSBee::SetTLOffsetMilliVolts(int tl_offset_mv) {
         return false;
     }
     tl_offset_mv_ = tl_offset_mv;
+    if (tl_learner_.IsActive()) {
+        tl_learner_.Stop();
+        CONSOLE_INFO("ADSBee::SetTLOffsetMilliVolts", "Trigger level learning stopped.");
+    }
 
     return true;
 }
 
 void ADSBee::StartTLLearning(uint16_t tl_learning_num_cycles, uint16_t tl_learning_start_temperature_mv,
-                             uint16_t tl_min_mv, uint16_t tl_max_mv) {
-    tl_learning_temperature_mv_ = tl_learning_start_temperature_mv;
-    tl_learning_temperature_step_mv_ = tl_learning_start_temperature_mv / tl_learning_num_cycles;
-    tl_learning_cycle_start_timestamp_ms_ = get_time_since_boot_ms();
+                             int tl_min_mv, int tl_max_mv) {
+    tl_offset_mv_ = tl_learner_.Start(tl_offset_mv_, {.num_cycles = tl_learning_num_cycles,
+                                                      .start_temperature_mv = tl_learning_start_temperature_mv,
+                                                      .min_offset_mv = MAX(tl_min_mv, kTLOffsetMinMV),
+                                                      .max_offset_mv = MIN(tl_max_mv, kTLOffsetMaxMV)});
 }
 
 /** Private Functions **/
@@ -987,12 +989,8 @@ void ADSBee::PruneAircraftDictionary() {
             esp32.Write(ObjectDictionary::kAddrAircraftDictionaryMetrics, aircraft_dictionary.metrics,
                         true);  // require ACK.
         }
-        // Add the fresh metrics values to the pile used for TL learning.
-        // If learning, add the number of valid packets received to the pile used for trigger level learning.
-        if (tl_learning_temperature_mv_ > 0) {
-            tl_learning_num_valid_packets_ += (aircraft_dictionary.metrics.valid_squitter_frames +
-                                               aircraft_dictionary.metrics.valid_extended_squitter_frames);
-        }
+        UpdateTLLearning(aircraft_dictionary.metrics.valid_squitter_frames +
+                         aircraft_dictionary.metrics.valid_extended_squitter_frames);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
 
 #ifdef DEBUG_ISR_TIMING
@@ -1087,50 +1085,11 @@ void ADSBee::UpdateNoiseFloor() {
     noise_floor_last_accepted_timestamp_ms_ = timestamp_ms;
 }
 
-void ADSBee::UpdateTLLearning() {
-    // Update trigger level learning if it's active.
-    uint32_t timestamp_ms = get_time_since_boot_ms();
-    if (tl_learning_temperature_mv_ > 0 &&
-        timestamp_ms - tl_learning_cycle_start_timestamp_ms_ > kTLLearningIntervalMs) {
-        CPUMonitor::WorkScope work;
-        // Trigger level learning is active and due for an update.
-        // Is this neighbor (current value for tl_mv) worth traversing to?
-        float valid_packet_ratio = (tl_learning_num_valid_packets_ - tl_learning_prev_num_valid_packets_) /
-                                   MAX(tl_learning_prev_num_valid_packets_, 1);  // Avoid divide by zero.
-        float random_weight =
-            static_cast<int16_t>(get_rand_32()) * kInt16MaxRecip * 0.25;  // Random value from [-0.25,0.25].
-        if (valid_packet_ratio + random_weight > 0.0f) {
-            // Transition to neighbor TL value.
-            tl_learning_prev_tl_offset_mv_ = tl_offset_mv_;
-            tl_learning_prev_num_valid_packets_ = tl_learning_num_valid_packets_;
-        }
-        // Else keep existing TL value in tl_learning_prev_tl_mv_.
-
-        // DO STUFF HERE
-        // Find a new neighbor by stepping trigger level with random value from [-1.0, 1.0] * temperature.
-        uint16_t new_tl_offset_mv =
-            tl_offset_mv_ + static_cast<int16_t>(get_rand_32()) * tl_learning_temperature_mv_ / INT16_MAX;
-        if (new_tl_offset_mv > tl_learning_max_offset_mv_) {
-            tl_offset_mv_ = tl_learning_max_offset_mv_;
-        } else if (new_tl_offset_mv < tl_learning_min_offset_mv_) {
-            tl_offset_mv_ = tl_learning_min_offset_mv_;
-        } else {
-            tl_offset_mv_ = new_tl_offset_mv;
-        }
-
-        // Update learning temperature. Decrement by the annealing temperature step or set to 0
-        // if learning is complete.
-        if (tl_learning_temperature_mv_ > tl_learning_temperature_step_mv_) {
-            // Not done learning: step the trigger level learning temperature.
-            tl_learning_temperature_mv_ -= tl_learning_temperature_step_mv_;
-        } else {
-            // Done learning: take the current best trigger level and yeet outta here.
-            tl_learning_temperature_mv_ = 0;  // Set learning temperature to 0 to finish learnign trigger level.
-            tl_offset_mv_ = tl_learning_prev_tl_offset_mv_;  // Set trigger level to the best value we've seen so far.
-        }
-
-        // Store timestamp as start of trigger learning cycle so we know when to come back.
-        tl_learning_cycle_start_timestamp_ms_ = timestamp_ms;
-        tl_learning_num_valid_packets_ = 0;  // Start the counter over.
+void ADSBee::UpdateTLLearning(uint32_t valid_frames) {
+    if (!tl_learner_.IsActive()) return;
+    tl_offset_mv_ = tl_learner_.Update(valid_frames, get_rand_32(), get_rand_32());
+    if (!tl_learner_.IsActive()) {
+        CONSOLE_INFO("ADSBee::UpdateTLLearning",
+                     "Trigger level learning done: offset %d mV. Use AT+SETTINGS=SAVE to keep it.", tl_offset_mv_);
     }
 }
