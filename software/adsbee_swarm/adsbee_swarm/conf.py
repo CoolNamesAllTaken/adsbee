@@ -25,8 +25,8 @@ DEFAULTS = {
     'TAG_VALIDATOR': None,
     #: Seconds between reports, told to every device.
     'REPORT_PERIOD_S': 3600,
-    #: Hourly rows older than this many days become daily rows (`manage.py swarm_retention`).
-    'HOURLY_RETENTION_DAYS': 365,
+    #: Hourly rows older than this many days are deleted (`manage.py swarm_retention`); daily rows stay.
+    'HOURLY_RETENTION_DAYS': 90,
     #: Daily rows older than this are deleted. None keeps them.
     'DAILY_RETENTION_DAYS': None,
     #: "<count>/<seconds>" in the default cache. Per client IP before the token is read, then per

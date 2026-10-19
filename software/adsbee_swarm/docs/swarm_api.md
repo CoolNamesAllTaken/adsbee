@@ -89,8 +89,9 @@ rollout is a 404.
 | GET, POST | `/rollouts` | List / start |
 | GET, POST | `/rollouts/{id}` | Read; `{"action": "promote" \| "pause" \| "resume" \| "cancel"}` |
 
-Windows default to the last 7 days and span at most 400 days. Hourly data is kept 365 days, then
-rolled into days (`manage.py swarm_retention`).
+Windows default to the last 7 days and span at most 400 days. Every report lands in its bee's
+hourly row and its daily row; windows over 3 days, and `step=day`, read daily rows. Hourly rows
+are kept 90 days, daily rows indefinitely (`manage.py swarm_retention`).
 
 ### Rollouts
 

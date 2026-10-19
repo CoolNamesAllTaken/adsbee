@@ -129,6 +129,27 @@ def hour_of(moment: datetime) -> datetime:
     return moment.replace(minute=0, second=0, microsecond=0)
 
 
+def day_of(moment: datetime) -> datetime:
+    return moment.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _apply(sample: Sample, report: Report, replaced: dict) -> None:
+    """Add a report to an hourly or daily row. `replaced`: the stats of the report it widens,
+    taken back out first, so a widened retry counts once (its range is a superset: max-merge)."""
+    for name in STATS:
+        if name in PEAK_STATS:
+            setattr(sample, name, max(getattr(sample, name), report.stats[name]))
+        else:
+            setattr(sample, name, max(0, getattr(sample, name) - replaced.get(name, 0)) + report.stats[name])
+    if not replaced:
+        sample.reports += 1
+    if report.ranges:
+        merged = ranges.merge(sample.ranges(), report.ranges)
+        sample.unit_m = max(sample.unit_m if sample.range_map else 0, report.unit_m)
+        sample.set_ranges(merged)
+    sample.save()
+
+
 def ingest(device: Device, report: Report, now: datetime | None = None) -> bool:
     """Store a report on `device` (locked by the caller). Returns False for a duplicate."""
     now = now or timezone.now()
@@ -150,18 +171,11 @@ def ingest(device: Device, report: Report, now: datetime | None = None) -> bool:
         replaced = {}
     else:
         replaced = last.get('stats') or {}
-    for name in STATS:
-        if name in PEAK_STATS:
-            setattr(sample, name, max(getattr(sample, name), report.stats[name]))
-        else:
-            setattr(sample, name, max(0, getattr(sample, name) - replaced.get(name, 0)) + report.stats[name])
-    if not replaced:
-        sample.reports += 1
-    if report.ranges:
-        merged = ranges.merge(sample.ranges(), report.ranges)
-        sample.unit_m = max(sample.unit_m if sample.range_map else 0, report.unit_m)
-        sample.set_ranges(merged)
-    sample.save()
+    _apply(sample, report, replaced)
+    # The bee's day, kept beside its hours from the first report: long windows read days.
+    daily, _ = Sample.objects.select_for_update().get_or_create(
+        device=device, span_s=Sample.DAY, start=day_of(sample.start))
+    _apply(daily, report, replaced)
 
     device.mac_address = report.mac_address or device.mac_address
     device.versions = report.versions

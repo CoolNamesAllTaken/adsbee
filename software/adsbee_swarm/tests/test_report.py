@@ -20,7 +20,8 @@ def test_a_report_is_stored_and_answered(client, owner, bee, rng):
     device = Device.objects.get(account=owner.account, unique_id=bee.unique_id)
     assert device.versions == {'rp2040': '0.9.1', 'esp32': '0.9.1'} and device.version == '0.9.1'
     assert (device.rx_lat, device.rx_source) == (bee.lat, 'fixed') and device.auto_update is True
-    sample = Sample.objects.get(device=device)
+    sample = Sample.objects.get(device=device, span_s=Sample.HOUR)
+    assert Sample.objects.get(device=device, span_s=Sample.DAY).ranges() == sample.ranges()
     assert sample.es_valid == body['stats']['es_valid'] and sample.reports == 1
     expected = ranges.decode(body['range']['changed'], body['range']['max'], 2000)
     assert sample.ranges() == expected and expected
@@ -30,14 +31,14 @@ def test_values_decode_to_meters_in_the_reports_unit(client, owner, bee):
     body = bee.report()
     body['range'].update(unit_m=500, **dict(zip(('changed', 'max'), ranges.encode({7: 1500, 400: 2000}, 500))))
     assert post_report(client, owner.token, body).status_code == 200
-    assert Sample.objects.get().ranges() == {7: 1500, 400: 2000}
+    assert Sample.objects.get(span_s=Sample.HOUR).ranges() == {7: 1500, 400: 2000}
 
 
 def test_without_a_position_the_range_is_dropped_and_stats_kept(client, owner, bee):
     body = bee.report()
     body['rx_position'] = None
     assert post_report(client, owner.token, body).status_code == 200
-    sample = Sample.objects.get()
+    sample = Sample.objects.get(span_s=Sample.HOUR)
     assert sample.range_map is None and sample.modes_valid == body['stats']['modes_valid']
 
 
@@ -47,7 +48,7 @@ def test_two_reports_in_an_hour_sum_counts_and_max_peaks_and_range(client, owner
     second['stats'].update(es_valid=5, aircraft_max=20)
     for body in (first, second):
         assert post_report(client, owner.token, body).status_code == 200
-    sample = Sample.objects.get()
+    sample = Sample.objects.get(span_s=Sample.HOUR)
     assert (sample.es_valid, sample.aircraft_max, sample.reports) == (15, 30, 2)
     both = ranges.merge(ranges.decode(first['range']['changed'], first['range']['max'], 2000),
                         ranges.decode(second['range']['changed'], second['range']['max'], 2000))
@@ -58,8 +59,8 @@ def test_a_repeated_report_is_not_counted_twice(client, owner, bee):
     body = bee.report()
     assert post_report(client, owner.token, body).status_code == 200
     assert post_report(client, owner.token, body).status_code == 200
-    assert Sample.objects.get().reports == 1
-    assert Sample.objects.get().es_valid == body['stats']['es_valid']
+    assert Sample.objects.get(span_s=Sample.HOUR).reports == 1
+    assert Sample.objects.get(span_s=Sample.HOUR).es_valid == body['stats']['es_valid']
 
 
 def test_a_widened_retry_replaces_the_stats_it_covers(client, owner, bee):
@@ -71,13 +72,13 @@ def test_a_widened_retry_replaces_the_stats_it_covers(client, owner, bee):
                'stats': {**body['stats'], 'es_valid': 130}}
     widened['range'] = dict(body['range'], **dict(zip(('changed', 'max'), ranges.encode({9: 300000}, 2000))))
     assert post_report(client, owner.token, widened).status_code == 200
-    sample = Sample.objects.get()
+    sample = Sample.objects.get(span_s=Sample.HOUR)
     assert (sample.es_valid, sample.reports) == (130, 1)
     assert sample.ranges()[9] == 300000
     # The same seq and start with a SHORTER period is a stale copy: ignored.
     shorter = {**widened, 'period': body['period'], 'stats': {**body['stats'], 'es_valid': 1}}
     assert post_report(client, owner.token, shorter).status_code == 200
-    assert Sample.objects.get().es_valid == 130
+    assert Sample.objects.get(span_s=Sample.HOUR).es_valid == 130
 
 
 def test_a_widened_retry_lands_on_its_own_hour_even_later():
@@ -92,7 +93,7 @@ def test_a_widened_retry_lands_on_its_own_hour_even_later():
     protocol.ingest(device, protocol.parse(body), first_hour)
     widened = {**body, 'period': {**body['period'], 'len_s': 4000}}
     protocol.ingest(device, protocol.parse(widened), first_hour + timedelta(minutes=20))
-    assert Sample.objects.filter(device=device).count() == 1
+    assert Sample.objects.filter(device=device, span_s=Sample.HOUR).count() == 1
 
 
 @pytest.mark.parametrize('header', ['', 'Bearer ', 'Bearer nope', 'Token x'])

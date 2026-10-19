@@ -35,8 +35,8 @@ def test_daily_rows_count_when_their_day_overlaps(device):
     now = timezone.now()
     day = (now - timedelta(days=400)).replace(hour=0, minute=0, second=0, microsecond=0)
     _sample(device, day, {3: 80000}, span=Sample.DAY)
-    assert queries.device_range(device, day + timedelta(hours=12), day + timedelta(hours=13)) == {3: 80000}
-    assert queries.device_range(device, day + timedelta(days=1), day + timedelta(days=2)) == {}
+    assert queries.device_range(device, day - timedelta(days=2), day + timedelta(days=2)) == {3: 80000}
+    assert queries.device_range(device, day + timedelta(days=1), day + timedelta(days=5)) == {}
 
 
 def test_the_payload_is_ready_for_a_3d_view(device, other):
@@ -59,5 +59,6 @@ def test_stats_sum_counts_and_max_peaks_per_bee(device):
     _sample(second, hour, {}, es_valid=5, aircraft_max=3)
     series = queries.stats_series([device, second], hour - timedelta(hours=1), hour + timedelta(hours=1))
     assert len(series) == 1 and series[0]['es_valid'] == 15 and series[0]['aircraft_max'] == 10
+    _sample(device, hour.replace(hour=0), {}, span=Sample.DAY, es_valid=10)
     daily = queries.stats_series([device], hour - timedelta(days=1), hour + timedelta(hours=1), 'day')
-    assert sum(row['es_valid'] for row in daily) == 10
+    assert sum(row['es_valid'] for row in daily) == 10, "step=day reads the daily rows"

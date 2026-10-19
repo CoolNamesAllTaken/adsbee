@@ -4,18 +4,21 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone as tz
 
-from django.db.models import Q
 
 from . import ranges
 from .models import PEAK_STATS, STATS, Device, Sample
 
 
-def _samples(devices, since: datetime, until: datetime):
-    # A daily row counts when its day overlaps the window.
-    return (Sample.objects.filter(device__in=devices, start__lt=until)
-            .filter(Q(span_s=Sample.HOUR, start__gte=since)
-                    | Q(span_s=Sample.DAY, start__gt=since - timedelta(days=1)))
-            .order_by('start'))
+#: Windows longer than this read daily rows (kept from the first report); shorter ones hourly.
+DAILY_AFTER = timedelta(days=3)
+
+
+def _samples(devices, since: datetime, until: datetime, span: int | None = None):
+    """Hourly rows starting inside the window, or daily rows whose day overlaps it."""
+    span = span or (Sample.DAY if until - since > DAILY_AFTER else Sample.HOUR)
+    rows = Sample.objects.filter(device__in=devices, span_s=span, start__lt=until)
+    rows = rows.filter(start__gte=since) if span == Sample.HOUR else rows.filter(start__gt=since - timedelta(days=1))
+    return rows.order_by('start')
 
 
 def device_range(device: Device, since: datetime, until: datetime) -> ranges.Map:
@@ -51,7 +54,8 @@ def stats_series(devices, since: datetime, until: datetime, step: str = 'hour') 
     across bees (each bee hears its own sky), maxed within a bee's step."""
     width = 3600 if step == 'hour' else 86400
     per_bee: dict = defaultdict(lambda: defaultdict(int))
-    for sample in _samples(devices, since, until).values('device_id', 'start', *STATS):
+    span = Sample.HOUR if step == 'hour' else Sample.DAY
+    for sample in _samples(devices, since, until, span).values('device_id', 'start', *STATS):
         epoch = int(sample['start'].timestamp()) // width * width
         slot = per_bee[(epoch, sample['device_id'])]
         for name in STATS:

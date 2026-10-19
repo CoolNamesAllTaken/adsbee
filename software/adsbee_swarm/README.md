@@ -23,8 +23,9 @@ The last command prints your **enroll token**. Sign in at `https://<SWARM_DOMAIN
 TLS certificate. `swarm_account` also does `grant`, `revoke`, `disable`, `enable` and `rotate`;
 `/admin/` works for a superuser (`manage.py createsuperuser`).
 
-Retention runs daily in the `app` container (`manage.py swarm_retention`): hourly rows older than
-365 days become daily rows. Change it with `ADSBEE_SWARM_HOURLY_RETENTION_DAYS`.
+Each bee gets an hourly and a daily row from its first report; windows over 3 days read the daily
+rows. Retention runs daily in the `app` container (`manage.py swarm_retention`): hourly rows older
+than 90 days are deleted, daily rows are kept. Change it with `ADSBEE_SWARM_HOURLY_RETENTION_DAYS`.
 
 ## Point a bee at it
 
