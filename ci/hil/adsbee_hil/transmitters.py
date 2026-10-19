@@ -1,7 +1,7 @@
 """Test transmitters: instruments that put known packets on the air (or on a cable) for receivers.
 
 ``transmit()`` plays a finite ``TestPattern`` to completion; ``start()`` / ``stop()`` run a
-continuous one. Types: ``bee_wiggler`` (USB AT console) and ``pluto`` (ADALM Pluto SDR, untested,
+continuous one. Types: ``bee_wiggler`` (USB AT console) and ``pluto`` (ADALM-Pluto SDR, untested,
 no UAT); others register through the ``adsbee_hil.transmitters`` entry-point group.
 
 Keep receivers on attenuated coax or behind attenuators: full output can damage a receiver, and
@@ -130,7 +130,7 @@ def _num(v: Optional[float]) -> str:
 
 
 class BeeWiggler(Transmitter):
-    """bee_wiggler over its USB AT console.
+    """Bee Wiggler over its USB AT console.
 
     Commands used:
       AT+DEVICE_INFO?
@@ -167,7 +167,7 @@ class BeeWiggler(Transmitter):
     def _open(self) -> AtConsole:
         port = self._port()
         if not port:
-            raise TransmitterError(f"{self.id}: wiggler {self.cfg.usb_serial} is not attached")
+            raise TransmitterError(f"{self.id}: Bee Wiggler {self.cfg.usb_serial} is not attached")
         return AtConsole(port, self.baud).open()
 
     def at(self, cmd: str, timeout: float = 3.0) -> str:
@@ -197,7 +197,7 @@ class BeeWiggler(Transmitter):
         if p.band == "1090":
             if p.messages:
                 if len(p.messages) != 1:
-                    raise TransmitterError("bee_wiggler plays one explicit Mode S message per command; "
+                    raise TransmitterError("Bee Wiggler plays one explicit Mode S message per command; "
                                            "use its table or a single message")
                 if p.power_dbm is not None:
                     raise TransmitterError("single-message Mode S takes no power argument; use atten_db")
@@ -209,11 +209,11 @@ class BeeWiggler(Transmitter):
             if p.messages:
                 raise TransmitterError("explicit UAT messages are not supported yet")
             if p.power_dbm is not None:
-                raise TransmitterError("bee_wiggler's UAT commands take no power argument; use atten_db")
+                raise TransmitterError("Bee Wiggler UAT commands take no power argument; use atten_db")
             cmds.append(f"AT+UAT_ADSB_TABLE_TX={p.count},{rate}")
         elif p.band == "dual":
             if p.messages:
-                raise TransmitterError("dual-band patterns use the wiggler's tables")
+                raise TransmitterError("dual-band patterns use the Bee Wiggler's tables")
             seconds = -1 if p.count < 0 else max(1, math.ceil(p.duration()))
             cmds.append(",".join([f"AT+DUAL_TABLE_TX={seconds}", rate, rate, "ADSB"] + power))
         else:
@@ -273,7 +273,7 @@ class BeeWiggler(Transmitter):
 
 
 class PlutoSdr(Transmitter):
-    """ADALM Pluto(+) SDR playing a generated 1090 MHz Mode S waveform. UNTESTED on hardware.
+    """ADALM-Pluto or Pluto+ SDR playing a generated 1090 MHz Mode S waveform. UNTESTED on hardware.
 
     Bench file keys: uri (e.g. "ip:192.168.2.1" or "usb:1.2.5"), tx_gain_db (<= 0, default -40),
     sample_rate (default 4 MS/s, i.e. 8 samples per 1 us bit), center_hz (default 1090e6).

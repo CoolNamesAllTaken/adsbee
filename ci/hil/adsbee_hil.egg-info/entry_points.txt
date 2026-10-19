@@ -1,0 +1,2 @@
+[console_scripts]
+adsbee-hil = adsbee_hil.cli:main

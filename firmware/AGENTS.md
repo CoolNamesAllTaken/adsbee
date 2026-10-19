@@ -237,7 +237,7 @@ The optional second argument is a regex passed to `ctest -R`. Test names follow 
 
 ### HIL testing with a signal source
 
-Before driving an ADSBee from a Bee Wiggler, Pluto wiggler or any other SDR:
+Before driving an ADSBee from a Bee Wiggler, Pluto Wiggler, Bee Waggler or any other SDR:
 
 1. **Turn its feeds off first**, so synthetic aircraft never reach an aggregator.
    - Check: `AT+FEED_ENABLE?` must print `=0` (and `AT+FEED?` shows each slot).

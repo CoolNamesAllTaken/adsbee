@@ -10,7 +10,7 @@ and test transmitters. It can:
 - **Flash** each model.
 - **RF-test** receivers: a transmitter plays a known pattern and the receiver must report it.
 
-Needs Python ≥ 3.9 and `pyserial`; `pyadi-iio` and `numpy` only for the Pluto. Device selection and
+Needs Python ≥ 3.9 and `pyserial`; `pyadi-iio` and `numpy` only for `pluto`. Device selection and
 locking use only the standard library, so `ci/test_usb_and_ota_flash` imports them without installing.
 
 ## Install
@@ -174,13 +174,13 @@ and optionally output power, attenuation and explicit hex messages. Named patter
 `transmitters.PATTERNS`; `--band`, `--count`, `--rate`, `--power-dbm`, `--atten-db` and `--message`
 override them.
 
-- **`bee_wiggler`**: PantsForBirds' Mode S / UAT packet generator, driven over its USB AT console
+- **`bee_wiggler`**: Bee Wiggler (Mode S / UAT packet generator), driven over its USB AT console
   (`usb_serial`) with `AT+MODE_S_ATTEN`, `AT+SUBG_ATTEN`, `AT+MODE_S_TABLE_TX`, `AT+MODE_S_TX`,
   `AT+UAT_ADSB_TABLE_TX` and `AT+DUAL_TABLE_TX`. A finite pattern ends with `OK`; any character
   stops an unbounded one.
-- **`pluto`**: ADALM Pluto(+) SDR (`uri`) playing a 1090 MHz waveform of distinct DF17
-  messages (`packets.unique_df17_set()`). **Not yet tested on hardware;** see the TODO in
-  `transmitters.py`.
+- **`pluto`**: ADALM-Pluto or Pluto+ SDR at `uri`, not a Pluto Wiggler, playing a 1090 MHz
+  waveform of distinct DF17 messages (`packets.unique_df17_set()`). **Not yet tested on hardware;**
+  see the TODO in `transmitters.py`.
 - **New transmitter:** subclass `Transmitter` and register it under `adsbee_hil.transmitters`.
 
 ```sh

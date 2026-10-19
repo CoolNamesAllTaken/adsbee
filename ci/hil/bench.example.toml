@@ -34,7 +34,7 @@ usb_port = "1-1.4"
 # Transmitters. `receivers` lists which receivers each one reaches (default: all).
 # [[transmitters]]
 # id = "wiggler-a"
-# type = "bee_wiggler"
+# type = "bee_wiggler"           # Bee Wiggler
 # usb_serial = "E000000000000003"
 # receivers = ["1090u-a", "1421-a"]
 # mode_s_atten_db = 60             # default step-attenuator settings when a pattern sets none
@@ -42,7 +42,7 @@ usb_port = "1-1.4"
 #
 # [[transmitters]]
 # id = "pluto-a"
-# type = "pluto"
+# type = "pluto"                 # ADALM-Pluto SDR driven directly, not a Pluto Wiggler
 # uri = "ip:192.168.2.1"
 # tx_gain_db = -60
 # receivers = ["1421-a"]

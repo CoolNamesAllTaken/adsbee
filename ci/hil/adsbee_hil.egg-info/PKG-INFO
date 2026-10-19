@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: adsbee-hil
+Version: 0.1.0
+Summary: Hardware-in-the-loop bench toolkit for ADSBee receivers
+Requires-Python: >=3.9
+Requires-Dist: pyserial>=3.4
+Requires-Dist: tomli>=1.1; python_version < "3.11"
+Provides-Extra: pluto
+Requires-Dist: pyadi-iio; extra == "pluto"
+Requires-Dist: numpy; extra == "pluto"
+Provides-Extra: ota
+Requires-Dist: websockets>=12.0; extra == "ota"
+Provides-Extra: test
+Requires-Dist: pytest; extra == "test"
