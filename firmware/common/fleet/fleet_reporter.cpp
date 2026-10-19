@@ -140,7 +140,8 @@ uint32_t FleetReporter::Jittered(uint32_t s) {
 uint32_t FleetReporter::FirstDelayMs(uint32_t uptime_ms) {
     uint32_t span_ms = (config_.first_max_s - config_.first_min_s) * 1000 + 1;
     uint32_t at_ms = config_.first_min_s * 1000 + platform_.Random() % span_ms;
-    return at_ms > uptime_ms ? at_ms - uptime_ms : 0;
+    // Turned on later than that: the same delay from now, so the first period isn't empty.
+    return at_ms > uptime_ms ? at_ms - uptime_ms : at_ms;
 }
 
 uint32_t FleetReporter::RetryMs(uint32_t retry_after_s) {

@@ -24,8 +24,8 @@ class FleetManager : public FleetPlatform {
         bool enabled = false;
         const char* result = "off";
         int http_status = 0;
-        uint32_t last_report_s_ago = 0;  // UINT32_MAX: none yet.
-        uint32_t last_attempt_s_ago = 0;
+        uint32_t last_report_s_ago = UINT32_MAX;  // UINT32_MAX: none yet.
+        uint32_t last_attempt_s_ago = UINT32_MAX;
         uint32_t next_report_s = 0;
         uint32_t seq = 0;
         uint16_t body_len = 0;
@@ -37,6 +37,11 @@ class FleetManager : public FleetPlatform {
     void Update();
 
     void GetStatus(Status& status);
+
+    // The RP2040's valid frame counts for the last second. Call from the same task as Update().
+    void AddFrames(uint32_t modes_valid, uint32_t es_valid, uint32_t uat_adsb, uint32_t uat_uplink) {
+        if (live_ != nullptr) live_->AddFrames(modes_valid, es_valid, uat_adsb, uat_uplink);
+    }
 
     // A report is being sent.
     bool Busy() const { return task_ != nullptr; }

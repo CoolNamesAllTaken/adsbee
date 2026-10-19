@@ -103,13 +103,16 @@ class FleetRecorder {
         unique_bits_[bit / 8] |= 1 << (bit % 8);
     }
 
-    // Once per dictionary update: that second's frame counts and the number of aircraft tracked.
-    inline void AddSecond(uint32_t modes_valid, uint32_t es_valid, uint32_t uat_adsb, uint32_t uat_uplink,
-                          uint16_t num_aircraft) {
+    // Valid frame counts as the receiver reports them each second.
+    inline void AddFrames(uint32_t modes_valid, uint32_t es_valid, uint32_t uat_adsb, uint32_t uat_uplink) {
         stats.modes_valid += modes_valid;
         stats.es_valid += es_valid;
         stats.uat_adsb += uat_adsb;
         stats.uat_uplink += uat_uplink;
+    }
+
+    // Once per dictionary update: the number of aircraft tracked.
+    inline void NoteAircraftCount(uint16_t num_aircraft) {
         if (num_aircraft > stats.aircraft_max) stats.aircraft_max = num_aircraft;
     }
 

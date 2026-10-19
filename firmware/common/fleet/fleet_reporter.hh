@@ -69,7 +69,7 @@ class FleetReporter {
     FleetReporter(FleetPlatform& platform, const char* version, const Config& config, uint32_t first_seq = 0);
     FleetReporter(FleetPlatform& platform, const char* version) : FleetReporter(platform, version, Config()) {}
 
-    // Delay before the first report, from boot.
+    // Delay before the first report: 2-5 min after boot, or after uptime_ms if that is later.
     uint32_t FirstDelayMs(uint32_t uptime_ms);
 
     /**
