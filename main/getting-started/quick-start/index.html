@@ -573,6 +573,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#feed-receiver-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Receiver ID
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#mqtt-feeds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1289,6 +1300,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#feed-receiver-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Receiver ID
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#mqtt-feeds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1554,6 +1576,14 @@
 <li>The ADSBee refuses a feed when the active feeds would need more ESP32 RAM than it has for them. The bar next to the feed count in the web interface shows how much is in use.</li>
 <li>Check that your values were set correctly with <code>AT+FEED?</code>. You should see a sparkline graph below the terminal indicating a non-zero number of packets per second being forwarded to your feed (assuming your ADSBee is receiving packets).</li>
 </ol>
+<h3 id="feed-receiver-id">Receiver ID<a class="headerlink" href="#feed-receiver-id" title="Permanent link">&para;</a></h3>
+<p>Each feed sends a receiver ID: 16 hex digits, by default this device's own (<code>bee0…</code>). Aggregators use it to tell receivers apart; whereplane.xyz and readsb show it as a UUID (<code>bee0xxxx-xxxx-xxxx-bee0-xxxxxxxxxxxx</code>). Feed 0's ID also names the MQTT topics.</p>
+<ul>
+<li>Web interface: the ID shows on each feed card and in the feed editor, with copy buttons for both forms, edit, and ↺ to go back to the default.</li>
+<li><code>AT+FEED_RECEIVER_ID?</code> prints each feed's ID and the device default.</li>
+<li><code>AT+FEED_RECEIVER_ID=&lt;feed_index&gt;,&lt;16 hex digits&gt;</code> sets one, e.g. to keep an ID an aggregator already knows after replacing a unit. <code>AT+FEED_RECEIVER_ID=&lt;feed_index&gt;,DEFAULT</code> restores the default. Save with <code>AT+SETTINGS=SAVE</code>.</li>
+<li>A settings dump (<code>AT+SETTINGS?DUMP</code>) leaves IDs out, so a restored dump keeps the target unit's own.</li>
+</ul>
 <h3 id="mqtt-feeds">MQTT feeds<a class="headerlink" href="#mqtt-feeds" title="Permanent link">&para;</a></h3>
 <p>MQTT feeds publish to one broker, such as Mosquitto for Home Assistant or Node-RED, over a single connection.</p>
 <ol>
