@@ -925,6 +925,19 @@ class AircraftDictionary {
 
     // Receives range, message and aircraft counts for fleet reports (AT+FLEET), or nullptr for none. ESP32 only.
     void SetFleetRecorder(FleetRecorder *recorder) { fleet_recorder_ = recorder; }
+
+    // Heard directly: TIS-B and ADS-R positions say where a ground station hears the aircraft, not this receiver.
+    static inline bool IsDirectPosition(const ModeSAircraft &aircraft) {
+        return aircraft.position_address_type == ModeSAircraft::kAddressTypeADSBICAO ||
+               aircraft.position_address_type == ModeSAircraft::kAddressTypeADSBICAONonTransponder ||
+               aircraft.position_address_type == ModeSAircraft::kAddressTypeADSBOther;
+    }
+    static inline bool IsDirectPosition(const UATAircraft &aircraft) {
+        UATAircraft::AddressQualifier q = aircraft.GetAddressQualifier();
+        return q == UATAircraft::kADSBTargetWithICAO24BitAddress ||
+               q == UATAircraft::kADSBTargetWithSelfAssignedTemporaryAddress || q == UATAircraft::kSurfaceVehicle ||
+               q == UATAircraft::kFixedADSBBeacon;
+    }
     static constexpr uint16_t kMaxNumSources = 4;  // One per 1090 demodulator state machine.
 
 #ifdef FILTER_CPR_POSITIONS
@@ -1596,14 +1609,15 @@ class AircraftDictionary {
 
     /**
      * Adds a freshly computed distance to the fleet range map, once the position is confirmed by a second decode (the
-     * first can be a CPR outlier). Altitude is barometric, else GNSS; aircraft without one are left out.
+     * first can be a CPR outlier). Only positions heard directly; altitude is barometric, else GNSS, and aircraft
+     * without one are left out.
      */
     template <typename T>
     inline void RecordRange(const T &aircraft) {
         if constexpr (kRecordsRange<T>) {
             FleetProfileScope prof(0);
             if (fleet_recorder_ == nullptr || aircraft.num_position_decodes < 2 ||
-                aircraft.distance_m == Aircraft::kDistanceUnknown) {
+                aircraft.distance_m == Aircraft::kDistanceUnknown || !IsDirectPosition(aircraft)) {
                 return;
             }
             int32_t altitude_ft;
