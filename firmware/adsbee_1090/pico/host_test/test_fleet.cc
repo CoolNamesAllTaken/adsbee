@@ -511,3 +511,26 @@ TEST(FleetRecorder, DictionaryRecordsConfirmedPositions) {
     EXPECT_EQ(num_bins(), 0);
     EXPECT_EQ(recorder.stats.aircraft_max, 0);
 }
+
+TEST(FleetRecorder, OnlyDirectPositionsCountForRange) {
+    ModeSAircraft mode_s(0xA46E6A);
+    const ModeSAircraft::AddressType direct[] = {ModeSAircraft::kAddressTypeADSBICAO,
+                                                 ModeSAircraft::kAddressTypeADSBICAONonTransponder,
+                                                 ModeSAircraft::kAddressTypeADSBOther};
+    const ModeSAircraft::AddressType relayed[] = {ModeSAircraft::kAddressTypeADSRICAO, ModeSAircraft::kAddressTypeTISBICAO,
+                                                  ModeSAircraft::kAddressTypeADSROther,
+                                                  ModeSAircraft::kAddressTypeTISBTrackFile,
+                                                  ModeSAircraft::kAddressTypeTISBOther};
+    for (auto type : direct) {
+        mode_s.position_address_type = type;
+        EXPECT_TRUE(AircraftDictionary::IsDirectPosition(mode_s)) << type;
+    }
+    for (auto type : relayed) {
+        mode_s.position_address_type = type;
+        EXPECT_FALSE(AircraftDictionary::IsDirectPosition(mode_s)) << type;
+    }
+    for (int q = 0; q <= 6; q++) {
+        UATAircraft uat(0xA00001 | (q << Aircraft::kAddressQualifierBitShift));
+        EXPECT_EQ(AircraftDictionary::IsDirectPosition(uat), q == 0 || q == 1 || q == 4 || q == 5) << q;
+    }
+}
