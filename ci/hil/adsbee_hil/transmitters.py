@@ -273,7 +273,7 @@ class BeeWiggler(Transmitter):
 
 
 class PlutoSdr(Transmitter):
-    """ADALM-Pluto or Pluto+ SDR playing a generated 1090 MHz Mode S waveform. UNTESTED on hardware.
+    """ADALM-Pluto (or compatible) SDR playing a generated 1090 MHz Mode S waveform. UNTESTED on hardware.
 
     Bench file keys: uri (e.g. "ip:192.168.2.1" or "usb:1.2.5"), tx_gain_db (<= 0, default -40),
     sample_rate (default 4 MS/s, i.e. 8 samples per 1 us bit), center_hz (default 1090e6).

@@ -178,7 +178,7 @@ override them.
   (`usb_serial`) with `AT+MODE_S_ATTEN`, `AT+SUBG_ATTEN`, `AT+MODE_S_TABLE_TX`, `AT+MODE_S_TX`,
   `AT+UAT_ADSB_TABLE_TX` and `AT+DUAL_TABLE_TX`. A finite pattern ends with `OK`; any character
   stops an unbounded one.
-- **`pluto`**: ADALM-Pluto or Pluto+ SDR at `uri`, not a Pluto Wiggler, playing a 1090 MHz
+- **`pluto`**: ADALM-Pluto (or compatible) SDR at `uri`, not a Pluto Wiggler, playing a 1090 MHz
   waveform of distinct DF17 messages (`packets.unique_df17_set()`). **Not yet tested on hardware;**
   see the TODO in `transmitters.py`.
 - **New transmitter:** subclass `Transmitter` and register it under `adsbee_hil.transmitters`.
