@@ -1,7 +1,7 @@
 {% extends "adsbee_fleet/base.html" %}
 {% block title %}Account{% endblock %}
 {% block content %}
-<h1>⚿ {{ account }}</h1>
+<h1>⚷ {{ account }}</h1>
 <section class="card">
   <h2 title="What a bee is given to report here">Enroll token</h2>
   {% if enroll_token %}
@@ -16,7 +16,7 @@
 <section class="card">
   <h2 title="For scripts: Authorization: Bearer <token>">API tokens</h2>
   {% if api_token %}<p title="Shown once"><code class="copy">{{ api_token }}</code></p>{% endif %}
-  <table class="list small">{% for t in tokens %}<tr><td class="mono">{{ t.prefix }}…</td><td>{{ t.name }}</td><td class="dim" title="Last used">{{ t.last_used_at|default:"—" }}</td>
+  <table class="list small">{% for t in tokens %}<tr><td class="mono">{{ t.prefix }}…</td><td>{{ t.name }}</td><td class="dim" title="Last used">{{ t.last_used_at|date:"M j, H:i"|default:"—" }}</td>
     <td><form method="post" action="{% url 'adsbee_fleet:account_action' %}">{% csrf_token %}<input type="hidden" name="token" value="{{ t.pk }}"><button name="action" value="delete_token" class="bad" title="Delete">✕</button></form></td></tr>{% endfor %}</table>
   <form method="post" action="{% url 'adsbee_fleet:account_action' %}">{% csrf_token %}
     <input name="name" placeholder="name" size="12"><button name="action" value="api_token" title="New API token">+</button></form>

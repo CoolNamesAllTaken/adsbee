@@ -43,6 +43,8 @@ class Bee:
     auto_update: bool = True
     seq: int = 0
     uptime_s: int = 300
+    #: Antenna, cable and noise: the share of the radio horizon this bee reaches.
+    quality: float = 0.7
     shadows: list = field(default_factory=list)
 
     @classmethod
@@ -50,10 +52,10 @@ class Bee:
         label, lat, lon, alt = SITES[index % len(SITES)]
         rng = random.Random(seed * 1000 + index)
         uid = hashlib.sha256(f'bee{seed}-{index}'.encode()).hexdigest()[:16].upper()
-        shadows = [(rng.uniform(0, 360), rng.uniform(15, 60), rng.uniform(0.25, 0.7)) for _ in range(rng.randint(1, 3))]
+        shadows = [(rng.uniform(0, 360), rng.uniform(20, 70), rng.uniform(0.35, 0.8)) for _ in range(rng.randint(1, 3))]
         return cls(uid, lat + rng.uniform(-.01, .01), lon + rng.uniform(-.01, .01), alt,
                    label=f'{label}' if index < len(SITES) else f'{label} {index}', shadows=shadows,
-                   auto_update=index % 3 != 2)
+                   auto_update=index % 3 != 2, quality=rng.uniform(0.45, 0.85))
 
     def reach_m(self, band: int, sector: int, rng: random.Random) -> int | None:
         floor_ft = ranges.BAND_FLOORS_FT[band]
@@ -65,12 +67,13 @@ class Bee:
         for center, width, depth in self.shadows:
             off = abs((bearing - center + 180) % 360 - 180)
             if off < width:
-                factor *= 1 - depth * (1 - off / width) * (1.2 if floor_ft < 6000 else .5)
+                # Terrain hides low aircraft most; high ones clear it sooner.
+                factor *= 1 - min(.95, depth * (1 - off / width) * (1.2 if floor_ft < 6000 else .7))
         # Low bands are often empty; high bands nearly always carry traffic.
         if rng.random() > (0.35 + 0.05 * band):
             return None
-        meters = horizon * factor * rng.uniform(.55, 1.0)
-        return int(min(meters, 450_000)) if meters > 2000 else None
+        meters = horizon * self.quality * factor * rng.uniform(.6, 1.0)
+        return int(min(meters, 400_000)) if meters > 2000 else None
 
     def report(self, period_s: int = 3600, rng: random.Random | None = None, unit_m: int = ranges.DEFAULT_UNIT_M) -> dict:
         rng = rng or random.Random()

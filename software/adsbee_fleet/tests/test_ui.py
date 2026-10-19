@@ -25,6 +25,8 @@ def test_pages_need_a_login_and_the_fleet_privilege(client, owner):
 
 def test_device_list_and_map(signed_in):
     page = signed_in.get('/?w=24h').content.decode()
+    device = Device.objects.first()
+    assert f'href="/devices/{device.pk}/"' in page and f'"url": "/devices/{device.pk}/"' in page
     assert page.count('href="') > 3 and 'id="markers"' in page and 'Attic' in page
     assert 'leaflet@1.9.4' in page
 
@@ -32,7 +34,7 @@ def test_device_list_and_map(signed_in):
 def test_device_page_draws_a_polar_plot_per_band(signed_in):
     device = Device.objects.first()
     page = signed_in.get(f'/devices/{device.pk}/').content.decode()
-    assert page.count('<svg') == 13 and 'class="wedge"' in page and '≥40k ft' in page
+    assert page.count('class="polar"') == 13 and page.count('class="bars"') == 4 and 'class="wedge"' in page and '≥40k ft' in page
 
 
 def test_device_edit_remove_restore(signed_in):

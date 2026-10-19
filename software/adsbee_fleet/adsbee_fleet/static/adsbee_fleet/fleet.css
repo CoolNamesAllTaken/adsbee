@@ -49,3 +49,9 @@ tr.cancelled, tr.paused { opacity: .6; }
 .msg { padding: .4rem .7rem; border-radius: 4px; background: var(--card); border-left: 3px solid var(--accent); }
 .msg.error { border-color: var(--bad); }
 code.copy { user-select: all; background: var(--bg); padding: .3rem .5rem; border: 1px solid var(--line); border-radius: 4px; display: inline-block; word-break: break-all; }
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .8rem; }
+.chart { text-align: left; }
+.chart figcaption { cursor: help; }
+svg.bars { width: 100%; height: 70px; background: var(--card); border-radius: 4px; }
+svg.bars rect { fill: var(--accent); }
+.axis-t { display: flex; justify-content: space-between; color: var(--dim); font-size: .75em; }

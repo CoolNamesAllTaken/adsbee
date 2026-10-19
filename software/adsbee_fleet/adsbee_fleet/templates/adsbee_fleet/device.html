@@ -13,13 +13,13 @@
       <dt title="Firmware versions">⚙</dt><dd class="mono">{% for k, v in info.versions.items %}{{ k }} {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}</dd>
       <dt title="Automatic updates">⟳</dt><dd>{% if info.auto_update %}✔{% else %}✕{% endif %}</dd>
       <dt title="Firmware target from a rollout">⇪</dt><dd class="mono">{{ target.tag|default:"—" }}</dd>
-      <dt title="Position (owner's, else reported)">⌖</dt><dd>{% if info.position %}{{ info.position.lat|floatformat:4 }}, {{ info.position.lon|floatformat:4 }} <span class="dim">{{ info.position.source }}</span>{% else %}—{% endif %}</dd>
-      <dt title="Last report">⏱</dt><dd>{{ info.last_report_at|default:"never" }}</dd>
+      <dt title="Position (owner's, else reported)">⊕</dt><dd>{% if info.position %}{{ info.position.lat|floatformat:4 }}, {{ info.position.lon|floatformat:4 }} <span class="dim">{{ info.position.source }}</span>{% else %}—{% endif %}</dd>
+      <dt title="Last report">◷</dt><dd>{{ device.last_report_at|date:"M j, H:i"|default:"never" }}</dd>
     </dl>
     <form method="post" class="edit">{% csrf_token %}
-      <label title="Label">🏷 <input name="label" value="{{ device.label }}" maxlength="120"></label>
+      <label title="Label">⚑ <input name="label" value="{{ device.label }}" maxlength="120"></label>
       <label title="Note">✎ <input name="note" value="{{ device.note }}" maxlength="500"></label>
-      <label title="Map location; empty: as reported">⌖ <input name="lat" value="{{ device.lat|default_if_none:'' }}" placeholder="lat" size="9">
+      <label title="Map location; empty: as reported">⊕ <input name="lat" value="{{ device.lat|default_if_none:'' }}" placeholder="lat" size="9">
         <input name="lon" value="{{ device.lon|default_if_none:'' }}" placeholder="lon" size="9">
         <input name="alt_m" value="{{ device.alt_m|default_if_none:'' }}" placeholder="alt m" size="6"></label>
       <button name="action" value="save" title="Save">✔</button>
@@ -30,7 +30,6 @@
 </div>
 <h2 title="Farthest aircraft per 10° sector, per altitude band">Range by altitude</h2>
 <div class="grid">{% for p in plots %}<figure>{{ p.svg|safe }}<figcaption>{{ p.title }}</figcaption></figure>{% endfor %}</div>
-<h2 title="Messages decoded per {% if window == '24h' or window == '7d' %}hour{% else %}day{% endif %}">Messages</h2>
-<table class="list small"><thead><tr><th>⏱</th><th title="Mode S valid">S</th><th title="Extended squitter valid">ES</th><th title="UAT ADS-B">UAT</th><th title="UAT uplink">UL</th><th title="Most aircraft at once">✈ max</th><th title="Distinct aircraft">✈ #</th></tr></thead>
-<tbody>{% for s in stats|slice:"-24:" %}<tr><td class="mono">{{ s.t|slice:":16"|cut:"T" }}</td><td>{{ s.modes_valid }}</td><td>{{ s.es_valid }}</td><td>{{ s.uat_adsb }}</td><td>{{ s.uat_uplink }}</td><td>{{ s.aircraft_max }}</td><td>{{ s.aircraft_unique }}</td></tr>{% empty %}<tr><td colspan="7" class="dim">—</td></tr>{% endfor %}</tbody></table>
+<h2 title="Per {% if window == '24h' or window == '7d' %}hour{% else %}day{% endif %}; hover a bar">Traffic</h2>
+<div class="charts">{% for c in charts %}<figure class="chart"><figcaption title="{{ c.title }}">{{ c.label }}</figcaption>{{ c.svg|safe }}<div class="axis-t"><span>{{ c.first }}</span><span>{{ c.last }}</span></div></figure>{% endfor %}</div>
 {% endblock %}

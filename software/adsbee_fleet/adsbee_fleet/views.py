@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -45,11 +46,12 @@ def device_list(request):
     devices = list(request.account.devices.filter(removed_at__isnull=True))
     key, since, until = _window(request)
     reach = {d['id']: d['max_range_m'] for d in queries.fleet_range(devices, since, until)['devices']}
-    rows = [{**device_json(d), 'max_range_m': reach.get(d.pk)} for d in devices]
+    rows = [{**device_json(d), 'max_range_m': reach.get(d.pk), 'last_dt': d.last_report_at} for d in devices]
     removed = request.account.devices.filter(removed_at__isnull=False)
     return render(request, 'adsbee_fleet/devices.html', {
         'rows': rows, 'removed': removed, 'window': key, 'windows': WINDOWS,
-        'markers': [{'id': r['id'], 'label': r['label'] or r['unique_id'], 'lat': r['position']['lat'],
+        'markers': [{'id': r['id'], 'url': reverse('adsbee_fleet:device', args=[r['id']]),
+                     'label': r['label'] or r['unique_id'], 'lat': r['position']['lat'],
                      'lon': r['position']['lon'], 'range_m': r['max_range_m']} for r in rows if r['position']],
         'stale_before': timezone.now() - timedelta(hours=3)})
 
@@ -83,7 +85,7 @@ def device_detail(request, pk: int):
         'device': device, 'info': device_json(device), 'window': key, 'windows': WINDOWS,
         'overall': polar_svg(ranges.sector_max(merged), scale, size=320), 'plots': plots,
         'max_km': round(scale / 1000) if scale else None,
-        'stats': queries.stats_series([device], since, until, 'hour' if key in ('24h', '7d') else 'day'),
+        'charts': _charts(queries.stats_series([device], since, until, 'hour' if key in ('24h', '7d') else 'day')),
         'target': rollouts.target(device)})
 
 
@@ -121,6 +123,32 @@ def polar_svg(values: list[int | None], scale: int, size: int = 140) -> str:
         parts.append(f'<path d="M{half},{half} L{x0:.1f},{y0:.1f} A{r:.1f},{r:.1f} 0 0 1 {x1:.1f},{y1:.1f} Z" '
                      f'class="wedge"><title>{sector * 10}–{sector * 10 + 10}°: {meters / 1000:.0f} km</title></path>')
     parts.append(f'<text x="{half}" y="11" class="north">N</text></svg>')
+    return ''.join(parts)
+
+
+CHARTS = [('es_valid', 'ES', 'Extended squitters decoded'), ('modes_valid', 'S', 'Mode S decoded'),
+          ('uat_adsb', 'UAT', 'UAT ADS-B decoded'), ('aircraft_max', '✈', 'Most aircraft at once')]
+
+
+def _charts(series: list[dict]) -> list[dict]:
+    first = series[0]['t'][:16].replace('T', ' ') if series else ''
+    last = series[-1]['t'][:16].replace('T', ' ') if series else ''
+    return [{'label': label, 'title': title, 'first': first, 'last': last,
+             'svg': bars_svg([(row['t'][:16].replace('T', ' '), row[key]) for row in series])}
+            for key, label, title in CHARTS]
+
+
+def bars_svg(points: list[tuple[str, int]], width: int = 540, height: int = 70) -> str:
+    """One bar per step, scaled to the peak; each bar's tooltip says when and how many."""
+    top = max((value for _t, value in points), default=0)
+    parts = [f'<svg viewBox="0 0 {width} {height}" class="bars" preserveAspectRatio="none" role="img">']
+    if top and points:
+        step = width / len(points)
+        for i, (when, value) in enumerate(points):
+            h = (height - 2) * value / top
+            parts.append(f'<rect x="{i * step:.2f}" y="{height - h:.2f}" width="{max(step - .5, .5):.2f}" '
+                         f'height="{h:.2f}"><title>{when}: {value:,}</title></rect>')
+    parts.append('</svg>')
     return ''.join(parts)
 
 

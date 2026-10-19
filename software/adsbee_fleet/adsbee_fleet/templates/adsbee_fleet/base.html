@@ -8,13 +8,13 @@
 </head>
 <body>
 <header>
-  <a class="brand" href="{% url 'adsbee_fleet:devices' %}" title="Devices">🐝 Fleet</a>
+  <a class="brand" href="{% url 'adsbee_fleet:devices' %}" title="Devices">⬡ Fleet</a>
   {% if user.is_authenticated %}
   <nav>
     <a href="{% url 'adsbee_fleet:devices' %}" title="Devices and map">◉ Bees</a>
     <a href="{% url 'adsbee_fleet:rollouts' %}" title="Firmware rollouts">⇪ Rollouts</a>
-    <a href="{% url 'adsbee_fleet:account' %}" title="Enroll token and API tokens">⚿ {{ user.get_username }}</a>
-    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link" title="Sign out">⏻</button></form>
+    <a href="{% url 'adsbee_fleet:account' %}" title="Enroll token and API tokens">⚷ {{ user.get_username }}</a>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link" title="Sign out">⏏</button></form>
   </nav>
   {% endif %}
 </header>

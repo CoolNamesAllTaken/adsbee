@@ -19,35 +19,35 @@
     var at = [m.lat, m.lon];
     bounds.push(at);
     if (m.range_m) {
-      L.circle(at, {radius: m.range_m, weight: 1, fillOpacity: 0.06}).addTo(map);
+      L.circle(at, {radius: m.range_m, weight: 1, fillOpacity: 0.06, interactive: false}).addTo(map);
     }
     L.circleMarker(at, {radius: 6, weight: 2, fillOpacity: 0.9}).addTo(map)
       .bindTooltip(m.label, {permanent: true, direction: 'right', className: 'bee-label'})
-      .on('click', function () { location.href = m.id + '/'; });
+      .on('click', function () { location.href = m.url; });
   });
   if (bounds.length) { map.fitBounds(bounds, {padding: [40, 40], maxZoom: 9}); } else { map.setView([20, 0], 2); }
 })();
 </script>
 <table class="list">
-<thead><tr><th title="Label">🏷</th><th title="Unique ID">ID</th><th title="Product">⌂</th><th title="Firmware (RP2040)">⚙</th>
+<thead><tr><th title="Label">⚑</th><th title="Unique ID">ID</th><th title="Product">⌂</th><th title="Firmware (RP2040)">⚙</th>
 <th title="Automatic updates (AT+AUTO_UPDATE)">⟳</th><th title="Firmware target from a rollout">⇪</th>
-<th title="Farthest aircraft in the window">↔ km</th><th title="Last report">⏱</th></tr></thead>
+<th title="Farthest aircraft in the window">↔ km</th><th title="Last report">◷</th></tr></thead>
 <tbody>
 {% for d in rows %}
 <tr>
-  <td><a href="{{ d.id }}/">{{ d.label|default:"—" }}</a></td>
+  <td><a href="{% url 'adsbee_fleet:device' d.id %}">{{ d.label|default:"—" }}</a></td>
   <td class="mono">{{ d.unique_id }}</td>
   <td>{{ d.product }}</td>
   <td class="mono">{{ d.version|default:"?" }}</td>
   <td>{% if d.auto_update %}<span title="On">✔</span>{% else %}<span class="dim" title="Off: targets are not installed">✕</span>{% endif %}</td>
   <td class="mono">{% if d.firmware_target %}{{ d.firmware_target.tag }}{% else %}<span class="dim">—</span>{% endif %}</td>
   <td>{% if d.max_range_m %}{% widthratio d.max_range_m 1000 1 %}{% else %}<span class="dim">—</span>{% endif %}</td>
-  <td title="{{ d.last_report_at|default:'never' }}">{% if d.last_report_at %}{{ d.last_report_at|slice:":16"|cut:"T" }}{% else %}<span class="dim">never</span>{% endif %}</td>
+  <td>{% if d.last_dt %}<span class="{% if d.last_dt < stale_before %}dim{% endif %}" title="{{ d.last_dt|date:'c' }}">{{ d.last_dt|date:"M j, H:i" }}</span>{% else %}<span class="dim">never</span>{% endif %}</td>
 </tr>
 {% empty %}
-<tr><td colspan="8" class="dim">No bees yet: give one the enroll token on <a href="{% url 'adsbee_fleet:account' %}">⚿</a>.</td></tr>
+<tr><td colspan="8" class="dim">No bees yet: give one the enroll token on <a href="{% url 'adsbee_fleet:account' %}">⚷</a>.</td></tr>
 {% endfor %}
 </tbody>
 </table>
-{% if removed %}<p class="dim" title="Removed bees: their reports are refused">✕ {% for d in removed %}<a href="{{ d.pk }}/">{{ d }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+{% if removed %}<p class="dim" title="Removed bees: their reports are refused">✕ {% for d in removed %}<a href="{% url 'adsbee_fleet:device' d.pk %}">{{ d }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
 {% endblock %}
