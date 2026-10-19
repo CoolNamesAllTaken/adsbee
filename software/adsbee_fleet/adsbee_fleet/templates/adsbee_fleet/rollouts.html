@@ -1,0 +1,32 @@
+{% extends "adsbee_fleet/base.html" %}
+{% block title %}Rollouts{% endblock %}
+{% block content %}
+<h1>Rollouts</h1>
+<form method="post" class="card rollout-new">{% csrf_token %}<input type="hidden" name="action" value="create">
+  <label title="Product">⌂ <select name="product">{% for key, p in products.items %}<option value="{{ key }}">{{ p.label }}</option>{% endfor %}</select></label>
+  <label title="Firmware tag, e.g. 0.9.2">⚙ <input name="tag" placeholder="0.9.2" required size="10"></label>
+  <label title="Which bees">◎ <select name="scope">{% for key, name in scopes %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+  <label title="Label (scope: bees with a label)">🏷 <select name="label"><option value=""></option>{% for l in labels %}<option>{{ l }}</option>{% endfor %}</select></label>
+  <label title="Chosen bees (scope: chosen bees)">☰ <select name="devices" multiple size="3">{% for d in devices %}<option value="{{ d.pk }}">{{ d }}</option>{% endfor %}</select></label>
+  <label title="Test bees: they get it first; promote to reach the rest">🧪 <select name="test_devices" multiple size="3">{% for d in devices %}<option value="{{ d.pk }}">{{ d }}</option>{% endfor %}</select></label>
+  <label title="Note">✎ <input name="note" size="16"></label>
+  <button title="Start">⇪</button>
+</form>
+<table class="list">
+<thead><tr><th>⚙</th><th title="Product">⌂</th><th title="Which bees">◎</th><th title="State">●</th><th title="Bees on the tag / targeted (auto update on)">✔</th><th></th></tr></thead>
+<tbody>
+{% for item in rollouts %}{% with r=item.r p=item.progress %}
+<tr class="{{ r.state }}">
+  <td class="mono">{{ r.tag }} <span class="dim">{{ r.channel }}</span></td>
+  <td>{{ r.product }}</td>
+  <td>{% if r.scope == 'label' %}🏷 {{ r.label }}{% elif r.scope == 'devices' %}☰ {{ r.devices.count }}{% else %}all{% endif %}{% if r.test_devices.count %} · 🧪 {{ r.test_devices.count }}{% endif %}</td>
+  <td><span class="tag {{ r.state }}" title="{{ r.state }}">{% if r.state == 'test' %}🧪{% elif r.state == 'all' %}▶{% elif r.state == 'paused' %}⏸{% else %}✕{% endif %}</span></td>
+  <td title="{{ p.auto_update }} with auto update on">{{ p.on_tag }}/{{ p.targeted }}</td>
+  <td>{% if r.state != 'cancelled' %}<form method="post" class="inline">{% csrf_token %}<input type="hidden" name="rollout" value="{{ r.pk }}">
+    {% if r.stage == 'test' %}<button name="action" value="promote" title="Promote: every bee in scope">▶</button>{% endif %}
+    {% if r.paused %}<button name="action" value="resume" title="Resume">⏵</button>{% else %}<button name="action" value="pause" title="Pause: offer nothing">⏸</button>{% endif %}
+    <button name="action" value="cancel" class="bad" title="Cancel" onclick="return confirm('Cancel this rollout?')">✕</button></form>{% endif %}</td>
+</tr>
+{% endwith %}{% empty %}<tr><td colspan="6" class="dim">—</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

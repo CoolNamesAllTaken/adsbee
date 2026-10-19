@@ -1,0 +1,11 @@
+{% extends "adsbee_fleet/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<form method="post" class="card narrow">{% csrf_token %}
+  {% if form.errors %}<p class="msg error">Wrong username or password.</p>{% endif %}
+  <label>Username <input name="username" autofocus required></label>
+  <label>Password <input name="password" type="password" required></label>
+  <input type="hidden" name="next" value="{{ next }}">
+  <button>Sign in</button>
+</form>
+{% endblock %}

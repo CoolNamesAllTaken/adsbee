@@ -1,0 +1,286 @@
+openapi: 3.0.3
+info:
+  title: ADSBee fleet API
+  version: "1"
+  license: {name: GPL-3.0-only}
+  description: |
+    Device report (enroll token) and user API (session or API token). docs/fleet_api.md has the prose.
+    Errors are `{"error": code, "detail"?: text}`. Another account's object is a 404.
+servers: [{url: /}]
+security: [{apiToken: []}, {session: []}]
+components:
+  securitySchemes:
+    enrollToken: {type: http, scheme: bearer, description: "The account's enroll token (AT+FLEET)."}
+    apiToken: {type: http, scheme: bearer, description: "An API token from /account/api-tokens."}
+    session: {type: apiKey, in: cookie, name: sessionid, description: "Signed in; unsafe methods need X-CSRFToken."}
+  parameters:
+    id: {name: id, in: path, required: true, schema: {type: integer}}
+    since: {name: since, in: query, schema: {type: string, format: date-time}, description: "Default: until - 7 days."}
+    until: {name: until, in: query, schema: {type: string, format: date-time}, description: "Default: now. At most 400 days after since."}
+    device: {name: device, in: query, schema: {type: array, items: {type: integer}}, style: form, explode: true,
+             description: "Device ids; none: every bee of the account."}
+  responses:
+    Error:
+      description: Error
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties: {error: {type: string}, detail: {type: string}}
+    Position:
+      type: object
+      nullable: true
+      properties: {lat: {type: number}, lon: {type: number}, alt_m: {type: number, nullable: true}, source: {type: string}}
+    Range:
+      type: object
+      required: [sectors, bands, unit_m, changed, max]
+      properties:
+        sectors: {type: integer, enum: [36]}
+        bands: {type: integer, enum: [12]}
+        unit_m: {type: integer, minimum: 1}
+        changed: {type: string, format: byte, description: "54-byte bitmap; bin i = byte i/8, bit i%8 (LSB first). Bin = band*36 + sector."}
+        max: {type: string, format: byte, description: "One byte (1..255) per set bit, in bin order: ceil(distance_m / unit_m)."}
+    Report:
+      type: object
+      required: [v, product, unique_id, uptime_s, seq, period]
+      properties:
+        v: {type: integer, enum: [1]}
+        product: {type: string, example: adsbee_1090}
+        unique_id: {type: string, pattern: '^[0-9A-Fa-f]{16}$'}
+        mac_address: {type: string}
+        ota_keys: {type: array, items: {type: string}, description: "Only to the default adsbee.aero host."}
+        versions: {type: object, additionalProperties: {type: string}}
+        auto_update: {type: boolean}
+        uptime_s: {type: integer}
+        seq: {type: integer}
+        period:
+          type: object
+          required: [start_uptime_s, len_s]
+          properties: {start_uptime_s: {type: integer}, len_s: {type: integer, minimum: 1}}
+        rx_position: {$ref: '#/components/schemas/Position'}
+        stats:
+          type: object
+          properties:
+            modes_valid: {type: integer}
+            es_valid: {type: integer}
+            uat_adsb: {type: integer}
+            uat_uplink: {type: integer}
+            aircraft_max: {type: integer}
+            aircraft_unique: {type: integer}
+        range: {allOf: [{$ref: '#/components/schemas/Range'}], nullable: true, description: "Ignored without rx_position."}
+    ReportAnswer:
+      type: object
+      properties:
+        next_report_s: {type: integer}
+        firmware:
+          type: object
+          nullable: true
+          properties: {tag: {type: string}, channel: {type: string}}
+    Device:
+      type: object
+      properties:
+        id: {type: integer}
+        product: {type: string}
+        unique_id: {type: string}
+        mac_address: {type: string}
+        label: {type: string}
+        note: {type: string}
+        location: {$ref: '#/components/schemas/Position'}
+        rx_position: {$ref: '#/components/schemas/Position'}
+        position: {$ref: '#/components/schemas/Position'}
+        versions: {type: object, additionalProperties: {type: string}}
+        version: {type: string}
+        auto_update: {type: boolean}
+        uptime_s: {type: integer, nullable: true}
+        first_seen: {type: string, format: date-time}
+        last_report_at: {type: string, format: date-time, nullable: true}
+        removed: {type: boolean}
+        firmware_target: {type: object, nullable: true, properties: {tag: {type: string}, channel: {type: string}}}
+    DeviceEdit:
+      type: object
+      properties:
+        label: {type: string, maxLength: 120}
+        note: {type: string, maxLength: 500}
+        location: {$ref: '#/components/schemas/Position'}
+    Matrix:
+      type: array
+      description: "bands x sectors: meters or null."
+      items: {type: array, items: {type: integer, nullable: true}}
+    RangeMap:
+      type: object
+      properties:
+        since: {type: string, format: date-time}
+        until: {type: string, format: date-time}
+        sectors: {type: integer}
+        bands: {type: integer}
+        sector_deg: {type: integer}
+        band_edges_ft: {type: array, items: {type: array, items: {type: integer, nullable: true}}}
+        devices:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: integer}
+              label: {type: string}
+              unique_id: {type: string}
+              position: {$ref: '#/components/schemas/Position'}
+              max_m: {$ref: '#/components/schemas/Matrix'}
+              sector_max_m: {type: array, items: {type: integer, nullable: true}}
+              bins: {type: integer}
+              max_range_m: {type: integer, nullable: true}
+        fleet:
+          type: object
+          description: "Max per bin over every bee (each relative to its own receiver)."
+          properties:
+            max_m: {$ref: '#/components/schemas/Matrix'}
+            sector_max_m: {type: array, items: {type: integer, nullable: true}}
+    Stats:
+      type: object
+      properties:
+        since: {type: string, format: date-time}
+        until: {type: string, format: date-time}
+        step: {type: string, enum: [hour, day]}
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              t: {type: string, format: date-time}
+              modes_valid: {type: integer}
+              es_valid: {type: integer}
+              uat_adsb: {type: integer}
+              uat_uplink: {type: integer}
+              aircraft_max: {type: integer}
+              aircraft_unique: {type: integer}
+    RolloutNew:
+      type: object
+      required: [product, tag]
+      properties:
+        product: {type: string}
+        tag: {type: string, example: 0.9.2}
+        channel: {type: string, description: "Default: rc for -rc tags, else stable."}
+        scope: {type: string, enum: [all, label, devices], default: all}
+        label: {type: string}
+        devices: {type: array, items: {type: integer}}
+        test_devices: {type: array, items: {type: integer}, description: "If any: stage test until promoted."}
+        note: {type: string}
+    Rollout:
+      allOf:
+        - {$ref: '#/components/schemas/RolloutNew'}
+        - type: object
+          properties:
+            id: {type: integer}
+            stage: {type: string, enum: [test, all]}
+            state: {type: string, enum: [test, all, paused, cancelled]}
+            paused: {type: boolean}
+            cancelled_at: {type: string, format: date-time, nullable: true}
+            created_at: {type: string, format: date-time}
+            progress:
+              type: object
+              properties: {targeted: {type: integer}, on_tag: {type: integer}, auto_update: {type: integer}}
+paths:
+  /api/fleet/v1/report:
+    post:
+      summary: A bee's periodic report
+      security: [{enrollToken: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}}
+      responses:
+        '200': {description: Stored (or a duplicate), content: {application/json: {schema: {$ref: '#/components/schemas/ReportAnswer'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '410': {$ref: '#/components/responses/Error'}
+        '429': {description: Slow down, headers: {Retry-After: {schema: {type: integer}}}}
+  /api/fleet/v1/account:
+    get:
+      summary: Who is asking
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username: {type: string}
+                  privileges: {type: array, items: {type: string}}
+                  enroll_token_prefix: {type: string}
+                  enroll_token_rotated_at: {type: string, format: date-time, nullable: true}
+                  report_url: {type: string}
+                  products: {type: object, additionalProperties: {type: string}}
+  /api/fleet/v1/account/enroll-token:
+    post:
+      summary: Replace the enroll token (bees holding the old one get 401)
+      responses:
+        '200':
+          description: The new token, shown once
+          content: {application/json: {schema: {type: object, properties: {token: {type: string}, at_command: {type: string}}}}}
+  /api/fleet/v1/account/api-tokens:
+    get:
+      summary: API tokens (prefixes only)
+      responses: {'200': {description: List}}
+    post:
+      summary: New API token, shown once
+      requestBody: {content: {application/json: {schema: {type: object, properties: {name: {type: string}}}}}}
+      responses: {'201': {description: "{id, name, token}"}}
+  /api/fleet/v1/account/api-tokens/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    delete:
+      summary: Delete an API token
+      responses: {'200': {description: Deleted}, '404': {$ref: '#/components/responses/Error'}}
+  /api/fleet/v1/devices:
+    get:
+      summary: The account's bees (?removed=1 includes removed ones)
+      responses:
+        '200': {description: Bees, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Device'}}}}}
+  /api/fleet/v1/devices/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get:
+      summary: One bee
+      responses: {'200': {description: Bee, content: {application/json: {schema: {$ref: '#/components/schemas/Device'}}}}, '404': {$ref: '#/components/responses/Error'}}
+    patch:
+      summary: Label, note, map location (null = as reported)
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/DeviceEdit'}}}}
+      responses: {'200': {description: Bee}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
+    delete:
+      summary: Remove from the account (its reports get 410)
+      responses: {'200': {description: Bee, removed}, '404': {$ref: '#/components/responses/Error'}}
+  /api/fleet/v1/devices/{id}/restore:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post:
+      summary: Accept a removed bee's reports again
+      responses: {'200': {description: Bee}, '404': {$ref: '#/components/responses/Error'}}
+  /api/fleet/v1/range:
+    get:
+      summary: Range map, max per bin over the window, per bee and for the fleet
+      parameters: [{$ref: '#/components/parameters/device'}, {$ref: '#/components/parameters/since'}, {$ref: '#/components/parameters/until'}]
+      responses: {'200': {description: Map, content: {application/json: {schema: {$ref: '#/components/schemas/RangeMap'}}}}}
+  /api/fleet/v1/stats:
+    get:
+      summary: Message and aircraft counts per hour or day, summed over the chosen bees
+      parameters:
+        - {$ref: '#/components/parameters/device'}
+        - {$ref: '#/components/parameters/since'}
+        - {$ref: '#/components/parameters/until'}
+        - {name: step, in: query, schema: {type: string, enum: [hour, day], default: hour}}
+      responses: {'200': {description: Series, content: {application/json: {schema: {$ref: '#/components/schemas/Stats'}}}}}
+  /api/fleet/v1/rollouts:
+    get:
+      summary: Rollouts, newest first
+      responses: {'200': {description: List, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Rollout'}}}}}}
+    post:
+      summary: Start a rollout
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RolloutNew'}}}}
+      responses: {'201': {description: Rollout, content: {application/json: {schema: {$ref: '#/components/schemas/Rollout'}}}}, '400': {$ref: '#/components/responses/Error'}}
+  /api/fleet/v1/rollouts/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get:
+      summary: One rollout
+      responses: {'200': {description: Rollout, content: {application/json: {schema: {$ref: '#/components/schemas/Rollout'}}}}}
+    post:
+      summary: Promote, pause, resume or cancel
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [action], properties: {action: {type: string, enum: [promote, pause, resume, cancel]}}}}}
+      responses: {'200': {description: Rollout}, '400': {$ref: '#/components/responses/Error'}}

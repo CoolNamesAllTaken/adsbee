@@ -1,0 +1,4 @@
+{$FLEET_DOMAIN} {
+	encode gzip
+	reverse_proxy app:8000
+}
