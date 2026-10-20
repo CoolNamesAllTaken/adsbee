@@ -8,6 +8,7 @@
 #include "comms.hh"
 #include "aircraftjson_utils.hh"
 #include "auto_update_manager.hh"
+#include "swarm_manager.hh"
 #include "feed_ram_budget.hh"
 #include "network_time.hh"
 #include "gdl90/gdl90_utils.hh"
@@ -238,6 +239,7 @@ bool ADSBeeServer::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
     auto_update_manager.Update();
+    swarm_manager.Update();
     network_time.Update();
 
     // Ingest any Broadcast Remote ID advertisements received on the BLE/WiFi radios into the local aircraft dictionary
@@ -254,6 +256,10 @@ bool ADSBeeServer::Update() {
         xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0) == pdTRUE;
     if (received_rp2040_metrics) {
         last_rp2040_metrics_timestamp_ms_ = timestamp_ms;
+        // The RP2040 sees every frame; the ESP32 only those forwarded to it.
+        const AircraftDictionary::Metrics& m = rp2040_aircraft_dictionary_metrics;
+        swarm_manager.AddFrames(m.valid_squitter_frames, m.valid_extended_squitter_frames, m.valid_uat_adsb_frames,
+                                m.valid_uat_uplink_frames);
     }
     if (received_rp2040_metrics ||
         timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateFallbackIntervalMs) {
@@ -1012,6 +1018,18 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              ", \"auto_update\": { \"enabled\": %s, \"state\": \"%s\", \"version\": \"%s\", \"progress\": %u }",
              auto_update.enabled ? "true" : "false", auto_update.state, auto_update.version,
              auto_update.progress_percent);
+    SwarmManager::Status swarm;
+    swarm_manager.GetStatus(swarm);
+    char last_report_s_ago[12] = "null";
+    if (swarm.last_report_s_ago != UINT32_MAX) {
+        snprintf(last_report_s_ago, sizeof(last_report_s_ago), "%lu", (unsigned long)swarm.last_report_s_ago);
+    }
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"swarm\": { \"enabled\": %s, \"result\": \"%s\", \"http_status\": %d, \"last_report_s_ago\": %s, "
+             "\"next_report_s\": %lu, \"seq\": %lu, \"body_bytes\": %u }",
+             swarm.enabled ? "true" : "false", swarm.result, swarm.http_status, last_report_s_ago,
+             (unsigned long)swarm.next_report_s, (unsigned long)swarm.seq, swarm.body_len);
     NetworkTime::Status sntp;
     network_time.GetStatus(sntp);
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),

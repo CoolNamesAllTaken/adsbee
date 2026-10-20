@@ -129,6 +129,9 @@ bool SettingsManager::Sanitize() {
         changed |= SanitizeString(net.password, sizeof(net.password), "wifi_sta_extra_networks.password", i);
     }
     changed |= SanitizeString(settings.ntp_server, sizeof(settings.ntp_server), "ntp_server");
+    changed |= SanitizeBool(settings.swarm_enabled, "swarm_enabled");
+    changed |= SanitizeString(settings.swarm_server, sizeof(settings.swarm_server), "swarm_server");
+    changed |= SanitizeString(settings.swarm_token, sizeof(settings.swarm_token), "swarm_token");
 
     // Baud rate 0 is invalid on hardware UARTs (but normal for the USB console).
     if (settings.baud_rates[SerialInterface::kCommsUART] == 0) {
@@ -280,6 +283,10 @@ void SettingsManager::Print() {
                    static_cast<unsigned long>(settings.filter_distance_deci_nm % 10));
     CONSOLE_PRINTF("\tAltitude Filter: %s, %ld, %ld ft\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
                    (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
+    char redacted_swarm_token[Settings::kSwarmTokenMaxLen + 1];
+    RedactPassword(const_cast<char*>(settings.swarm_token), redacted_swarm_token, Settings::kSwarmTokenMaxLen);
+    CONSOLE_PRINTF("\tSwarm Reports: %s, %s, token %s\r\n", settings.swarm_enabled ? "ENABLED" : "DISABLED",
+                   settings.swarm_server, redacted_swarm_token);
 
 #ifdef ON_PICO
     // Only print serial reporting protocols on master, where we aren't constrained by log message size.
@@ -486,4 +493,8 @@ void SettingsManager::PrintAT() {
     // AT+FILTER_ALTITUDE_FT
     CONSOLE_PRINTF("AT+FILTER_ALTITUDE_FT=%s,%ld,%ld\r\n", AltitudeFilterModeStr(settings.filter_altitude_mode),
                    (long)settings.filter_altitude_a_ft, (long)settings.filter_altitude_b_ft);
+
+    // AT+SWARM. "-" is an empty string.
+    CONSOLE_PRINTF("AT+SWARM=%d,%s,%s\r\n", settings.swarm_enabled, settings.swarm_server[0] ? settings.swarm_server : "-",
+                   settings.swarm_token[0] ? settings.swarm_token : "-");
 }

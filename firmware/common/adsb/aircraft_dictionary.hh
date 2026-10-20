@@ -15,6 +15,7 @@
 #include "json_utils.hh"
 #include "macros.hh"
 #include "mode_s_packet.hh"
+#include "range_map.hh"
 #include "remote_id_packet.hh"
 #include "uat_packet.hh"
 
@@ -415,6 +416,7 @@ class ModeSAircraft : public Aircraft {
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
+    uint8_t num_position_decodes = 0;  // Accepted positions in a row, up to 2. Sits in padding.
     uint16_t squawk = ADSBTypes::kSquawkCodeNotYetReceived;  // Squawk digits as a decimal value, e.g. 7700.
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
     uint8_t emitter_category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
@@ -731,6 +733,7 @@ class UATAircraft : public Aircraft {
     uint16_t squawk = ADSBTypes::kSquawkCodeNotYetReceived;  // Squawk digits as a decimal value, e.g. 7700.
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
     uint8_t emitter_category_raw = 0;  // Non-enum category.
+    uint8_t num_position_decodes = 0;  // Accepted positions in a row, up to 2. Sits in padding.
     EmergencyPriorityStatus emergency_priority_status =
         kEmergencyPriorityStatusNone;  // Emergency priority status of the aircraft.
 
@@ -919,6 +922,22 @@ struct AircraftReportFilter {
 class AircraftDictionary {
    public:
     static constexpr uint16_t kMaxNumAircraft = kAircraftDictionaryMaxNumAircraft;
+
+    // Receives range, message and aircraft counts for swarm reports (AT+SWARM), or nullptr for none. ESP32 only.
+    void SetSwarmRecorder(SwarmRecorder *recorder) { swarm_recorder_ = recorder; }
+
+    // Heard directly: TIS-B and ADS-R positions say where a ground station hears the aircraft, not this receiver.
+    static inline bool IsDirectPosition(const ModeSAircraft &aircraft) {
+        return aircraft.position_address_type == ModeSAircraft::kAddressTypeADSBICAO ||
+               aircraft.position_address_type == ModeSAircraft::kAddressTypeADSBICAONonTransponder ||
+               aircraft.position_address_type == ModeSAircraft::kAddressTypeADSBOther;
+    }
+    static inline bool IsDirectPosition(const UATAircraft &aircraft) {
+        UATAircraft::AddressQualifier q = aircraft.GetAddressQualifier();
+        return q == UATAircraft::kADSBTargetWithICAO24BitAddress ||
+               q == UATAircraft::kADSBTargetWithSelfAssignedTemporaryAddress || q == UATAircraft::kSurfaceVehicle ||
+               q == UATAircraft::kFixedADSBBeacon;
+    }
     static constexpr uint16_t kMaxNumSources = 4;  // One per 1090 demodulator state machine.
 
 #ifdef FILTER_CPR_POSITIONS
@@ -1568,12 +1587,58 @@ class AircraftDictionary {
     template <typename T>
     void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before) {
         PositionSnapshot after = PositionSnapshot::Of(aircraft);
+        if constexpr (kRecordsRange<T>) {
+            bool moved = after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg;
+            if (!after.valid) {
+                aircraft.num_position_decodes = 0;
+            } else if ((!before.valid || moved) && aircraft.num_position_decodes < 2) {
+                aircraft.num_position_decodes++;
+            }
+        }
         if (after.valid != before.valid || (after.valid && aircraft.distance_m == Aircraft::kDistanceUnknown)) {
             UpdateDistanceAndBearing(aircraft, after.valid);
+            RecordRange(aircraft);
         } else if (after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg) {
             aircraft.distance_reference_epoch = kDistanceEpochStale;
         }
     }
+
+    // Mode S and UAT positions go into swarm range maps; Remote ID drones don't. Only builds that report swarm
+    // metrics (the ESP32, host tests) define SWARM_RECORDING: elsewhere this compiles to nothing.
+#ifdef SWARM_RECORDING
+    static constexpr bool kSwarmRecording = true;
+#else
+    static constexpr bool kSwarmRecording = false;
+#endif
+    template <typename T>
+    static constexpr bool kRecordsRange =
+        kSwarmRecording && (std::is_same_v<T, ModeSAircraft> || std::is_same_v<T, UATAircraft>);
+
+    /**
+     * Adds a freshly computed distance to the swarm range map, once the position is confirmed by a second decode (the
+     * first can be a CPR outlier). Only positions heard directly; altitude is barometric, else GNSS, and aircraft
+     * without one are left out.
+     */
+    template <typename T>
+    inline void RecordRange(const T &aircraft) {
+        if constexpr (kRecordsRange<T>) {
+            if (swarm_recorder_ == nullptr || aircraft.num_position_decodes < 2 ||
+                aircraft.distance_m == Aircraft::kDistanceUnknown || !IsDirectPosition(aircraft)) {
+                return;
+            }
+            int32_t altitude_ft;
+            if (aircraft.HasBitFlag(T::kBitFlagBaroAltitudeValid)) {
+                altitude_ft = aircraft.baro_altitude_ft;
+            } else if (aircraft.HasBitFlag(T::kBitFlagGNSSAltitudeValid)) {
+                altitude_ft = aircraft.gnss_altitude_ft;
+            } else {
+                return;
+            }
+            swarm_recorder_->RecordPosition(aircraft.distance_m, aircraft.bearing_bam16, altitude_ft, aircraft.GetUID());
+        }
+    }
+
+    SwarmRecorder *swarm_recorder_ = nullptr;
 
     void BumpReferenceEpoch();
 

@@ -60,7 +60,9 @@ class AutoUpdater::TokenReader : public AutoUpdatePlatform::BodySink, public Jso
 class AutoUpdater::OfferReader : public AutoUpdatePlatform::BodySink, public JsonScanner::Handler {
    public:
     // want_tag: a tag learned from an earlier pass, for a listing that names the recommendation after the releases.
-    OfferReader(Offer& offer, const char* want_tag) : offer_(offer), want_tag_(want_tag) {}
+    // force: install want_tag whatever the listing recommends.
+    OfferReader(Offer& offer, const char* want_tag, bool force = false)
+        : offer_(offer), want_tag_(want_tag), force_(force) {}
 
     bool OnBody(int status, const uint8_t* data, size_t len) override {
         if (status == 200) scanner_.Feed(reinterpret_cast<const char*>(data), len);
@@ -71,7 +73,7 @@ class AutoUpdater::OfferReader : public AutoUpdatePlatform::BodySink, public Jso
         if (depth == 1) {
             if (strcmp(key, "recommended") == 0 && is_string) {
                 CopyStr(offer_.recommended, sizeof(offer_.recommended), value);
-            } else if (strcmp(key, "recommended_tag") == 0 && is_string) {
+            } else if (strcmp(key, "recommended_tag") == 0 && is_string && !force_) {
                 CopyStr(offer_.tag, sizeof(offer_.tag), value);
             } else if (strcmp(key, "rollback") == 0) {
                 offer_.rollback = strcmp(value, "true") == 0;
@@ -135,6 +137,7 @@ class AutoUpdater::OfferReader : public AutoUpdatePlatform::BodySink, public Jso
 
     Offer& offer_;
     const char* want_tag_;
+    bool force_;
     JsonScanner scanner_{*this};
     bool in_releases_ = false;
     char release_tag_[64] = {0};
@@ -441,7 +444,33 @@ AutoUpdater::Reply AutoUpdater::Authenticate() {
     return reply;
 }
 
+void AutoUpdater::SetTarget(const char* version_or_tag) {
+    const char* version = version_or_tag ? version_or_tag : "";
+    size_t product_len = strlen(config_.product);
+    if (strncmp(version, config_.product, product_len) == 0 && version[product_len] == '-') {
+        version += product_len + 1;  // A release tag: adsbee_1090-0.9.2.
+    }
+    CopyStr(target_, sizeof(target_), version);
+}
+
 AutoUpdater::Reply AutoUpdater::GetOffer(Offer& offer) {
+    if (target_[0]) {
+        // The rc listing has every release the service keeps, so a staged RC is found too.
+        char tag[sizeof(offer.tag)];
+        snprintf(tag, sizeof(tag), "%s-%s", config_.product, target_);
+        offer = Offer();
+        OfferReader* reader = new (std::nothrow) OfferReader(offer, tag, true);
+        if (!reader) return kReplyNoAnswer;
+        AutoUpdatePlatform::HttpRequest request;
+        request.path = "releases?channel=rc";
+        Reply reply = Request(request, reader, true);
+        delete reader;
+        if (reply != kReplyOK) return reply;
+        if (!offer.parsed) return kReplyError;
+        CopyStr(offer.recommended, sizeof(offer.recommended), target_);
+        offer.rollback = true;  // The swarm owner chose this version, older or not.
+        return kReplyOK;
+    }
     char path[48];
     snprintf(path, sizeof(path), "releases?channel=%s", config_.channel);
     char tag[sizeof(offer.tag)] = {0};
@@ -581,7 +610,13 @@ const char* AutoUpdater::Install(const Offer& offer) {
     return reason;
 }
 
+uint32_t AutoUpdater::TargetWaitMs() {
+    uint32_t now_ms = platform_.NowMs();
+    return target_pending_ && now_ms < config_.target_wait_ms ? config_.target_wait_ms - now_ms : 0;
+}
+
 uint32_t AutoUpdater::RunOnce() {
+    if (uint32_t wait_ms = TargetWaitMs()) return wait_ms;
     if (!platform_.Online()) return config_.offline_retry_ms;
 
     uint32_t now_ms = platform_.NowMs();
@@ -628,6 +663,12 @@ uint32_t AutoUpdater::RunOnce() {
 
     if (offer.hold) {
         SetState(kHeld);
+        return NextCheckMs();
+    }
+    if (target_[0] && !offer.has_asset && strcmp(target_, running_version_) != 0) {
+        // Never falls back to the recommendation: the swarm asked for this version.
+        CopyStr(detail_, sizeof(detail_), "target not offered");
+        SetState(kFailed, target_);
         return NextCheckMs();
     }
     int newer = offer.recommended[0] ? CompareVersions(offer.recommended, running_version_) : 0;

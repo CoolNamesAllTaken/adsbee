@@ -9,7 +9,7 @@ Send `AT+CONFIG_HASH?` on the [CLI](../getting-started/quick-start.md#connect-to
 ```
 AT+CONFIG_HASH?
 CONFIG_HASH=0x01B412E7
-SETTINGS_FLEET=0x41982E33 (settings version 19, 1660 Bytes)
+SETTINGS_FLEET=0x41982E33 (settings version 19, 1792 Bytes)
 SETTINGS_FULL=0x34C6C16A
 CCFG_CC1312=0x4BB06FBD
 FIRMWARE=0x2AE30B6C

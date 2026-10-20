@@ -3,6 +3,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 add_compile_definitions(ON_ESP32)
+add_compile_definitions(SWARM_RECORDING)  # AircraftDictionary feeds swarm range maps (AT+SWARM).
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(adsbee_esp)

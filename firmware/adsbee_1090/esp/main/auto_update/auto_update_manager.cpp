@@ -5,8 +5,8 @@
 
 #include "comms.hh"
 #include "device_info.hh"
-#include "esp_crt_bundle.h"
 #include "esp_random.h"
+#include "swarm_manager.hh"
 #include "esp_heap_caps.h"
 #include "hal.hh"
 #include "hardware_capabilities.hh"
@@ -19,11 +19,6 @@
 #endif
 const char AutoUpdateManager::kAPIBase[] = AUTO_UPDATE_API_BASE;
 
-#ifdef AUTO_UPDATE_TEST_CA
-// Bench builds only: trust this CA instead of the certificate bundle (see CMakeLists.txt).
-extern const char auto_update_test_ca_pem_start[] asm("_binary_auto_update_test_ca_pem_start");
-#endif
-
 static const char kNVSNamespace[] = "auto_update";
 static const char kNVSStateKey[] = "state";
 
@@ -32,6 +27,17 @@ AutoUpdateManager auto_update_manager;
 static void auto_update_task(void* pvParameters) {
     auto_update_manager.Task();
     vTaskDelete(NULL);
+}
+
+void AutoUpdateManager::RunningVersion(char* buf, size_t buf_size) {
+    if (ObjectDictionary::kFirmwareVersionReleaseCandidate == 0) {
+        snprintf(buf, buf_size, "%d.%d.%d", ObjectDictionary::kFirmwareVersionMajor,
+                 ObjectDictionary::kFirmwareVersionMinor, ObjectDictionary::kFirmwareVersionPatch);
+    } else {
+        snprintf(buf, buf_size, "%d.%d.%d-rc%d", ObjectDictionary::kFirmwareVersionMajor,
+                 ObjectDictionary::kFirmwareVersionMinor, ObjectDictionary::kFirmwareVersionPatch,
+                 ObjectDictionary::kFirmwareVersionReleaseCandidate);
+    }
 }
 
 void AutoUpdateManager::Update() {
@@ -52,14 +58,7 @@ void AutoUpdateManager::Update() {
     }
     if (updater_ == nullptr) {
         char version[kVersionMaxLen + 1];
-        if (ObjectDictionary::kFirmwareVersionReleaseCandidate == 0) {
-            snprintf(version, sizeof(version), "%d.%d.%d", ObjectDictionary::kFirmwareVersionMajor,
-                     ObjectDictionary::kFirmwareVersionMinor, ObjectDictionary::kFirmwareVersionPatch);
-        } else {
-            snprintf(version, sizeof(version), "%d.%d.%d-rc%d", ObjectDictionary::kFirmwareVersionMajor,
-                     ObjectDictionary::kFirmwareVersionMinor, ObjectDictionary::kFirmwareVersionPatch,
-                     ObjectDictionary::kFirmwareVersionReleaseCandidate);
-        }
+        RunningVersion(version, sizeof(version));
         AutoUpdater::Config config;
 #ifdef AUTO_UPDATE_FIRST_CHECK_S
         config.first_check_delay_ms = AUTO_UPDATE_FIRST_CHECK_S * 1000;  // Bench builds only.
@@ -78,6 +77,16 @@ void AutoUpdateManager::Update() {
         CONSOLE_INFO("AutoUpdateManager::Update", "Automatic updates on, running %s.", version);
     }
     if (static_cast<int32_t>(now_ms - next_run_timestamp_ms_) < 0) return;
+    xSemaphoreTake(updater_mutex_, portMAX_DELAY);
+    updater_->SetTargetPending(settings_manager.settings.swarm_enabled && !swarm_answered_);
+    uint32_t target_wait_ms = updater_->TargetWaitMs();
+    xSemaphoreGive(updater_mutex_);
+    if (target_wait_ms > 0) {
+        // No task meanwhile: SetSwarmTarget() brings the check forward.
+        static constexpr uint32_t kTargetWaitStepMs = 30 * 1000;
+        next_run_timestamp_ms_ = now_ms + (target_wait_ms < kTargetWaitStepMs ? target_wait_ms : kTargetWaitStepMs);
+        return;
+    }
 
     // A check costs about 40 kB of internal RAM at its peak (task stack plus the TLS handshake). Without that much to
     // spare, WiFi and Ethernet allocations start failing, so wait for a better moment.
@@ -94,6 +103,7 @@ void AutoUpdateManager::Update() {
         return;
     }
     low_memory_ = false;
+    if (swarm_manager.Busy()) return;  // One TLS session at a time.
     if (xTaskCreate(auto_update_task, "auto_update", kTaskStackSizeBytes, NULL, kTaskPriority, &task_) != pdPASS) {
         task_ = nullptr;
         next_run_timestamp_ms_ = now_ms + kLowMemoryRetryMs;
@@ -106,9 +116,12 @@ void AutoUpdateManager::Task() {
     xStreamBufferReset(console_rx_buf_);
     tap_line_len_ = 0;
     capturing_ = true;
+    xSemaphoreTake(updater_mutex_, portMAX_DELAY);
+    updater_->SetTarget(settings_manager.settings.swarm_enabled ? swarm_target_ : nullptr);
+    xSemaphoreGive(updater_mutex_);
     uint32_t delay_ms = updater_->RunOnce();
     capturing_ = false;
-    HTTPClose();
+    http_.Close();
     if (updater_->state() == AutoUpdater::kFailed) {
         CONSOLE_WARNING("AutoUpdateManager::Task", "Update to %s failed: %s.", updater_->version(), updater_->detail());
     }
@@ -131,6 +144,23 @@ void AutoUpdateManager::GetStatus(Status& status) {
         status.progress_percent = updater_->progress_percent();
     }
     xSemaphoreGive(updater_mutex_);
+}
+
+void AutoUpdateManager::SetSwarmTarget(const char* tag) {
+    if (tag == nullptr) tag = "";
+    xSemaphoreTake(updater_mutex_, portMAX_DELAY);
+    bool changed = strncmp(swarm_target_, tag, sizeof(swarm_target_) - 1) != 0 || !swarm_answered_;
+    strncpy(swarm_target_, tag, sizeof(swarm_target_) - 1);
+    swarm_target_[sizeof(swarm_target_) - 1] = '\0';
+    swarm_answered_ = true;
+    xSemaphoreGive(updater_mutex_);
+    if (!changed) return;
+    CONSOLE_INFO("AutoUpdateManager::SetSwarmTarget", "Swarm firmware target: %s.", tag[0] ? tag : "none");
+    static constexpr uint32_t kTargetCheckDelayMs = 30 * 1000;
+    uint32_t soon_ms = NowMs() + kTargetCheckDelayMs;
+    if (updater_ != nullptr && task_ == nullptr && static_cast<int32_t>(next_run_timestamp_ms_ - soon_ms) > 0) {
+        next_run_timestamp_ms_ = soon_ms;
+    }
 }
 
 void AutoUpdateManager::NoteUserOTA(const char* buf, size_t len, const char* marker) {
@@ -214,104 +244,10 @@ bool AutoUpdateManager::GetIdentity(Identity& identity) {
     return true;
 }
 
-esp_err_t AutoUpdateManager::HTTPEventHandler(esp_http_client_event_t* event) {
-    AutoUpdateManager* self = static_cast<AutoUpdateManager*>(event->user_data);
-    switch (event->event_id) {
-        case HTTP_EVENT_ON_HEADER:
-            if (strcasecmp(event->header_key, "Retry-After") == 0) {
-                self->retry_after_s_ = strtoul(event->header_value, nullptr, 10);
-            }
-            break;
-        case HTTP_EVENT_ON_DATA:
-            self->got_body_ = true;
-            if (self->sink_ != nullptr && !self->aborted_ &&
-                !self->sink_->OnBody(esp_http_client_get_status_code(event->client),
-                                     static_cast<const uint8_t*>(event->data), event->data_len)) {
-                self->aborted_ = true;  // Ranges are small: the rest of this one is read and dropped.
-            }
-            break;
-        default:
-            break;
-    }
-    return ESP_OK;
-}
-
-void AutoUpdateManager::HTTPClose() {
-    if (client_ != nullptr) {
-        esp_http_client_cleanup(client_);
-        client_ = nullptr;
-    }
-}
-
 bool AutoUpdateManager::Http(const HttpRequest& request, HttpResult& result, BodySink* sink) {
-    // A kept-alive connection the server has closed in the meantime fails at once: try again on a fresh one.
-    for (int attempt = 0; attempt < 2; attempt++) {
-        bool reused = client_ != nullptr;
-        if (HTTPPerform(request, sink)) {
-            result.status = esp_http_client_get_status_code(client_);
-            result.retry_after_s = retry_after_s_;
-            return true;
-        }
-        HTTPClose();
-        if (!reused || got_body_ || aborted_) break;
-    }
-    return false;
-}
-
-bool AutoUpdateManager::HTTPPerform(const HttpRequest& request, BodySink* sink) {
     char url[sizeof(kAPIBase) + 160];
     snprintf(url, sizeof(url), "%s%s", kAPIBase, request.path);
-    if (client_ == nullptr) {
-        esp_http_client_config_t config = {};
-        config.url = url;
-        config.timeout_ms = kHTTPTimeoutMs;
-        config.event_handler = HTTPEventHandler;
-        config.user_data = this;
-        config.buffer_size = kHTTPBufferLenBytes;
-        config.buffer_size_tx = kHTTPBufferLenBytes;
-        config.keep_alive_enable = true;
-        config.user_agent = "ADSBee1090";
-#ifdef AUTO_UPDATE_TEST_CA
-        config.cert_pem = auto_update_test_ca_pem_start;
-        config.skip_cert_common_name_check = true;
-#else
-        config.crt_bundle_attach = esp_crt_bundle_attach;
-#endif
-        client_ = esp_http_client_init(&config);
-        if (client_ == nullptr) return false;
-    } else {
-        esp_http_client_set_url(client_, url);
-    }
-
-    esp_http_client_set_method(client_, strcmp(request.method, "POST") == 0 ? HTTP_METHOD_POST : HTTP_METHOD_GET);
-    char header[AutoUpdater::kTokenMaxLen + 16];
-    if (request.token != nullptr) {
-        snprintf(header, sizeof(header), "Bearer %s", request.token);
-        esp_http_client_set_header(client_, "Authorization", header);
-    } else {
-        esp_http_client_delete_header(client_, "Authorization");
-    }
-    if (request.range_first >= 0) {
-        snprintf(header, sizeof(header), "bytes=%ld-%ld", (long)request.range_first, (long)request.range_last);
-        esp_http_client_set_header(client_, "Range", header);
-    } else {
-        esp_http_client_delete_header(client_, "Range");
-    }
-    if (request.body != nullptr) {
-        esp_http_client_set_header(client_, "Content-Type", "application/json");
-        esp_http_client_set_post_field(client_, request.body, strlen(request.body));
-    } else {
-        esp_http_client_delete_header(client_, "Content-Type");
-        esp_http_client_set_post_field(client_, nullptr, 0);
-    }
-
-    sink_ = sink;
-    aborted_ = false;
-    got_body_ = false;
-    retry_after_s_ = 0;
-    esp_err_t err = esp_http_client_perform(client_);
-    sink_ = nullptr;
-    return err == ESP_OK && !aborted_;
+    return http_.Request(url, request, result, sink);
 }
 
 void AutoUpdateManager::ConsoleSend(const uint8_t* data, size_t len) {

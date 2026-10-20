@@ -1546,9 +1546,15 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
                     if (aircraft.distance_reference_epoch != reference_epoch_) {
                         using T = std::remove_reference_t<decltype(aircraft)>;
                         UpdateDistanceAndBearing(aircraft, aircraft.HasBitFlag(T::kBitFlagPositionValid));
+                        RecordRange(aircraft);
                     }
                 },
                 it->second);
+            if constexpr (kSwarmRecording) {
+                if (swarm_recorder_ != nullptr && !std::holds_alternative<RemoteIDAircraft>(it->second)) {
+                    swarm_recorder_->MarkAircraft(it->first);
+                }
+            }
 
             // Update lowest GNSS altitude if available.
             bool has_valid_gnss_altitude = false;
@@ -1587,6 +1593,9 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     }
 
     // Update aggregate statistics.
+    if (kSwarmRecording && swarm_recorder_ != nullptr) {
+        swarm_recorder_->NoteAircraftCount(metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
+    }
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.
 }
