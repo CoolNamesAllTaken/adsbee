@@ -19,6 +19,8 @@ class SwarmManager : public SwarmPlatform {
     static constexpr uint32_t kMinFreeHeapBytesToRun = 56 * 1024;
     static constexpr uint32_t kBusyRetryMs = 30 * 1000;  // While an automatic update runs.
     static constexpr uint32_t kLowMemoryRetryMs = 10 * 60 * 1000;
+    // Update() runs on every server loop (hundreds per second); the swarm bookkeeping only needs to run once a second.
+    static constexpr uint32_t kUpdateIntervalMs = 1000;
 
     struct Status {
         bool enabled = false;
@@ -66,6 +68,7 @@ class SwarmManager : public SwarmPlatform {
     SwarmReporter* reporter_ = nullptr;
     uint32_t next_seq_ = 0;  // Survives turning the setting off and on.
     uint32_t next_report_timestamp_ms_ = 0;
+    uint32_t last_update_timestamp_ms_ = 0;
     bool low_memory_ = false;
     char token_seen_[SettingsManager::Settings::kSwarmTokenMaxLen + 1] = {0};
     // The task's copies of the settings, which may change while it runs.

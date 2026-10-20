@@ -35,8 +35,10 @@ void SwarmManager::Stop() {
 
 void SwarmManager::Update() {
     if (task_ != nullptr) return;  // A report is being sent; it owns the pending report.
-    const SettingsManager::Settings& settings = settings_manager.settings;
     uint32_t now_ms = NowMs();
+    if (now_ms - last_update_timestamp_ms_ < kUpdateIntervalMs) return;
+    last_update_timestamp_ms_ = now_ms;
+    const SettingsManager::Settings& settings = settings_manager.settings;
     if (!settings.swarm_enabled) {
         if (reporter_ != nullptr) Stop();
         return;
