@@ -150,6 +150,15 @@ Here are a few apps that can be used with ADSBee 1090. If you have one that you 
    - The ADSBee refuses a feed when the active feeds would need more ESP32 RAM than it has for them. The bar next to the feed count in the web interface shows how much is in use.
 5. Check that your values were set correctly with `AT+FEED?`. You should see a sparkline graph below the terminal indicating a non-zero number of packets per second being forwarded to your feed (assuming your ADSBee is receiving packets).
 
+### Receiver ID { #feed-receiver-id }
+
+Each feed sends a receiver ID: 16 hex digits, by default this device's own (`bee0…`). Aggregators use it to tell receivers apart; whereplane.xyz and readsb show it as a UUID (`bee0xxxx-xxxx-xxxx-bee0-xxxxxxxxxxxx`). Feed 0's ID also names the MQTT topics.
+
+- Web interface: the ID shows on each feed card and in the feed editor, with copy buttons for both forms, edit, and ↺ to go back to the default.
+- `AT+FEED_RECEIVER_ID?` prints each feed's ID and the device default.
+- `AT+FEED_RECEIVER_ID=<feed_index>,<16 hex digits>` sets one, e.g. to keep an ID an aggregator already knows after replacing a unit. `AT+FEED_RECEIVER_ID=<feed_index>,DEFAULT` restores the default. Save with `AT+SETTINGS=SAVE`.
+- A settings dump (`AT+SETTINGS?DUMP`) leaves IDs out, so a restored dump keeps the target unit's own.
+
 ### MQTT feeds { #mqtt-feeds }
 
 MQTT feeds publish to one broker, such as Mosquitto for Home Assistant or Node-RED, over a single connection.

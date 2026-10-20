@@ -82,6 +82,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_feed_datagram.cc
         test_swarm.cc
         test_feed_send_buffer.cc
+        test_feed_receiver_id.cc
         test_log_message.cc
         test_squitter_packets.cc
         test_transponder_packet.cc

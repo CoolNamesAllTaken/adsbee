@@ -1541,18 +1541,20 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
             }
             // Call UpdateMetrics on the underlying aircraft type, and catch up distances after the receiver moved.
             std::visit(
-                [this, &it](auto& aircraft) {
+                [this](auto& aircraft) {
                     aircraft.UpdateMetrics();
-                    using T = std::remove_reference_t<decltype(aircraft)>;
                     if (aircraft.distance_reference_epoch != reference_epoch_) {
+                        using T = std::remove_reference_t<decltype(aircraft)>;
                         UpdateDistanceAndBearing(aircraft, aircraft.HasBitFlag(T::kBitFlagPositionValid));
                         RecordRange(aircraft);
                     }
-                    if constexpr (kRecordsRange<T>) {
-                        if (swarm_recorder_ != nullptr) swarm_recorder_->MarkAircraft(it->first);
-                    }
                 },
                 it->second);
+            if constexpr (kSwarmRecording) {
+                if (swarm_recorder_ != nullptr && !std::holds_alternative<RemoteIDAircraft>(it->second)) {
+                    swarm_recorder_->MarkAircraft(it->first);
+                }
+            }
 
             // Update lowest GNSS altitude if available.
             bool has_valid_gnss_altitude = false;

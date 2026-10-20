@@ -104,7 +104,7 @@ class ConsoleWebSocket {
                     clearTimeout(timer);
                     this.captureCallback = null;
                     reject(new Error(errorLine.replace(/^ERROR\s*/, '') || 'ERROR response'));
-                } else if (matches(text)) {
+                } else if (matches(isLineTerminator ? text : captured.join(''))) {
                     clearTimeout(timer);
                     this.captureCallback = null;
                     resolve(captured);
@@ -272,6 +272,16 @@ class MetricCard {
         this.container.removeChild(this.card);
     }
 
+    // Receiver ID chip under the title of a feed card.
+    setReceiverId(id) {
+        if (!id || id === this.receiverId) return;
+        this.receiverId = id;
+        const chip = receiverIdChip(id);
+        if (this.ridChip) this.card.replaceChild(chip, this.ridChip);
+        else this.card.insertBefore(chip, this.card.children[1] || null);
+        this.ridChip = chip;
+    }
+
     labelToID(label) {
         return label.replace(/[^a-zA-Z0-9]/g, '-');
     }
@@ -342,6 +352,14 @@ class MetricsWebSocket {
                 this.cards[parentLabel][label] = new MetricCard(container, label, 'msg/s', slot, {}, title);
             }
             this.cards[parentLabel][label].update(value);
+        });
+        this.updateFeedReceiverIds();
+    }
+
+    updateFeedReceiverIds() {
+        const ids = this._feedReceiverIds || [];
+        Object.values(this.cards['feed']).forEach(card => {
+            if (card.feedSlot !== null && ids[card.feedSlot]) card.setReceiverId(ids[card.feedSlot]);
         });
     }
 
@@ -479,6 +497,10 @@ class MetricsWebSocket {
                     const addBtn = document.getElementById('add-feed-btn');
                     if (addBtn) addBtn.disabled = (this.getFirstEmptySlot() === -1);
                 }
+                if (data.hasOwnProperty('feed_receiver_id')) {
+                    this._feedReceiverIds = data['feed_receiver_id'];
+                    this.updateFeedReceiverIds();
+                }
                 if (data.hasOwnProperty('device_status')) {
                     const deviceStatus = data['device_status'];
                     // console.log('Device Status:', deviceStatus);
@@ -535,6 +557,187 @@ function feedLabel(uri, transport, slot) {
     return transport === 'MQTT' ? `mqtt#${slot}` : null;
 }
 
+// BEGIN FEED_RECEIVER_ID (same copy in software/adsbee_1090_console; feed_receiver_id.test.js checks it)
+const RECEIVER_ID_RE = /^[0-9a-f]{16}$/i;
+const RECEIVER_ID_TIP = 'Receiver ID this feed sends. Aggregators (adsb.fi, adsb.lol, airplanes.live...) tell '
+    + 'receivers apart by it. Feed 0\'s also names the MQTT topics.';
+const RECEIVER_UUID_TIP = 'The same ID as a UUID: whereplane.xyz, readsb and tar1090 show this form.';
+
+/** UUID form of a 16 hex digit receiver ID (BeastReporter::BuildFeedStartFrame), or null. */
+function receiverIdUuid(id) {
+    const h = String(id || '').toLowerCase();
+    if (!RECEIVER_ID_RE.test(h)) return null;
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(0, 4)}-${h.slice(4)}`;
+}
+
+/** {index, id, defaultId} from an AT+FEED_RECEIVER_ID? line, or null. defaultId is '' if the device can't tell. */
+function parseFeedReceiverIdLine(text) {
+    const m = /FEED_RECEIVER_ID=(\d+)\(INDEX\),([0-9a-fA-F]*)\(RECEIVER_ID\),([0-9a-fA-F]*)\(DEFAULT\)/.exec(text);
+    return m ? { index: Number(m[1]), id: m[2].toLowerCase(), defaultId: m[3].toLowerCase() } : null;
+}
+
+/** Copies text. The device page is plain HTTP, where navigator.clipboard is missing. */
+async function copyText(text) {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch (e) { /* fall back */ }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+}
+
+function ridEl(tag, className, text, title) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined) el.textContent = text;
+    if (title) el.title = title;
+    return el;
+}
+
+const RID_COPY_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" '
+    + 'stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/>'
+    + '<path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>';
+
+/** A copy button that copies text() and shows ✓ for a second. */
+function ridCopyButton(text, title) {
+    const b = ridEl('button', 'rid-btn rid-copy', undefined, title);
+    b.type = 'button';
+    b.innerHTML = RID_COPY_ICON;
+    b.onclick = async (ev) => {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        b.textContent = (await copyText(text())) ? '✓' : '✗';
+        setTimeout(() => { b.innerHTML = RID_COPY_ICON; }, 1000);
+    };
+    return b;
+}
+
+/** Receiver ID chip for a feed card: the 16 hex digits; a click copies them (and doesn't open the editor). */
+function receiverIdChip(id) {
+    const chip = ridEl('span', 'rid-chip', String(id).toLowerCase(),
+        `${RECEIVER_ID_TIP}\n${receiverIdUuid(id) || ''}\nClick to copy.`);
+    chip.onclick = async (ev) => {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        if (await copyText(String(id).toLowerCase())) {
+            chip.classList.add('copied');
+            setTimeout(() => chip.classList.remove('copied'), 1000);
+        }
+    };
+    return chip;
+}
+
+/**
+ * Receiver ID in the feed editor: hex and UUID with copy buttons, ✎ inline edit, ↺ back to the device default.
+ * onSet(value) gets 16 hex digits or 'DEFAULT', and resolves to {id, defaultId} as the device now reports them.
+ */
+class ReceiverIdField {
+    constructor(el, { id, defaultId = null, onSet }) {
+        this.el = el;
+        this.id = String(id || '').toLowerCase();
+        this.defaultId = defaultId ? String(defaultId).toLowerCase() : null;
+        this.onSet = onSet;
+        this.editing = false;
+        this.message = '';
+        this.render();
+    }
+
+    setDefault(defaultId) {
+        this.defaultId = defaultId ? String(defaultId).toLowerCase() : null;
+        if (!this.editing) this.render();
+    }
+
+    async apply(value) {
+        this.message = '…';
+        this.render();
+        try {
+            const now = await this.onSet(value);
+            this.id = now.id;
+            if (now.defaultId) this.defaultId = now.defaultId;
+            this.editing = false;
+            this.message = '';
+        } catch (e) {
+            this.message = `✗ ${e.message}`;
+        }
+        this.render();
+    }
+
+    render() {
+        this.uuidCode = null;
+        const rows = [];
+        const isDefault = this.defaultId !== null && this.id === this.defaultId;
+        const hexRow = ridEl('div', 'rid-row');
+        hexRow.appendChild(ridEl('span', 'rid-label', 'ID', RECEIVER_ID_TIP));
+        if (this.editing) {
+            const input = ridEl('input', 'rid-input');
+            input.type = 'text';
+            input.maxLength = 16;
+            input.spellcheck = false;
+            input.value = this.draft;
+            input.placeholder = this.defaultId || '16 hex digits';
+            input.title = '16 hex digits (0-9, a-f)';
+            const ok = ridEl('button', 'rid-btn', '✓', 'Set this ID (saved right away)');
+            ok.type = 'button';
+            const cancel = ridEl('button', 'rid-btn', '✕', 'Cancel');
+            cancel.type = 'button';
+            const check = () => {
+                this.draft = input.value.trim();
+                const valid = RECEIVER_ID_RE.test(this.draft);
+                ok.disabled = !valid;
+                input.className = valid || this.draft === '' ? 'rid-input' : 'rid-input bad';
+                if (this.uuidCode) this.uuidCode.textContent = receiverIdUuid(this.draft) || '—';
+            };
+            input.oninput = check;
+            input.onkeydown = (ev) => {
+                if (ev.key === 'Enter' && !ok.disabled) { ev.preventDefault(); ok.onclick(); }
+                if (ev.key === 'Escape') { ev.preventDefault(); cancel.onclick(); }
+            };
+            ok.onclick = () => this.apply(this.draft.toLowerCase());
+            cancel.onclick = () => { this.editing = false; this.message = ''; this.render(); };
+            check();
+            hexRow.appendChild(input);
+            hexRow.appendChild(ok);
+            hexRow.appendChild(cancel);
+            this.input = input;
+        } else {
+            hexRow.appendChild(ridEl('code', 'rid-hex', this.id || '—', RECEIVER_ID_TIP));
+            hexRow.appendChild(ridCopyButton(() => this.id, 'Copy the ID'));
+            const edit = ridEl('button', 'rid-btn', '✎', 'Edit, e.g. to keep the ID an aggregator already knows');
+            edit.type = 'button';
+            edit.onclick = () => { this.editing = true; this.draft = this.id; this.render(); if (this.input && this.input.focus) this.input.focus(); };
+            hexRow.appendChild(edit);
+            if (this.defaultId !== null) {
+                const reset = ridEl('button', 'rid-btn', '↺',
+                    isDefault ? 'Device default' : `Back to this device's default: ${this.defaultId}`);
+                reset.type = 'button';
+                reset.disabled = isDefault;
+                reset.onclick = () => this.apply('DEFAULT');
+                hexRow.appendChild(reset);
+                if (!isDefault) hexRow.appendChild(ridEl('span', 'rid-custom', '✱', `Custom. Device default: ${this.defaultId}`));
+            }
+        }
+        rows.push(hexRow);
+        const uuid = receiverIdUuid(this.editing ? this.draft : this.id);
+        const uuidRow = ridEl('div', 'rid-row');
+        uuidRow.appendChild(ridEl('span', 'rid-label', 'UUID', RECEIVER_UUID_TIP));
+        this.uuidCode = ridEl('code', 'rid-uuid', uuid || '—', RECEIVER_UUID_TIP);
+        uuidRow.appendChild(this.uuidCode);
+        if (uuid && !this.editing) uuidRow.appendChild(ridCopyButton(() => receiverIdUuid(this.id), 'Copy the UUID'));
+        rows.push(uuidRow);
+        if (this.message) rows.push(ridEl('div', 'rid-msg', this.message));
+        this.el.replaceChildren(...rows);
+    }
+}
+// END FEED_RECEIVER_ID
+
 class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
         'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'AIRCRAFT_JSON_UAT_UPLINK', 'ASTERIX'];
@@ -589,7 +792,7 @@ class FeedEditor {
         sel.innerHTML = FeedEditor.PROTOCOLS
             .map(p => `<option value="${p}"${p === current.protocol ? ' selected' : ''}>${p}</option>`)
             .join('');
-        FeedEditor.receiverId = current.receiver_id;
+        FeedEditor.showReceiverId(current.index, current.receiver_id);
         const transportSel = document.getElementById('feed-transport');
         transportSel.innerHTML = FeedEditor.TRANSPORTS.map(t => `<option value="${t}">${t}</option>`).join('');
         transportSel.value = current.transport || 'TCP';
@@ -617,6 +820,35 @@ class FeedEditor {
         FeedEditor.updateMapLink();
         statusEl.textContent = '';
         document.getElementById('feed-form').style.display = '';
+    }
+
+    // Receiver ID field; the device default comes from AT+FEED_RECEIVER_ID? (firmware without it: no ↺).
+    static showReceiverId(slot, id) {
+        FeedEditor.receiverId = id;
+        FeedEditor.ridField = new ReceiverIdField(document.getElementById('feed-receiver-id'), {
+            id, onSet: (value) => FeedEditor.setReceiverId(slot, value),
+        });
+        FeedEditor.queryReceiverId(slot).then((r) => {
+            if (r && FeedEditor.ridField && String(document.getElementById('feed-slot').value) === String(slot)) {
+                FeedEditor.ridField.setDefault(r.defaultId);
+            }
+        }).catch(() => {});
+    }
+
+    static async queryReceiverId(slot) {
+        const out = await consoleWebSocket.sendAndCapture(`AT+FEED_RECEIVER_ID?${slot}\r\n`, '(DEFAULT)', 3000);
+        return parseFeedReceiverIdLine(out.join(''));
+    }
+
+    // value: 16 hex digits or DEFAULT. Saves right away; resolves to what the device now reports.
+    static async setReceiverId(slot, value) {
+        await consoleWebSocket.sendAndCapture(`AT+FEED_RECEIVER_ID=${slot},${value}\r\n`, 'OK', 5000);
+        await consoleWebSocket.sendAndCapture(`AT+SETTINGS=SAVE\r\n`, 'OK', 5000);
+        const now = await FeedEditor.queryReceiverId(slot);
+        if (!now) throw new Error('no reply');
+        FeedEditor.receiverId = now.id;
+        FeedEditor.updateMapLink();
+        return now;
     }
 
     static renderPresets() {
@@ -1932,5 +2164,6 @@ class AircraftTable {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { isOtherTextEntry, whereplaneMapUrl, webSocketRefused, AircraftWebSocket, UplinkWebSocket, MapWeather };
+    module.exports = { isOtherTextEntry, whereplaneMapUrl, webSocketRefused, AircraftWebSocket, UplinkWebSocket, MapWeather,
+        receiverIdUuid, parseFeedReceiverIdLine };
 }
