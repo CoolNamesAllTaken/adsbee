@@ -664,6 +664,25 @@ body {
     margin: 0;
 }
 
+/* Feed receiver ID (adsbee.js ReceiverIdField, receiverIdChip) */
+.feed-rid { margin-bottom: 12px; }
+.rid-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; min-height: 26px; }
+.rid-label { font-size: 0.72rem; color: var(--text-secondary); width: 36px; flex: none; cursor: help; }
+.rid-hex, .rid-uuid { font-family: monospace; font-size: 0.85rem; user-select: all; overflow-wrap: anywhere; }
+.rid-btn { background: none; border: 1px solid var(--border-subtle); border-radius: 4px; color: inherit;
+    cursor: pointer; font-size: 0.85rem; line-height: 1; min-width: 26px; padding: 4px 6px; }
+.rid-btn:hover:not(:disabled) { border-color: #ffcb00; }
+.rid-btn:disabled { cursor: default; opacity: 0.35; }
+.rid-btn svg { display: block; }
+.rid-input { font-family: monospace; font-size: 0.85rem; width: 17ch; padding: 3px 5px; }
+.rid-input.bad { outline: 2px solid #e5484d; }
+.rid-custom { color: #ffcb00; cursor: help; }
+.rid-msg { font-size: 0.8rem; color: var(--text-secondary); }
+.rid-chip { display: inline-block; font-family: monospace; font-size: 0.68rem; color: var(--text-secondary);
+    border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0 4px; margin-bottom: 0.3rem; cursor: copy; }
+.rid-chip:hover { border-color: #ffcb00; }
+.rid-chip.copied { border-color: #30a46c; color: #30a46c; }
+
 .feed-map-row {
     margin-bottom: 12px;
     font-size: 0.9em;

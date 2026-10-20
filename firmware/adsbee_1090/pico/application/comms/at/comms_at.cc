@@ -21,6 +21,7 @@
 #include "pico/stdlib.h"  // for getchar etc
 #include "pico/unique_id.h"
 #include "feed_ram_budget.hh"
+#include "feed_receiver_id.hh"
 #include "settings.hh"
 #include "settings_hash.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
@@ -1085,6 +1086,67 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             }
             s.feed_ports[index] = feed_port;
             s.feed_protocols[index] = feed_protocol;
+            settings_manager.SyncToCoprocessors();
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+static void PrintFeedReceiverID(const CppAT::ATCommandDef_t& def, uint16_t index, const char* default_str) {
+    char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
+    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
+    CPP_AT_CMD_PRINTF("=%d(INDEX),%s(RECEIVER_ID),%s(DEFAULT)", index, receiver_id_str, default_str);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFeedReceiverIDCallback) {
+    static_assert(FeedReceiverID::kNumBytes == SettingsManager::Settings::kFeedReceiverIDNumBytes);
+    // Device default ID, from the part code in EEPROM. Empty if the EEPROM can't be read.
+    uint8_t default_id[SettingsManager::Settings::kFeedReceiverIDNumBytes];
+    char default_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1] = "";
+    SettingsManager::DeviceInfo device_info;
+    bool have_default = settings_manager.GetDeviceInfo(device_info);
+    if (have_default) {
+        device_info.GetDefaultFeedReceiverID(default_id);
+        SettingsManager::ReceiverIDToStr(default_id, default_str);
+    }
+    uint16_t index = UINT16_MAX;
+    if (CPP_AT_HAS_ARG(0)) {
+        CPP_AT_TRY_ARG2NUM(0, index);
+        if (index >= SettingsManager::Settings::kMaxNumFeeds) {
+            CPP_AT_ERROR("Feed index must be between 0-%d.", SettingsManager::Settings::kMaxNumFeeds - 1);
+        }
+    }
+    switch (op) {
+        case '?':
+            if (index != UINT16_MAX) {
+                PrintFeedReceiverID(def, index, default_str);
+            } else {
+                for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+                    PrintFeedReceiverID(def, i, default_str);
+                }
+            }
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            if (index == UINT16_MAX || !CPP_AT_HAS_ARG(1)) {
+                CPP_AT_ERROR("Usage: AT+FEED_RECEIVER_ID=<index>,<16 hex digits|DEFAULT>");
+            }
+            uint8_t id[SettingsManager::Settings::kFeedReceiverIDNumBytes];
+            switch (FeedReceiverID::Parse(args[1], id)) {
+                case FeedReceiverID::kHex:
+                    break;
+                case FeedReceiverID::kDefault:
+                    if (!have_default) {
+                        CPP_AT_ERROR("Can't read the device default ID from EEPROM.");
+                    }
+                    memcpy(id, default_id, sizeof(id));
+                    break;
+                default:
+                    CPP_AT_ERROR("Receiver ID must be 16 hex digits or DEFAULT.");
+            }
+            memcpy(settings_manager.settings.feed_receiver_ids[index], id, sizeof(id));
             settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
@@ -2510,6 +2572,15 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "all feeds, or 1 to allow feeds marked active. Does not change per-feed active flags set with "
                     "AT+FEED.\r\n\tAT+FEED_ENABLE?\r\n\tQuery whether outbound feeds are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedEnableCallback, comms_manager)},
+    {.command = "FEED_RECEIVER_ID",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string = "AT+FEED_RECEIVER_ID=<index>,<receiver_id>\r\n\tSet the receiver ID a feed sends to its "
+                    "aggregator (Beast feeds; feed 0's also names MQTT topics). index = [0-9], receiver_id = 16 hex "
+                    "digits, or DEFAULT for this device's own ID. AT+SETTINGS=SAVE keeps it.\r\n\t"
+                    "AT+FEED_RECEIVER_ID?\r\n\tPrint every feed's receiver ID and the device default.\r\n\t"
+                    "AT+FEED_RECEIVER_ID?<index>\r\n\tPrint one feed's.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedReceiverIDCallback, comms_manager)},
     {.command = "FILTER_ALTITUDE_FT",
      .min_args = 0,
      .max_args = 3,

@@ -1,0 +1,58 @@
+:root { --fg: #1c2024; --dim: #6b7178; --line: #d6dadf; --bg: #fff; --card: #f6f7f9; --accent: #c98a00; --bad: #b3261e; }
+@media (prefers-color-scheme: dark) { :root { --fg: #e6e8eb; --dim: #9aa1a8; --line: #343a40; --bg: #15181b; --card: #1d2125; --accent: #f2b400; --bad: #ff6b60; } }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+header { display: flex; align-items: center; gap: 1rem; padding: .6rem 1rem; border-bottom: 1px solid var(--line); }
+header nav { display: flex; gap: 1rem; margin-left: auto; align-items: center; }
+header form { margin: 0; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+.brand { font-weight: 600; color: var(--fg); }
+main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 1.4rem; margin: .2rem 0; } h1 small { color: var(--dim); font-weight: 400; }
+h2 { font-size: 1.05rem; margin: 1.2rem 0 .5rem; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.windows a { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 4px; margin-left: .25rem; color: var(--fg); }
+.windows a.on { background: var(--accent); color: #000; border-color: var(--accent); }
+.map { height: 420px; border: 1px solid var(--line); border-radius: 6px; margin: .8rem 0; }
+.bee-label { font-weight: 600; }
+table.list { width: 100%; border-collapse: collapse; margin: .5rem 0; }
+table.list th, table.list td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line); }
+table.list th { color: var(--dim); font-weight: 500; cursor: help; }
+table.small { font-size: .9em; }
+.mono, code { font-family: ui-monospace, monospace; }
+.dim { color: var(--dim); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .8rem 1rem; margin: .5rem 0; }
+.narrow { max-width: 320px; margin: 3rem auto; display: grid; gap: .7rem; }
+label { display: inline-flex; align-items: center; gap: .3rem; }
+.narrow label { display: grid; }
+input, select, button { font: inherit; padding: .3rem .45rem; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
+button { cursor: pointer; background: var(--accent); color: #000; border-color: var(--accent); }
+button.bad { background: transparent; color: var(--bad); border-color: var(--bad); }
+button.link { background: none; border: 0; color: var(--accent); padding: 0; }
+.cols { display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: start; }
+@media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+.facts { display: grid; grid-template-columns: 2rem 1fr; gap: .2rem .6rem; margin: 0 0 .8rem; }
+.facts dt { color: var(--dim); cursor: help; }
+.facts dd { margin: 0; }
+form.edit, .rollout-new { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+form.inline { display: inline-flex; gap: .3rem; margin: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; }
+figure { margin: 0; text-align: center; }
+figcaption { color: var(--dim); font-size: .85em; }
+svg.polar .ring { fill: none; stroke: var(--line); }
+svg.polar .axis { stroke: var(--line); stroke-dasharray: 2 3; }
+svg.polar .wedge { fill: var(--accent); fill-opacity: .75; stroke: var(--bg); stroke-width: .5; }
+svg.polar .north { fill: var(--dim); font-size: 9px; text-anchor: middle; }
+.tag { padding: 0 .35rem; border-radius: 3px; }
+.tag.bad, tr.cancelled { color: var(--bad); }
+tr.cancelled, tr.paused { opacity: .6; }
+.msg { padding: .4rem .7rem; border-radius: 4px; background: var(--card); border-left: 3px solid var(--accent); }
+.msg.error { border-color: var(--bad); }
+code.copy { user-select: all; background: var(--bg); padding: .3rem .5rem; border: 1px solid var(--line); border-radius: 4px; display: inline-block; word-break: break-all; }
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .8rem; }
+.chart { text-align: left; }
+.chart figcaption { cursor: help; }
+svg.bars { width: 100%; height: 70px; background: var(--card); border-radius: 4px; }
+svg.bars rect { fill: var(--accent); }
+.axis-t { display: flex; justify-content: space-between; color: var(--dim); font-size: .75em; }
+.warn { color: #b26a00; cursor: help; }
