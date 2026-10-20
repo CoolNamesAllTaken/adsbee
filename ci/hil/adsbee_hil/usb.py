@@ -110,7 +110,7 @@ def usb_devices(sysfs_root: Optional[str] = None, dev_root: Optional[str] = None
 
 
 def adsbee_candidates(sysfs_root: Optional[str] = None, dev_root: Optional[str] = None) -> List[UsbDevice]:
-    """RP2040-family devices (app or BOOTSEL): every ADSBee receiver, ADSBee 1421 Programmer and wiggler is one."""
+    """RP2040-family devices (app or BOOTSEL): every ADSBee receiver, ADSBee 1421 Programmer and Bee Wiggler is one."""
     return [d for d in usb_devices(sysfs_root, dev_root) if d.is_rp2040]
 
 
