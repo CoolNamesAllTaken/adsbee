@@ -71,6 +71,7 @@ class SwarmManager : public SwarmPlatform {
     uint32_t last_update_timestamp_ms_ = 0;
     bool low_memory_ = false;
     char token_seen_[SettingsManager::Settings::kSwarmTokenMaxLen + 1] = {0};
+    char server_seen_[SettingsManager::Settings::kSwarmServerMaxLen + 1] = {0};
     // The task's copies of the settings, which may change while it runs.
     char server_[SettingsManager::Settings::kSwarmServerMaxLen + 1] = {0};
     char token_[SettingsManager::Settings::kSwarmTokenMaxLen + 1] = {0};

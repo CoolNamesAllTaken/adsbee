@@ -30,7 +30,7 @@ A self-hosted server works the same: give its URL as `server`.
   Positions beyond the radio horizon of their altitude band are dropped and counted. If 10% or more of an hour's positions, from 5 or more aircraft, are dropped, that hour's range is withheld and the server shows "check position". This catches gross errors of about 200 km or more (a sign flip, a wrong country), not a position that is only somewhat off.
 * OTA keys, to adsbee.aero only (to verify the unit is genuine).
 
-Needs WiFi station or Ethernet. The first report goes 2-5 minutes after power-up. A failed report is merged into the next one, so no period is lost.
+Needs WiFi station or Ethernet. The first report goes 2-5 minutes after power-up, turning it on, or changing the server or token. A failed report is retried after 1, 2, 4, ... minutes (up to the report period, longer if the server asks) and merged into the next one, so no period is lost.
 
 ## Firmware from the swarm
 
