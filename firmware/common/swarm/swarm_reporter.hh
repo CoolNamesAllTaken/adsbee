@@ -88,8 +88,12 @@ class SwarmReporter {
     // Starts a new period at now_ms without reporting the data so far (e.g. while stopped).
     void Restart(SwarmRecorder& live, uint32_t now_ms);
 
-    // A new token undoes a 410.
-    void ClearStop() { status_.stopped = false; }
+    // A new server or token: undoes a 410 and the old server's backoff and period. A pending report is kept.
+    void Reconfigure() {
+        status_.stopped = false;
+        num_failures_ = 0;
+        period_s_ = config_.period_s;
+    }
 
     bool has_pending() const { return have_pending_; }
     uint32_t seq() const { return seq_; }

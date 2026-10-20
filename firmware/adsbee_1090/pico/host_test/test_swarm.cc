@@ -439,12 +439,36 @@ TEST(SwarmReporter, ErrorAnswers) {
     size_t num_requests = platform.bodies.size();
     reporter.Send("https://adsbee.aero", kToken);
     EXPECT_EQ(platform.bodies.size(), num_requests);
-    reporter.ClearStop();
+    reporter.Reconfigure();
     platform.status = 200;
     reporter.TakePeriod(live, 4000, FixedPosition());
     reporter.Send("https://adsbee.aero", kToken);
     EXPECT_EQ(platform.bodies.size(), num_requests + 1);
     EXPECT_STREQ(reporter.status().result, "ok");
+}
+
+TEST(SwarmReporter, NewServerForgetsTheOldBackoff) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    SwarmRecorder live;
+    platform.response = "{\"next_report_s\": 600, \"firmware\": null}";
+    reporter.TakePeriod(live, 1000, FixedPosition());
+    reporter.Send("https://adsbee.aero", kToken);
+    reporter.TakePeriod(live, 2000, FixedPosition());
+    platform.answer = false;
+    EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), 60 * 1000u);
+    EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), 120 * 1000u);
+    EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), 240 * 1000u);
+    EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), 480 * 1000u);
+    EXPECT_EQ(reporter.Send("https://adsbee.aero", kToken), 600 * 1000u);  // Up to the server's period.
+    uint32_t seq = reporter.seq();
+
+    reporter.Reconfigure();
+    EXPECT_TRUE(reporter.has_pending());
+    EXPECT_EQ(reporter.Send("https://swarm.example", kToken), 60 * 1000u);
+    EXPECT_EQ(reporter.seq(), seq);
+    for (int i = 0; i < 10; i++) reporter.Send("https://swarm.example", kToken);
+    EXPECT_EQ(reporter.Send("https://swarm.example", kToken), 3600 * 1000u);  // Back to the default period.
 }
 
 TEST(SwarmReporter, FirstReportTwoToFiveMinutesAfterBoot) {

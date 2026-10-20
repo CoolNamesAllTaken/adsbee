@@ -58,15 +58,20 @@ void SwarmManager::Update() {
         reporter->Restart(*live_, now_ms);
         next_report_timestamp_ms_ = now_ms + reporter->FirstDelayMs(now_ms);
         strncpy(token_seen_, settings.swarm_token, sizeof(token_seen_) - 1);
+        strncpy(server_seen_, settings.swarm_server, sizeof(server_seen_) - 1);
         xSemaphoreTake(mutex_, portMAX_DELAY);
         reporter_ = reporter;
         xSemaphoreGive(mutex_);
         adsbee_server.aircraft_dictionary.SetSwarmRecorder(live_);
         CONSOLE_INFO("SwarmManager::Update", "Swarm reports on, to %s.", settings.swarm_server);
     }
-    if (strncmp(token_seen_, settings.swarm_token, sizeof(token_seen_) - 1) != 0) {
+    if (strncmp(token_seen_, settings.swarm_token, sizeof(token_seen_) - 1) != 0 ||
+        strncmp(server_seen_, settings.swarm_server, sizeof(server_seen_) - 1) != 0) {
+        // A new token undoes a 410; neither inherits the old setup's backoff. Next report as if just turned on.
         strncpy(token_seen_, settings.swarm_token, sizeof(token_seen_) - 1);
-        reporter_->ClearStop();  // A new token undoes a 410.
+        strncpy(server_seen_, settings.swarm_server, sizeof(server_seen_) - 1);
+        reporter_->Reconfigure();
+        next_report_timestamp_ms_ = now_ms + reporter_->FirstDelayMs(now_ms);
     }
 
     // Aircraft-derived receiver positions move with the aircraft: no range map from them.
