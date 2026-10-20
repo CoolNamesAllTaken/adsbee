@@ -144,8 +144,8 @@ factory-default CCFG, which keeps the bootloader enabled).
 ## Notes
 
 - Requires Chrome or Edge (Web Serial). Firefox/Safari show an unsupported banner.
-- Map tiles load from openstreetmap.org and need internet; everything else works
-  offline. Leaflet 1.9.4 is vendored inline (BSD-2-Clause, license header kept).
+- Map tiles (OpenStreetMap) load through the adsbee.aero/tiles proxy and need
+  internet; everything else works offline. Leaflet 1.9.4 is vendored inline (BSD-2-Clause, license header kept).
 - Connecting resets the device; see [Firmware upload wiring](#firmware-upload-wiring).
 - The page is assembled by hand — Leaflet's JS/CSS are pasted between
   `BEGIN/END VENDORED` markers with the sourcemap comment and `url(images/...)`
