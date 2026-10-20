@@ -1,0 +1,4 @@
+swarm.sqlite3
+staticfiles/
+docker/.env
+__pycache__/
