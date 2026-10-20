@@ -11,8 +11,9 @@
 <script>
 (function () {
   var markers = JSON.parse(document.getElementById('markers').textContent);
+  var TILE_URL = 'https://adsbee.aero/tiles/{z}/{x}/{y}.png';  // OSM tiles through adsbee.aero's caching proxy
   var map = L.map('map', {worldCopyJump: true});
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  L.tileLayer(TILE_URL,
               {maxZoom: 18, attribution: '&copy; OpenStreetMap contributors'}).addTo(map);
   var bounds = [];
   markers.forEach(function (m) {

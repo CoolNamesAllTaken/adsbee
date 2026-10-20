@@ -1647,6 +1647,10 @@ class AircraftStore {
 }
 
 // ─── LiveMap ─────────────────────────────────────────────────────────────────
+// OSM standard tiles through adsbee.aero's caching proxy. tile.openstreetmap.org blocks requests without a Referer,
+// which pages opened from file:// don't send.
+const MAP_TILE_URL = 'https://adsbee.aero/tiles/{z}/{x}/{y}.png';
+
 class LiveMap {
     constructor(containerId, store) {
         this.containerId = containerId;
@@ -1718,7 +1722,7 @@ class LiveMap {
 
     _initMap() {
         this.map = L.map(this.containerId, { preferCanvas: true }).setView([20, 0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        L.tileLayer(MAP_TILE_URL, {
             attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
             maxZoom: 18,
         }).addTo(this.map);

@@ -144,8 +144,8 @@ re-copy the marked block:
   banner and can still use network mode.
 - Network mode uses plain `ws://`, so the page must not be served over HTTPS
   (mixed-content blocking) — opening it from `file://` is fine.
-- Map tiles load from openstreetmap.org and need internet; everything else
-  works offline.
+- Map tiles (OpenStreetMap) load through the adsbee.aero/tiles proxy and need
+  internet; everything else works offline.
 - Opening the serial port asserts DTR deliberately: the RP2040's USB CDC
   console gates its output on DTR ("terminal connected").
 - Never open the port at 233495790 baud (0xDEADBEE) — that is the pico-sdk
