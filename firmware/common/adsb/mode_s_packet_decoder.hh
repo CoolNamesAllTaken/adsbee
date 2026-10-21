@@ -20,7 +20,7 @@ class ModeSPacketDecoder {
 
     struct PacketDecoderConfig {
         bool enable_1090_error_correction = true;
-        bool max_1090_error_correction_num_bits = 1;
+        uint8_t max_1090_error_correction_num_bits = 2;
     };
 
     /**

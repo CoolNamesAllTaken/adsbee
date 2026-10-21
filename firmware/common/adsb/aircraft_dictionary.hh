@@ -963,6 +963,9 @@ class AircraftDictionary {
 
     struct AircraftDictionaryConfig {
         uint32_t aircraft_prune_interval_ms = 60e3;
+        // Address parity replies that match no aircraft get a one or two bit correction if it gives a unique tracked
+        // aircraft with a plausible altitude or squawk.
+        bool enable_address_parity_correction = false;
 #ifdef FILTER_CPR_POSITIONS
         // CPR position filter checks each new aircraft location against the previous location and requires two
         // consecutive packets within a geographic radius to confirm large jumps in aircraft location. This reduces the
@@ -970,6 +973,19 @@ class AircraftDictionary {
         bool enable_cpr_position_filter = true;
 #endif
     };
+
+    // Mode S frames accepted after a bit error correction, and corrected frames turned down.
+    enum CorrectionKind : uint8_t {
+        kCorrectionExtendedSquitter1Bit = 0,
+        kCorrectionExtendedSquitter2Bit,
+        kCorrectionAddressParity1Bit,
+        kCorrectionAddressParity2Bit,
+        kCorrectionRejected,
+        kNumCorrectionKinds
+    };
+    static constexpr const char* kCorrectionKindStrs[kNumCorrectionKinds] = {
+        "extended_squitter_1_bit", "extended_squitter_2_bit", "address_parity_1_bit", "address_parity_2_bit",
+        "rejected"};
 
     struct Metrics {
         static const uint16_t kMetricsJSONMaxLen = 1000;  // Includes null terminator.
@@ -998,6 +1014,8 @@ class AircraftDictionary {
 
         uint16_t raw_remote_id_frames = 0;    // Remote ID advertisements received (pre-decode).
         uint16_t valid_remote_id_frames = 0;  // Remote ID advertisements that decoded successfully.
+
+        uint16_t corrected_frames[kNumCorrectionKinds] = {0};  // By CorrectionKind.
 
         /**
          * Formats the metrics dictionary into a JSON packet with the following structure.
@@ -1056,7 +1074,12 @@ class AircraftDictionary {
                 snprintf(buf + chars_written, buf_len - chars_written,
                          ", \"num_mode_s_aircraft\": %u, \"num_uat_aircraft\": %u, \"num_remote_id_aircraft\": %u",
                          num_mode_s_aircraft, num_uat_aircraft, num_remote_id_aircraft);
-            chars_written += snprintf(buf + chars_written, buf_len - chars_written, "}");
+            chars_written += snprintf(buf + chars_written, buf_len - chars_written, ", \"corrected_frames\": {");
+            for (uint16_t i = 0; i < kNumCorrectionKinds; i++) {
+                chars_written += snprintf(buf + chars_written, buf_len - chars_written, "%s\"%s\": %u", i ? ", " : "",
+                                          kCorrectionKindStrs[i], corrected_frames[i]);
+            }
+            chars_written += snprintf(buf + chars_written, buf_len - chars_written, "}}");
             return chars_written;
         }
     };
@@ -1075,6 +1098,8 @@ class AircraftDictionary {
      * Constructor with config values specified.
      */
     AircraftDictionary(AircraftDictionaryConfig config_in) : config_(config_in) {};
+
+    inline void SetAddressParityCorrection(bool enable) { config_.enable_address_parity_correction = enable; }
 
     /**
      * Removes all aircraft from the aircraft dictionary.
@@ -1547,6 +1572,19 @@ class AircraftDictionary {
     };
 
     // Helper functions for ingesting specific ADS-B packet types, called by IngestModeSADSBPacket.
+
+    /**
+     * Whether an extended squitter with corrected bits may update the dictionary: its aircraft must be tracked, and a
+     * two bit correction must agree with the aircraft's callsign, position and altitude, or velocity.
+     */
+    bool AcceptCorrectedExtendedSquitter(const DecodedModeSPacket& packet);
+
+    /**
+     * Tries the one or two bit corrections of an address parity reply that give a tracked aircraft's address. Applies
+     * the correction if exactly one aircraft fits, with a plausible altitude or the same squawk.
+     * @retval True if the packet was corrected.
+     */
+    bool CorrectAddressParityPacket(DecodedModeSPacket& packet);
 
     AircraftDictionaryConfig config_;
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary

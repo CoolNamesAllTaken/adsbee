@@ -174,10 +174,18 @@ class DecodedModeSPacket {
      */
     int16_t CorrectSingleBitError();
 
+    /**
+     * Like CorrectSingleBitError(), for a two bit error outside the DF field. The aircraft dictionary only accepts the
+     * result for an aircraft it already tracks.
+     * @retval True if two bits were flipped.
+     */
+    bool CorrectTwoBitError();
+
     bool is_valid = false;
     // True if the CRC can only be checked against a known ICAO address (address parity formats, or DF=11 with a
     // nonzero interrogator code). is_valid is set once the address is confirmed.
     bool is_address_parity = false;
+    uint8_t num_corrected_bits = 0;  // Bits flipped to pass the parity check.
     RawModeSPacket raw;
 
     uint32_t icao_address = 0;

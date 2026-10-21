@@ -59,6 +59,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_nasa_cpr.cc
         test_mode_s_packet_decoder.cc
         test_mode_s_single_bit_correction.cc
+        test_mode_s_bit_error_correction.cc
         test_mode_s_single_bit_filter.cc
         test_nmea_parser.cc
         ${CMAKE_SOURCE_DIR}/application/peripherals/gnss/nmea_parser.cc

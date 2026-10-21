@@ -932,6 +932,10 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
     combined_metrics.valid_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_adsb_frames;
     combined_metrics.raw_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_uplink_frames;
     combined_metrics.valid_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_uplink_frames;
+    // Bit error corrections happen on the RP2040.
+    for (uint16_t i = 0; i < AircraftDictionary::kNumCorrectionKinds; i++) {
+        combined_metrics.corrected_frames[i] = adsbee_server.rp2040_aircraft_dictionary_metrics.corrected_frames[i];
+    }
 
     // Broadcast dictionary metrics over the metrics Websocket.
     char metrics_message[kNetworkMetricsMessageMaxLen];
