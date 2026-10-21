@@ -282,6 +282,17 @@ TEST_F(BitErrorCorrection, AddressParityNeedsAPlausibleAltitudeAndTheSameSquawk)
     EXPECT_EQ(Aircraft()->squawk, 4502);
 }
 
+// An untracked aircraft whose address is one bit from a tracked one looks like a one bit error in the parity field.
+TEST_F(BitErrorCorrection, RepeatedNearbyAddressesAreNotCorrected) {
+    RawModeSPacket neighbor = WithAddressParity(Raw(kAltitudeReply), kICAO ^ 0x000100);
+    EXPECT_TRUE(Ingest(neighbor));
+    for (uint16_t i = 0; i < 5; i++) {
+        inc_time_since_boot_ms(1000);
+        EXPECT_FALSE(Ingest(neighbor));
+    }
+    EXPECT_TRUE(Ingest(Flip(Raw(kAltitudeReply), {9})));  // Errors outside the parity field are still corrected.
+}
+
 TEST_F(BitErrorCorrection, AddressParitySearchesAreLimited) {
     RawModeSPacket reply = Flip(Raw(kAltitudeReply), {9});
     dictionary.Update(get_time_since_boot_ms());

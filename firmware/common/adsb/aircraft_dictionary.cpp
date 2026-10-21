@@ -1955,6 +1955,22 @@ bool AircraftDictionary::CorrectAddressParityPacket(DecodedModeSPacket& packet) 
         metrics_counter_.corrected_frames[kCorrectionRejected]++;
         return false;
     }
+    // Flips in the address parity field look the same as an untracked aircraft with a nearby address, which keeps
+    // replying with that address: stop correcting an address that repeats. The data bit flips are undone first, so
+    // the address is the sender's even when its reply had another error.
+    uint16_t first_parity_bit = len_bits - kAddressParityFieldNumBits;
+    if (fit_bits[best_num_bits - 1] >= first_parity_bit) {
+        uint32_t sender_address = packet.crc_syndrome;
+        for (uint16_t i = 0; i < best_num_bits; i++) {
+            if (fit_bits[i] < first_parity_bit) {
+                sender_address ^= ModeSBitErrors::BitSyndrome(fit_bits[i], len_bits);
+            }
+        }
+        if (RepeatsAsUncorrectedAddress(sender_address, now_ms)) {
+            metrics_counter_.corrected_frames[kCorrectionRejected]++;
+            return false;
+        }
+    }
     RawModeSPacket corrected = packet.raw;
     for (uint16_t i = 0; i < best_num_bits; i++) {
         flip_bit(corrected.buffer, fit_bits[i]);
@@ -1967,6 +1983,33 @@ bool AircraftDictionary::CorrectAddressParityPacket(DecodedModeSPacket& packet) 
     metrics_counter_.corrected_frames[best_num_bits == 1 ? kCorrectionAddressParity1Bit
                                                          : kCorrectionAddressParity2Bit]++;
     return true;
+}
+
+bool AircraftDictionary::RepeatsAsUncorrectedAddress(uint32_t address, uint32_t now_ms) {
+    // Two way set associative, so two frequent addresses that share a set both keep their counts.
+    uint32_t set = ModeSBitErrors::HashSlot(address, kRecentAddressSlotBits) & ~1u;
+    RecentAddress* slot = nullptr;
+    for (uint32_t i = set; i <= set + 1; i++) {
+        RecentAddress& recent = recent_uncorrected_addresses_[i];
+        bool live = (recent.address_and_count >> 24) != 0 && now_ms - recent.last_ms <= kRecentAddressWindowMs;
+        if (live && (recent.address_and_count & 0xFFFFFF) == (address & 0xFFFFFF)) {
+            slot = &recent;
+            break;
+        }
+        if (slot == nullptr || !live || now_ms - recent.last_ms > now_ms - slot->last_ms) {
+            slot = &recent;  // Replace an expired or the older entry.
+        }
+    }
+    uint32_t count = (slot->address_and_count & 0xFFFFFF) == (address & 0xFFFFFF) &&
+                             now_ms - slot->last_ms <= kRecentAddressWindowMs
+                         ? slot->address_and_count >> 24
+                         : 0;
+    if (count < UINT8_MAX) {
+        count++;
+    }
+    slot->address_and_count = (address & 0xFFFFFF) | count << 24;
+    slot->last_ms = now_ms;
+    return count >= kMaxUncorrectedAddressRepeats;
 }
 
 bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {

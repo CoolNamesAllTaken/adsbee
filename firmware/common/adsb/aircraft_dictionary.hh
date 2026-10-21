@@ -1598,6 +1598,23 @@ class AircraftDictionary {
 
     AircraftDictionaryConfig config_;
     uint16_t address_parity_correction_attempts_ = 0;  // Since the last update.
+
+    // Uncorrected addresses of recent replies that a fix in the address parity field would have matched.
+    static constexpr uint16_t kAddressParityFieldNumBits = 24;
+    static constexpr uint16_t kRecentAddressSlotBits = 7;
+    static constexpr uint32_t kRecentAddressWindowMs = 60e3;
+    static constexpr uint8_t kMaxUncorrectedAddressRepeats = 2;  // From the second reply on, it's another aircraft.
+    struct RecentAddress {
+        uint32_t address_and_count = 0;  // Address in the low 24 bits, repeats in the top 8.
+        uint32_t last_ms = 0;
+    };
+    RecentAddress recent_uncorrected_addresses_[1 << kRecentAddressSlotBits];
+
+    /**
+     * Records an uncorrected address and returns whether it has repeated kMaxUncorrectedAddressRepeats times within
+     * kRecentAddressWindowMs.
+     */
+    bool RepeatsAsUncorrectedAddress(uint32_t address, uint32_t now_ms);
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;
