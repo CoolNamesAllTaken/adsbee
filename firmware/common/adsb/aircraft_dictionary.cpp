@@ -1748,6 +1748,7 @@ bool AircraftDictionary::IsPreferredReportForAddress(uint32_t uid, uint32_t time
     return best_uid == uid;
 }
 
+#ifndef ON_TI  // The 1421 corrects in its own decoder.
 namespace {
 // Limits on how far a corrected frame may move an aircraft: a step plus a rate over the time since the last update.
 constexpr uint32_t kCorrectionMaxAgeMs = 60e3;
@@ -2012,10 +2013,13 @@ bool AircraftDictionary::RepeatsAsUncorrectedAddress(uint32_t address, uint32_t 
     return count >= kMaxUncorrectedAddressRepeats;
 }
 
+#endif
+
 bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
     // Check validity and record stats.
     int16_t source = packet.raw.source;
 
+#ifndef ON_TI
     if (packet.is_valid && packet.num_corrected_bits > 0) {
         if (!AcceptCorrectedExtendedSquitter(packet)) {
             packet.is_valid = false;  // Not forwarded either.
@@ -2028,6 +2032,7 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
                !ContainsAircraft(packet.icao_address)) {
         CorrectAddressParityPacket(packet);
     }
+#endif
 
     // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
     // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
