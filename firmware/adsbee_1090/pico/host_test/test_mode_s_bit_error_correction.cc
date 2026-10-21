@@ -237,6 +237,26 @@ TEST_F(BitErrorCorrection, ImplausibleTwoBitCorrectionsAreRejected) {
     EXPECT_EQ(Metrics().corrected_frames[AircraftDictionary::kCorrectionRejected], 5);
 }
 
+TEST_F(BitErrorCorrection, StalePositionsCantCheckTwoBitFixes) {
+    inc_time_since_boot_ms(11e3);  // Position and velocity older than 10 s.
+    EXPECT_FALSE(Ingest(Flip(Raw(kNextOddPosition), {60, 70})));
+    EXPECT_FALSE(Ingest(Flip(Raw(kNextVelocity), {45, 108})));
+    EXPECT_TRUE(Ingest(Flip(Raw(kNextOddPosition), {60})));  // One bit fixes are only turned down by a disagreement.
+}
+
+TEST_F(BitErrorCorrection, OneBitFixesThatDisagreeWithTheTrackAreRejected) {
+    RawModeSPacket far = WithME(kNextOddPosition, WithAltitude(ME(kNextOddPosition), 15050));
+    EXPECT_FALSE(Ingest(Flip(far, {60})));
+    EXPECT_EQ(Aircraft()->baro_altitude_ft, 10050);
+}
+
+TEST_F(BitErrorCorrection, AddressParityRepliesKeepTheAirGroundState) {
+    // Flight status 1: on the ground.
+    RawModeSPacket on_ground = WithAddressParity(Flip(Raw(kAltitudeReply), {7}), kICAO);
+    EXPECT_FALSE(Ingest(Flip(on_ground, {45})));
+    EXPECT_TRUE(Aircraft()->HasBitFlag(ModeSAircraft::kBitFlagIsAirborne));
+}
+
 TEST_F(BitErrorCorrection, AddressParityRepliesAreCorrected) {
     RawModeSPacket altitude = Raw(kAltitudeReply);
     EXPECT_TRUE(Ingest(Flip(altitude, {9})));  // Downlink request.

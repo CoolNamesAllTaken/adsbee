@@ -1750,10 +1750,13 @@ bool AircraftDictionary::IsPreferredReportForAddress(uint32_t uid, uint32_t time
 namespace {
 // Limits on how far a corrected frame may move an aircraft: a step plus a rate over the time since the last update.
 constexpr uint32_t kCorrectionMaxAgeMs = 60e3;
+constexpr uint32_t kCorrectionMaxReferenceAgeMs = 10e3;  // Older positions and velocities can't check a correction.
 constexpr int32_t kCorrectionAltitudeStepFt = 300;
 constexpr int32_t kCorrectionClimbRateFtPerS = 100;  // 6,000 ft/min.
 constexpr int32_t kCorrectionPositionStepM = 926;    // 0.5 NM.
 constexpr int32_t kCorrectionSpeedMPerS = 370;       // 720 kt.
+constexpr int32_t kCorrectionDeadReckoningErrorMPerS = 60;  // Turns and speed changes since the last velocity.
+constexpr float kMetersPerDegreeLatitude = 111320.0f;
 constexpr int32_t kCorrectionSpeedStepKts = 20;
 constexpr int32_t kCorrectionAccelerationKtsPerS = 5;
 constexpr int32_t kCorrectionDirectionStepDeg = 20;
@@ -1779,61 +1782,88 @@ bool AircraftDictionary::AcceptCorrectedExtendedSquitter(const DecodedModeSPacke
     if (aircraft == nullptr) {
         return false;  // Corrected frames never start a track.
     }
-    if (packet.num_corrected_bits < 2) {
-        return true;
-    }
+    TrackFit fit = CheckAgainstTrack(es, *aircraft);
+    // A one bit fix is only turned down when the track disagrees; a two bit fix needs the track to agree.
+    return fit == kTrackFits || (fit == kTrackUnknown && packet.num_corrected_bits < 2);
+}
 
+AircraftDictionary::TrackFit AircraftDictionary::CheckAgainstTrack(const ModeSADSBPacket& es,
+                                                                   const ModeSAircraft& aircraft) {
     // Apply the frame to a copy of the aircraft and compare.
     uint32_t now_ms = get_time_since_boot_ms();
-    ModeSAircraft trial = *aircraft;
+    ModeSAircraft trial = aircraft;
     trial.WriteBitFlag(ModeSAircraft::kBitFlagUpdatedBaroAltitude, false);
     trial.WriteBitFlag(ModeSAircraft::kBitFlagUpdatedPosition, false);
     trial.WriteBitFlag(ModeSAircraft::kBitFlagUpdatedHorizontalSpeed, false);
     uint16_t type_code = es.type_code;
     if (type_code >= ModeSADSBPacket::kTypeCodeAircraftID && type_code < ModeSADSBPacket::kTypeCodeSurfacePosition) {
-        if (strlen(aircraft->callsign) < ModeSAircraft::kCallSignMinNumChars) {
-            return false;
+        if (strlen(aircraft.callsign) < ModeSAircraft::kCallSignMinNumChars) {
+            return kTrackUnknown;
         }
         trial.ApplyAircraftIDMessage(es);
-        return strcmp(trial.callsign, aircraft->callsign) == 0 &&
-               trial.emitter_category_raw == aircraft->emitter_category_raw;
+        return strcmp(trial.callsign, aircraft.callsign) == 0 &&
+                       trial.emitter_category_raw == aircraft.emitter_category_raw
+                   ? kTrackFits
+                   : kTrackDisagrees;
     }
     if (type_code >= ModeSADSBPacket::kTypeCodeAirbornePositionBaroAlt &&
         type_code < ModeSADSBPacket::kTypeCodeAirborneVelocities) {
-        if (!aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid) ||
-            !aircraft->HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid) ||
+        uint32_t position_age_ms = now_ms - aircraft.last_position_update_ms;
+        if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagPositionValid) ||
+            !aircraft.HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid) ||
+            position_age_ms > kCorrectionMaxReferenceAgeMs ||
             !trial.ApplyAirbornePositionMessage(es, config_.enable_cpr_position_filter) ||
             !trial.HasBitFlag(ModeSAircraft::kBitFlagUpdatedPosition) ||
             !trial.HasBitFlag(ModeSAircraft::kBitFlagUpdatedBaroAltitude) ||
             !trial.HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid)) {
-            return false;
+            return kTrackUnknown;
         }
-        if (!WithinStep(trial.baro_altitude_ft - aircraft->baro_altitude_ft, kCorrectionAltitudeStepFt,
-                        kCorrectionClimbRateFtPerS, now_ms - aircraft->last_message_timestamp_ms)) {
-            return false;
+        if (!WithinStep(trial.baro_altitude_ft - aircraft.baro_altitude_ft, kCorrectionAltitudeStepFt,
+                        kCorrectionClimbRateFtPerS, now_ms - aircraft.last_message_timestamp_ms)) {
+            return kTrackDisagrees;
         }
-        GeoReference last_position(lat2awb(aircraft->latitude_deg), lon2awb(aircraft->longitude_deg));
+        // Expected position: dead reckoning from the last position with a fresh velocity, else the last position.
+        float expected_lat_deg = aircraft.latitude_deg;
+        float expected_lon_deg = aircraft.longitude_deg;
+        int32_t position_rate_m_per_s = kCorrectionSpeedMPerS;
+        if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagHorizontalSpeedValid) &&
+            aircraft.HasBitFlag(ModeSAircraft::kBitFlagDirectionValid) &&
+            now_ms - aircraft.last_velocity_update_ms <= kCorrectionMaxReferenceAgeMs) {
+            float distance_m = aircraft.speed_kts * (kMetersPerNauticalMile / 3600.0f) * (position_age_ms / 1000.0f);
+            float direction_rad = aircraft.direction_deg / kDegreesPerRadian;
+            float meters_per_degree_longitude =
+                kMetersPerDegreeLatitude * cosf(aircraft.latitude_deg / kDegreesPerRadian);
+            expected_lat_deg += distance_m * cosf(direction_rad) / kMetersPerDegreeLatitude;
+            expected_lon_deg += distance_m * sinf(direction_rad) / meters_per_degree_longitude;
+            position_rate_m_per_s = kCorrectionDeadReckoningErrorMPerS;
+        }
+        GeoReference expected(lat2awb(expected_lat_deg), lon2awb(expected_lon_deg));
         uint32_t distance_m =
-            CalculateDistanceMeters(last_position, lat2awb(trial.latitude_deg), lon2awb(trial.longitude_deg));
+            CalculateDistanceMeters(expected, lat2awb(trial.latitude_deg), lon2awb(trial.longitude_deg));
         return distance_m <= INT32_MAX && WithinStep(static_cast<int32_t>(distance_m), kCorrectionPositionStepM,
-                                                     kCorrectionSpeedMPerS, now_ms - aircraft->last_position_update_ms);
+                                                     position_rate_m_per_s, position_age_ms)
+                   ? kTrackFits
+                   : kTrackDisagrees;
     }
     if (type_code == ModeSADSBPacket::kTypeCodeAirborneVelocities) {
-        if (!aircraft->HasBitFlag(ModeSAircraft::kBitFlagHorizontalSpeedValid) ||
-            !aircraft->HasBitFlag(ModeSAircraft::kBitFlagDirectionValid) || !trial.ApplyAirborneVelocitiesMessage(es) ||
+        uint32_t velocity_age_ms = now_ms - aircraft.last_velocity_update_ms;
+        if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagHorizontalSpeedValid) ||
+            !aircraft.HasBitFlag(ModeSAircraft::kBitFlagDirectionValid) ||
+            velocity_age_ms > kCorrectionMaxReferenceAgeMs || !trial.ApplyAirborneVelocitiesMessage(es) ||
             !trial.HasBitFlag(ModeSAircraft::kBitFlagUpdatedHorizontalSpeed) ||
             !trial.HasBitFlag(ModeSAircraft::kBitFlagHorizontalSpeedValid) ||
             !trial.HasBitFlag(ModeSAircraft::kBitFlagDirectionValid)) {
-            return false;
+            return kTrackUnknown;
         }
-        uint32_t elapsed_ms = now_ms - aircraft->last_velocity_update_ms;
-        float turn_deg = fmodf(trial.direction_deg - aircraft->direction_deg + 540.0f, 360.0f) - 180.0f;
-        return WithinStep(trial.speed_kts - aircraft->speed_kts, kCorrectionSpeedStepKts,
-                          kCorrectionAccelerationKtsPerS, elapsed_ms) &&
-               WithinStep(static_cast<int32_t>(turn_deg), kCorrectionDirectionStepDeg, kCorrectionTurnRateDegPerS,
-                          elapsed_ms);
+        float turn_deg = fmodf(trial.direction_deg - aircraft.direction_deg + 540.0f, 360.0f) - 180.0f;
+        return WithinStep(trial.speed_kts - aircraft.speed_kts, kCorrectionSpeedStepKts,
+                          kCorrectionAccelerationKtsPerS, velocity_age_ms) &&
+                       WithinStep(static_cast<int32_t>(turn_deg), kCorrectionDirectionStepDeg,
+                                  kCorrectionTurnRateDegPerS, velocity_age_ms)
+                   ? kTrackFits
+                   : kTrackDisagrees;
     }
-    return false;  // Other messages carry nothing to check against the track.
+    return kTrackUnknown;  // Other messages carry nothing to check against the track.
 }
 
 bool AircraftDictionary::CorrectAddressParityPacket(DecodedModeSPacket& packet) {
@@ -1870,17 +1900,33 @@ bool AircraftDictionary::CorrectAddressParityPacket(DecodedModeSPacket& packet) 
         for (uint16_t i = 0; i < num_bits; i++) {
             flip_bit(corrected.buffer, bits[i]);
         }
+        DecodedModeSPacket corrected_packet(corrected);
         bool fits;
+        bool airborne_state_known = true;
+        bool is_airborne;
         if (has_altitude) {
             int32_t altitude_ft = AltitudeCodeToAltitudeFt(GetNBitsFromWordBuffer(13, 19, corrected.buffer));
             fits = aircraft->HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid) &&
                    altitude_ft > kAltitudeDecodeErrorInvalid &&
                    WithinStep(altitude_ft - aircraft->baro_altitude_ft, kCorrectionAltitudeStepFt,
                               kCorrectionClimbRateFtPerS, now_ms - aircraft->last_message_timestamp_ms);
+            if (df == DecodedModeSPacket::kDownlinkFormatAltitudeReply ||
+                df == DecodedModeSPacket::kDownlinkFormatCommBAltitudeReply) {
+                ModeSAltitudeReplyPacket reply(corrected_packet);
+                airborne_state_known = reply.airborne_state_known;
+                is_airborne = reply.is_airborne;
+            } else {
+                is_airborne = GetNBitsFromWordBuffer(1, 5, corrected.buffer) == 0;  // Vertical status.
+            }
         } else {
-            fits = aircraft->squawk != ADSBTypes::kSquawkCodeNotYetReceived &&
-                   ModeSIdentityReplyPacket(DecodedModeSPacket(corrected)).squawk == aircraft->squawk;
+            ModeSIdentityReplyPacket reply(corrected_packet);
+            fits = aircraft->squawk != ADSBTypes::kSquawkCodeNotYetReceived && reply.squawk == aircraft->squawk;
+            airborne_state_known = reply.airborne_state_known;
+            is_airborne = reply.is_airborne;
         }
+        // The reply must not move the aircraft between the air and the ground.
+        fits = fits &&
+               (!airborne_state_known || is_airborne == aircraft->HasBitFlag(ModeSAircraft::kBitFlagIsAirborne));
         if (num_bits < best_num_bits) {
             best_num_bits = num_bits;  // A closer aircraft decides, whether it fits or not.
             num_fits = 0;
