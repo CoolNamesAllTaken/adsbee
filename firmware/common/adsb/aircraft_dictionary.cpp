@@ -1597,6 +1597,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     if (kSwarmRecording && swarm_recorder_ != nullptr) {
         swarm_recorder_->NoteAircraftCount(metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
     }
+    address_parity_correction_attempts_ = 0;
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.
 }
@@ -1877,6 +1878,11 @@ bool AircraftDictionary::CorrectAddressParityPacket(DecodedModeSPacket& packet) 
     if (!has_altitude && !has_squawk) {
         return false;  // DF=11 replies carry nothing to check.
     }
+    if (address_parity_correction_attempts_ >= kMaxAddressParityCorrectionAttemptsPerUpdate) {
+        metrics_counter_.corrected_frames[kCorrectionSkipped]++;
+        return false;  // Bounds the time spent searching under heavy traffic.
+    }
+    address_parity_correction_attempts_++;
     uint16_t len_bits = packet.raw.buffer_len_bytes * kBitsPerByte;
     uint32_t now_ms = get_time_since_boot_ms();
 
@@ -1890,9 +1896,13 @@ bool AircraftDictionary::CorrectAddressParityPacket(DecodedModeSPacket& packet) 
         if (aircraft == nullptr || (aircraft->icao_address & ~0xFFFFFFu) != 0) {
             continue;  // Only ICAO addresses answer interrogations.
         }
+        uint32_t error_syndrome = packet.crc_syndrome ^ aircraft->icao_address;
+        if (!ModeSBitErrors::MayBeOneOrTwoBitError(error_syndrome)) {
+            continue;
+        }
         uint16_t bits[2];
-        uint16_t num_bits = ModeSBitErrors::Find(packet.crc_syndrome ^ aircraft->icao_address, len_bits,
-                                                 DecodedModeSPacket::kDFNumBits, best_num_bits, bits);
+        uint16_t num_bits =
+            ModeSBitErrors::Find(error_syndrome, len_bits, DecodedModeSPacket::kDFNumBits, best_num_bits, bits);
         if (num_bits == 0 || num_bits > best_num_bits) {
             continue;
         }

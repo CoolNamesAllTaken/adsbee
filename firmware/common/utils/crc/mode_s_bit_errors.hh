@@ -7,6 +7,14 @@
 
 #include "mode_s_single_bit_filter.hh"  // kBitSyndromes.
 
+#ifdef ON_PICO
+#include "pico.h"
+// Tables read for every tracked aircraft live in RAM: a flash cache miss costs more than the lookup.
+#define MODE_S_BIT_ERRORS_RAM_TABLE __not_in_flash("mode_s_bit_errors_tables")
+#else
+#define MODE_S_BIT_ERRORS_RAM_TABLE
+#endif
+
 namespace ModeSBitErrors {
 
 static constexpr uint16_t kFrameLenBits = ModeSSingleBitFilter::kFrameLenBits;
@@ -35,14 +43,20 @@ constexpr Table MakeTable() {
     }
     return t;
 }
-static constexpr Table kTable = MakeTable();
+// A template, so the table is only built by the targets that use it, once.
+template <typename T = void>
+const Table& GetTable() {
+    static constexpr Table kTable = MakeTable();
+    return kTable;
+}
 
 /**
  * Index of the bit of a 112 bit frame whose error gives this syndrome, or -1.
  */
-constexpr int16_t FindBit112(uint32_t syndrome) {
+inline int16_t FindBit112(uint32_t syndrome) {
+    const Table& table = GetTable();
     for (uint32_t s = SlotOf(syndrome);; s = (s + 1) & (kNumSlots - 1)) {
-        uint32_t entry = kTable.slot[s];
+        uint32_t entry = table.slot[s];
         if (entry == 0) {
             return -1;
         }
@@ -62,7 +76,7 @@ constexpr uint32_t BitSyndrome(uint16_t i, uint16_t len_bits) {
 /**
  * Index of the bit (first_bit or later) of a len_bits frame whose error gives this syndrome, or -1.
  */
-constexpr int16_t FindBit(uint32_t syndrome, uint16_t len_bits, uint16_t first_bit) {
+inline int16_t FindBit(uint32_t syndrome, uint16_t len_bits, uint16_t first_bit) {
     int16_t i = FindBit112(syndrome);
     if (i < 0) {
         return -1;
@@ -92,11 +106,47 @@ constexpr PairTable MakePairTable() {
     }
     return t;
 }
-// A template, so the table is only built by the targets that use it.
 template <typename T = void>
 const PairTable& GetPairTable() {
     static constexpr PairTable kPairTable = MakePairTable();
     return kPairTable;
+}
+
+// One bit per hash of the two bit syndromes. A clear bit means the syndrome is no two bit error (about 9 % pass).
+static constexpr uint16_t kPairFilterBits = 16;
+struct PairFilter {
+    uint32_t bits[(1u << kPairFilterBits) / 32];
+    constexpr bool MayMatch(uint32_t syndrome) const {
+        uint32_t h = HashSlot(syndrome, kPairFilterBits);
+        return (bits[h >> 5] >> (h & 31)) & 1u;
+    }
+};
+constexpr PairFilter MakePairFilter() {
+    PairFilter f{};
+    for (uint16_t a = 0; a < kFrameLenBits; a++) {
+        for (uint16_t b = a + 1; b < kFrameLenBits; b++) {
+            uint32_t h = HashSlot(ModeSSingleBitFilter::kBitSyndromes.v[a] ^ ModeSSingleBitFilter::kBitSyndromes.v[b],
+                                  kPairFilterBits);
+            f.bits[h >> 5] |= 1u << (h & 31);
+        }
+    }
+    return f;
+}
+template <typename T = void>
+const PairFilter& GetPairFilter() {
+    MODE_S_BIT_ERRORS_RAM_TABLE static constexpr PairFilter kPairFilter = MakePairFilter();
+    return kPairFilter;
+}
+
+/**
+ * Whether a syndrome may be a one or two bit error. Cheap check before Find().
+ */
+inline bool MayBeOneOrTwoBitError(uint32_t syndrome) {
+#ifdef ON_TI
+    return true;  // No pair filter: see Find().
+#else
+    return ModeSSingleBitFilter::kFilter.MayMatch(syndrome) || GetPairFilter().MayMatch(syndrome);
+#endif
 }
 
 /**

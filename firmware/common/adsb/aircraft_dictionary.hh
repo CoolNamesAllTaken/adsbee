@@ -981,11 +981,14 @@ class AircraftDictionary {
         kCorrectionAddressParity1Bit,
         kCorrectionAddressParity2Bit,
         kCorrectionRejected,
+        kCorrectionSkipped,  // Address parity replies not searched: over the per-update limit.
         kNumCorrectionKinds
     };
     static constexpr const char* kCorrectionKindStrs[kNumCorrectionKinds] = {
         "extended_squitter_1_bit", "extended_squitter_2_bit", "address_parity_1_bit", "address_parity_2_bit",
-        "rejected"};
+        "rejected", "skipped"};
+    // Address parity searches per dictionary update (1 s). Each one checks every tracked aircraft.
+    static constexpr uint16_t kMaxAddressParityCorrectionAttemptsPerUpdate = 250;
 
     struct Metrics {
         static const uint16_t kMetricsJSONMaxLen = 1000;  // Includes null terminator.
@@ -1594,6 +1597,7 @@ class AircraftDictionary {
     bool CorrectAddressParityPacket(DecodedModeSPacket& packet);
 
     AircraftDictionaryConfig config_;
+    uint16_t address_parity_correction_attempts_ = 0;  // Since the last update.
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;

@@ -282,6 +282,18 @@ TEST_F(BitErrorCorrection, AddressParityNeedsAPlausibleAltitudeAndTheSameSquawk)
     EXPECT_EQ(Aircraft()->squawk, 4502);
 }
 
+TEST_F(BitErrorCorrection, AddressParitySearchesAreLimited) {
+    RawModeSPacket reply = Flip(Raw(kAltitudeReply), {9});
+    dictionary.Update(get_time_since_boot_ms());
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxAddressParityCorrectionAttemptsPerUpdate; i++) {
+        EXPECT_TRUE(Ingest(reply));
+    }
+    EXPECT_FALSE(Ingest(reply));
+    AircraftDictionary::Metrics metrics = Metrics();
+    EXPECT_EQ(metrics.corrected_frames[AircraftDictionary::kCorrectionSkipped], 1);
+    EXPECT_TRUE(Ingest(reply));  // The update reset the limit.
+}
+
 TEST_F(BitErrorCorrection, AddressParityCorrectionCanBeTurnedOff) {
     dictionary.SetAddressParityCorrection(false);
     EXPECT_FALSE(Ingest(Flip(Raw(kAltitudeReply), {9})));
@@ -300,6 +312,9 @@ TEST_F(BitErrorCorrection, RandomAddressParityRepliesAreRejected) {
     }
     uint16_t accepted = 0;
     for (uint16_t i = 0; i < 20000; i++) {
+        if (i % 200 == 0) {
+            dictionary.Update(get_time_since_boot_ms());  // Resets the search limit.
+        }
         RawModeSPacket raw = Raw(kAltitudeReply);
         raw.buffer[0] = (raw.buffer[0] & 0xF8000000) | (rng() & 0x07FFFFFF);
         raw.buffer[1] = rng() & 0xFFFFFF00;

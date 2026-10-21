@@ -1150,7 +1150,7 @@ TEST(AircraftDictionary, MetricsToJSON) {
 \"raw_remote_id_frames\": 0, \"valid_remote_id_frames\": 0, \
 \"num_mode_s_aircraft\": 0, \"num_uat_aircraft\": 0, \"num_remote_id_aircraft\": 0, \
 \"corrected_frames\": {\"extended_squitter_1_bit\": 0, \"extended_squitter_2_bit\": 0, \
-\"address_parity_1_bit\": 0, \"address_parity_2_bit\": 0, \"rejected\": 0}\
+\"address_parity_1_bit\": 0, \"address_parity_2_bit\": 0, \"rejected\": 0, \"skipped\": 0}\
 }";
     EXPECT_EQ(metrics.ToJSON(buf, AircraftDictionary::Metrics::kMetricsJSONMaxLen), strlen(expected_result));
     EXPECT_STREQ(buf, expected_result);
