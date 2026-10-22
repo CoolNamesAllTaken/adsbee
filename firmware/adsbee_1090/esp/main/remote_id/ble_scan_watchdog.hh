@@ -19,20 +19,19 @@ class BLEScanWatchdog {
     static constexpr uint32_t kMaxQuietMs = 120 * 1000;
 
     /**
-     * Starts watching from now, e.g. after the scan (re)started.
+     * Restarts the quiet time from now, e.g. after the scan (re)started. Traffic seen before still counts, so a scan
+     * that stalls again right after a reset is caught after kQuietAfterTrafficMs.
      * @param[in] num_reports Running count of advertising reports.
      */
-    void Reset(uint32_t num_reports, uint32_t now_ms) {
+    void Restart(uint32_t num_reports, uint32_t now_ms) {
         last_num_reports_ = num_reports;
         last_report_ms_ = now_ms;
-        num_samples_ = 0;
-        next_sample_ = 0;
     }
 
     /**
      * Call about once a second while scanning.
      * @param[in] num_reports Running count of advertising reports.
-     * @retval True if the scan has stalled; call Reset() after resetting the scan.
+     * @retval True if the scan has stalled; call Restart() after resetting the scan.
      */
     bool Update(uint32_t num_reports, uint32_t now_ms) {
         if (num_reports != last_num_reports_) {
