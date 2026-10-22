@@ -18,8 +18,11 @@
 
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BT_NIMBLE_ENABLED)
 
+#include <atomic>
 #include <cstring>
 
+#include "ble_adv_watchdog.hh"
+#include "ble_scan_watchdog.hh"
 #include "comms.hh"  // Logging.
 #include "hal.hh"    // get_time_since_boot_ms.
 #include "host/ble_gap.h"
@@ -43,6 +46,13 @@ bool s_ble_initialized = false;
 bool s_scanning = false;
 bool s_want_coded = false;
 bool s_scan_want = false;  // Receive scanning requested (may be pending until the host syncs).
+// Advertising reports received and scan starts, counted on the host task for the scan watchdog on the main task.
+std::atomic<uint32_t> s_num_scan_reports = 0;
+std::atomic<uint32_t> s_num_scan_starts = 0;
+uint32_t s_watched_scan_starts = 0;
+uint32_t s_last_scan_watchdog_ms = 0;
+BLEScanWatchdog s_scan_watchdog;
+std::atomic<bool> s_watchdog_reset = false;  // The next host reset is a watchdog's, already logged.
 
 // --- Transmit state ---------------------------------------------------------------------------------------------
 // Extended advertising instance IDs. Instance 0 carries BT4 legacy advertisements (one 25-byte ODID message each, the
@@ -64,6 +74,28 @@ bool s_tx_coded_want = false;
 // Set from ble_gap_ext_adv_start's result, so the status reports what is really on the air.
 bool s_tx_legacy_advertising = false;
 bool s_tx_coded_advertising = false;
+// Advertising events the controller reported sent, per instance, counted on the host task for the advertising
+// watchdogs on the main task.
+constexpr uint8_t kNumAdvInstances = 2;
+std::atomic<uint32_t> s_num_adv_events[kNumAdvInstances] = {};
+BLEAdvWatchdog s_adv_watchdogs[kNumAdvInstances];
+bool s_adv_watched[kNumAdvInstances] = {};
+uint32_t s_last_adv_watchdog_ms = 0;
+
+int StartAdvInstance(uint8_t instance) {
+    return ble_gap_ext_adv_start(instance, /*duration=*/0, /*max_events=*/BLEAdvWatchdog::kEventsPerRun);
+}
+
+// An advertising set ends after BLEAdvWatchdog::kEventsPerRun events: count them and start it again at once.
+int AdvEventHandler(struct ble_gap_event* event, void* arg) {
+    if (event->type != BLE_GAP_EVENT_ADV_COMPLETE) return 0;
+    const uint8_t instance = event->adv_complete.instance;
+    if (instance >= kNumAdvInstances) return 0;
+    s_num_adv_events[instance] += event->adv_complete.num_ext_adv_events;
+    const bool wanted = instance == kAdvInstanceLegacy ? s_tx_legacy_want : s_tx_coded_want;
+    if (wanted) StartAdvInstance(instance);  // A refusal is retried by the next payload update.
+    return 0;
+}
 
 // Wraps ODID payload bytes in the ASTM Remote ID BLE Service Data AD structure and pushes them into an advertising
 // instance. Layout: [len][0x16][UUID lo][UUID hi][app code][msg counter][ODID bytes...].
@@ -128,7 +160,7 @@ bool ConfigureAdvInstance(uint8_t instance, bool legacy) {
     params.tx_power = 127;  // Let the controller pick its maximum.
 
     int8_t selected_tx_power = 0;
-    int rc = ble_gap_ext_adv_configure(instance, &params, &selected_tx_power, nullptr, nullptr);
+    int rc = ble_gap_ext_adv_configure(instance, &params, &selected_tx_power, AdvEventHandler, nullptr);
     if (rc != 0) {
         CONSOLE_ERROR("remote_id_ble", "ble_gap_ext_adv_configure(%u, legacy=%d) failed, rc=%d.", instance,
                       (int)legacy, rc);
@@ -143,7 +175,8 @@ bool ReloadAdvInstance(uint8_t instance, const uint8_t* odid, uint16_t odid_len,
                        RawRemoteIDPacket::Transport transport) {
     if (!SetAdvODIDPayload(instance, odid, odid_len, transport)) return false;
     if (ble_gap_ext_adv_active(instance)) return true;
-    int rc = ble_gap_ext_adv_start(instance, /*duration=*/0, /*max_events=*/0);
+    int rc = StartAdvInstance(instance);
+    if (rc == BLE_HS_EALREADY) return true;  // Started again by AdvEventHandler meanwhile.
     if (rc != 0) {
         CONSOLE_ERROR("remote_id_ble", "ble_gap_ext_adv_start(%u) failed, rc=%d.", instance, rc);
         return false;
@@ -238,6 +271,7 @@ bool ParseAndForward(const uint8_t* adv_data, uint8_t adv_len, const uint8_t* ma
 int GapEventHandler(struct ble_gap_event* event, void* arg) {
     switch (event->type) {
         case BLE_GAP_EVENT_EXT_DISC: {
+            s_num_scan_reports++;
             const struct ble_gap_ext_disc_desc* d = &event->ext_disc;
             // Coded PHY (secondary) indicates a BT5 Long Range advertisement.
             RawRemoteIDPacket::Transport transport = (d->sec_phy == BLE_HCI_LE_PHY_CODED)
@@ -273,10 +307,12 @@ void StartExtDiscovery() {
         s_scanning = false;
     } else {
         s_scanning = true;
+        s_num_scan_starts++;
     }
 }
 
 void OnHostReset(int reason) {
+    if (s_watchdog_reset.exchange(false)) return;
     CONSOLE_WARNING("remote_id_ble", "Bluetooth host reset, reason=%d.", reason);
 }
 
@@ -408,6 +444,52 @@ void RemoteIDManager::BLETxServiceTick() {
     BLETxUpdateStatus();
 }
 
+void RemoteIDManager::BLEServiceScanWatchdog() {
+    uint32_t now_ms = get_time_since_boot_ms();
+    if (now_ms - s_last_scan_watchdog_ms < 1000) return;
+    s_last_scan_watchdog_ms = now_ms;
+    if (!ble_running_ || !s_scanning || !ble_hs_synced()) return;
+
+    const uint32_t num_reports = s_num_scan_reports;
+    const uint32_t num_starts = s_num_scan_starts;
+    if (num_starts != s_watched_scan_starts) {
+        s_watched_scan_starts = num_starts;
+        s_scan_watchdog.Restart(num_reports, now_ms);
+        return;
+    }
+    if (!s_scan_watchdog.Update(num_reports, now_ms)) return;
+    // Resets the controller and syncs again; OnHostSync() restarts scanning and advertising.
+    CONSOLE_INFO("remote_id_ble", "Bluetooth scan stalled, resetting the controller.");
+    s_watchdog_reset = true;
+    ble_hs_sched_reset(BLE_HS_ECONTROLLER);
+    s_scan_watchdog.Restart(num_reports, now_ms);
+}
+
+void RemoteIDManager::BLEServiceAdvWatchdog() {
+    uint32_t now_ms = get_time_since_boot_ms();
+    if (now_ms - s_last_adv_watchdog_ms < 1000) return;
+    s_last_adv_watchdog_ms = now_ms;
+    const bool synced = s_ble_initialized && ble_hs_synced();
+    const bool advertising[kNumAdvInstances] = {synced && s_tx_legacy_want && s_tx_legacy_configured,
+                                                synced && s_tx_coded_want && s_tx_coded_configured};
+    for (uint8_t instance = 0; instance < kNumAdvInstances; instance++) {
+        const uint32_t num_events = s_num_adv_events[instance];
+        if (!advertising[instance] || !s_adv_watched[instance]) {
+            // Not advertising, or just (re)configured: the quiet time starts now.
+            s_adv_watched[instance] = advertising[instance];
+            s_adv_watchdogs[instance].Restart(num_events, now_ms);
+            continue;
+        }
+        if (!s_adv_watchdogs[instance].Update(num_events, now_ms)) continue;
+        // Resets the controller and syncs again; OnHostSync() restarts scanning and advertising.
+        CONSOLE_INFO("remote_id_ble", "Bluetooth advertising stalled (set %u), resetting the controller.", instance);
+        s_watchdog_reset = true;
+        ble_hs_sched_reset(BLE_HS_ECONTROLLER);
+        for (bool& watched : s_adv_watched) watched = false;
+        return;
+    }
+}
+
 void RemoteIDManager::BLEReleaseIfIdle() {
     if (!s_ble_initialized || ble_running_ || ble_tx_legacy_running_ || ble_tx_coded_running_) return;
     // Stops the host task and frees the host and controller, which hold most of the Remote ID RAM.
@@ -440,6 +522,8 @@ void RemoteIDManager::BLETxStop() {}
 void RemoteIDManager::BLEReleaseIfIdle() {}
 void RemoteIDManager::BLETxServiceTick() {}
 void RemoteIDManager::BLETxUpdateStatus() {}
+void RemoteIDManager::BLEServiceScanWatchdog() {}
+void RemoteIDManager::BLEServiceAdvWatchdog() {}
 bool RemoteIDManager::BluetoothIsSupported() { return false; }
 
 #endif  // CONFIG_BT_ENABLED && CONFIG_BT_NIMBLE_ENABLED
