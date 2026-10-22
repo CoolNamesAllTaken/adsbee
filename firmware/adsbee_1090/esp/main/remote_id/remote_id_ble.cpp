@@ -286,7 +286,7 @@ void StartExtDiscovery() {
     // easily, so this costs BLE-only capture nothing meaningful. This keeps BLE the priority transport, WiFi best-effort.
     struct ble_gap_ext_disc_params uncoded = {};
     uncoded.itvl = 160;    // 100 ms scan interval (units of 0.625 ms).
-    uncoded.window = 128;  // 80 ms scan window -> ~80% duty, ~20% left for the WiFi sniffer under coexistence.
+    uncoded.window = 160;  // 80 ms scan window -> ~80% duty, ~20% left for the WiFi sniffer under coexistence.
     uncoded.passive = 1;
 
     struct ble_gap_ext_disc_params coded = uncoded;
