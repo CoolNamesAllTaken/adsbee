@@ -56,7 +56,11 @@ void RemoteIDManager::OnRawRemoteIDPacket(const RawRemoteIDPacket& packet) {
     // Runs in the NimBLE host task or the WiFi promiscuous callback. Keep it minimal: just enqueue. The queue exists
     // whenever a transport is running (EnsureBuffers is called before any transport starts).
     if (ingest_queue_ != nullptr) {
-        ingest_queue_->Enqueue(packet);
+        if (ingest_queue_->Enqueue(packet)) {
+            diag_enqueued_++;
+        } else {
+            diag_enqueue_fail_++;
+        }
     }
 }
 
@@ -116,6 +120,7 @@ uint16_t RemoteIDManager::ServiceIngestQueue() {
     RawRemoteIDPacket packet;
     while (ingest_queue_->Dequeue(packet)) {
         num_processed++;
+        diag_processed_++;
         // Always ingest locally (cheap) — this drives the ESP32's network/web output.
         adsbee_server.aircraft_dictionary.IngestRawRemoteIDPacket(packet);
         // Forward a rate-limited copy up to the RP2040 for serial reporting.
@@ -340,5 +345,6 @@ void RemoteIDManager::Update() {
         WiFiSnifferServiceHopper();
     }
     ServiceTxTick();
+    BLEDiagLog();
     object_dictionary.device_status.remote_id_status = status_;
 }

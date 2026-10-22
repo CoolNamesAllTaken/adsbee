@@ -21,7 +21,9 @@
 #include <cstring>
 
 #include "comms.hh"  // Logging.
+#include "esp_heap_caps.h"
 #include "hal.hh"    // get_time_since_boot_ms.
+#include "hardware_capabilities.hh"
 #include "host/ble_gap.h"
 #include "host/ble_hs.h"
 #include "nimble/nimble_port.h"
@@ -43,6 +45,13 @@ bool s_ble_initialized = false;
 bool s_scanning = false;
 bool s_want_coded = false;
 bool s_scan_want = false;  // Receive scanning requested (may be pending until the host syncs).
+
+// t0740 diagnostics: written by the host task, read by the main task.
+uint32_t s_diag_reports = 0, s_diag_legacy = 0, s_diag_coded = 0, s_diag_incomplete = 0, s_diag_rid = 0,
+                  s_diag_rid_legacy = 0, s_diag_rid_coded = 0, s_diag_disc_complete = 0, s_diag_other_events = 0,
+                  s_diag_resets = 0, s_diag_syncs = 0;
+int s_diag_last_reason = 0;
+uint32_t s_diag_last_report_ms = 0, s_diag_last_rid_ms = 0;
 
 // --- Transmit state ---------------------------------------------------------------------------------------------
 // Extended advertising instance IDs. Instance 0 carries BT4 legacy advertisements (one 25-byte ODID message each, the
@@ -243,10 +252,28 @@ int GapEventHandler(struct ble_gap_event* event, void* arg) {
             RawRemoteIDPacket::Transport transport = (d->sec_phy == BLE_HCI_LE_PHY_CODED)
                                                          ? RawRemoteIDPacket::kTransportBT5LongRange
                                                          : RawRemoteIDPacket::kTransportBT4Legacy;
-            ParseAndForward(d->data, d->length_data, d->addr.val, d->rssi, transport);
+            s_diag_reports++;
+            s_diag_last_report_ms = get_time_since_boot_ms();
+            if (d->props & BLE_HCI_ADV_LEGACY_MASK) s_diag_legacy++;
+            if (d->prim_phy == BLE_HCI_LE_PHY_CODED || d->sec_phy == BLE_HCI_LE_PHY_CODED) s_diag_coded++;
+            if (d->data_status != BLE_GAP_EXT_ADV_DATA_STATUS_COMPLETE) s_diag_incomplete++;
+            if (ParseAndForward(d->data, d->length_data, d->addr.val, d->rssi, transport)) {
+                s_diag_rid++;
+                s_diag_last_rid_ms = s_diag_last_report_ms;
+                if (transport == RawRemoteIDPacket::kTransportBT5LongRange) {
+                    s_diag_rid_coded++;
+                } else {
+                    s_diag_rid_legacy++;
+                }
+            }
             return 0;
         }
+        case BLE_GAP_EVENT_DISC_COMPLETE:
+            s_diag_disc_complete++;
+            s_diag_last_reason = event->disc_complete.reason;
+            return 0;
         default:
+            s_diag_other_events++;
             return 0;
     }
 }
@@ -277,6 +304,7 @@ void StartExtDiscovery() {
 }
 
 void OnHostReset(int reason) {
+    s_diag_resets++;
     CONSOLE_WARNING("remote_id_ble", "Bluetooth host reset, reason=%d.", reason);
 }
 
@@ -284,6 +312,7 @@ void OnHostSync() {
     // Controller/host are in sync; safe to start scanning and/or advertising. Either may have been requested before the
     // host finished syncing, so both are (re)applied here. After a host reset the controller has lost its scan and
     // advertising sets (NimBLE still marks the sets configured), so everything is set up again.
+    s_diag_syncs++;
     s_tx_host_ready = true;
     s_scanning = false;
     s_tx_legacy_configured = false;
@@ -429,6 +458,28 @@ void RemoteIDManager::BLEReleaseIfIdle() {
     s_tx_coded_advertising = false;
 }
 
+void RemoteIDManager::BLEDiagLog() {
+    static uint32_t last_ms = 0;
+    uint32_t now_ms = get_time_since_boot_ms();
+    if (now_ms - last_ms < 10000) return;
+    last_ms = now_ms;
+    if (!s_ble_initialized && !ble_running_) return;
+    CONSOLE_INFO("t0740diag",
+                 "rep=%lu leg=%lu cod=%lu inc=%lu rid=%lu/%lu/%lu dc=%lu(r%d) oth=%lu rst=%lu syn=%lu scan=%d act=%d "
+                 "want=%d run=%d coded=%d tx=%d/%d adv=%d/%d last_rep=%ld last_rid=%ld st=0x%x heap=%lu blk=%lu "
+                 "enq=%lu fail=%lu proc=%lu",
+                 (unsigned long)s_diag_reports, (unsigned long)s_diag_legacy, (unsigned long)s_diag_coded,
+                 (unsigned long)s_diag_incomplete, (unsigned long)s_diag_rid, (unsigned long)s_diag_rid_legacy,
+                 (unsigned long)s_diag_rid_coded, (unsigned long)s_diag_disc_complete, s_diag_last_reason,
+                 (unsigned long)s_diag_other_events, (unsigned long)s_diag_resets, (unsigned long)s_diag_syncs,
+                 s_scanning, s_tx_host_ready ? ble_gap_disc_active() : -1, s_scan_want, ble_running_,
+                 ble_coded_running_, s_tx_legacy_configured, s_tx_coded_configured, s_tx_legacy_advertising,
+                 s_tx_coded_advertising, (long)(now_ms - s_diag_last_report_ms), (long)(now_ms - s_diag_last_rid_ms),
+                 status_, (unsigned long)HardwareCapabilities::GetInternalFreeBytes(),
+                 (unsigned long)heap_caps_get_largest_free_block(HardwareCapabilities::kInternalHeapCaps),
+                 (unsigned long)diag_enqueued_, (unsigned long)diag_enqueue_fail_, (unsigned long)diag_processed_);
+}
+
 bool RemoteIDManager::BluetoothIsSupported() { return true; }
 
 #else  // Bluetooth not compiled in: no-op stubs so RemoteIDManager links and reports kStatusNotInBuild.
@@ -440,6 +491,7 @@ void RemoteIDManager::BLETxStop() {}
 void RemoteIDManager::BLEReleaseIfIdle() {}
 void RemoteIDManager::BLETxServiceTick() {}
 void RemoteIDManager::BLETxUpdateStatus() {}
+void RemoteIDManager::BLEDiagLog() {}
 bool RemoteIDManager::BluetoothIsSupported() { return false; }
 
 #endif  // CONFIG_BT_ENABLED && CONFIG_BT_NIMBLE_ENABLED

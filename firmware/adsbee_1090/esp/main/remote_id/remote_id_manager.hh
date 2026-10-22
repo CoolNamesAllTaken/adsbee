@@ -163,7 +163,8 @@ class RemoteIDManager {
     bool BLETxStart(bool enable_legacy, bool enable_coded_phy);
     void BLETxStop();
     void BLETxServiceTick();  // Refreshes the advertised ODID content; call at the transmit cadence.
-    void BLETxUpdateStatus();  // Sets the BLE TX status bits from what is actually advertising.
+    void BLETxUpdateStatus();
+    void BLEDiagLog();  // t0740 diagnostics, every 10 s.  // Sets the BLE TX status bits from what is actually advertising.
     void BLEReleaseIfIdle();  // Frees the NimBLE host and controller once neither scanning nor advertising.
     static bool BluetoothIsSupported();  // False when Bluetooth isn't compiled into this firmware.
 
@@ -213,6 +214,7 @@ class RemoteIDManager {
     uint32_t last_channel_hop_ms_ = 0;
 
     // Lazily heap-allocated (see EnsureBuffers). null until the first transport starts.
+    uint32_t diag_enqueued_ = 0, diag_enqueue_fail_ = 0, diag_processed_ = 0;
     PFBQueue<RawRemoteIDPacket>* ingest_queue_ = nullptr;  // BLE/WiFi producers -> main task.
     PFBQueue<RawRemoteIDPacket>* out_queue_ = nullptr;     // main task -> RP2040 (SPI) pull.
 
