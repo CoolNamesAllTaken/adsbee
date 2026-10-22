@@ -430,7 +430,7 @@ void RemoteIDManager::BLEServiceScanWatchdog() {
     const uint32_t num_starts = s_num_scan_starts;
     if (num_starts != s_watched_scan_starts) {
         s_watched_scan_starts = num_starts;
-        s_scan_watchdog.Reset(num_reports, now_ms);
+        s_scan_watchdog.Restart(num_reports, now_ms);
         return;
     }
     if (!s_scan_watchdog.Update(num_reports, now_ms)) return;
@@ -438,7 +438,7 @@ void RemoteIDManager::BLEServiceScanWatchdog() {
     CONSOLE_INFO("remote_id_ble", "Bluetooth scan stalled, resetting the controller.");
     s_scan_watchdog_reset = true;
     ble_hs_sched_reset(BLE_HS_ECONTROLLER);
-    s_scan_watchdog.Reset(num_reports, now_ms);
+    s_scan_watchdog.Restart(num_reports, now_ms);
 }
 
 void RemoteIDManager::BLEReleaseIfIdle() {
