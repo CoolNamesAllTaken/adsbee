@@ -67,6 +67,7 @@ ModeSPacketDecoder decoder = ModeSPacketDecoder({.enable_1090_error_correction =
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
     adsbee.aircraft_dictionary.SetAddressParityCorrection(kEnable1090ErrorCorrection);
+    decoder.backlog_callback = [] { return adsbee.CaptureQueueLength(); };
 
     // Initialize coprocessor SPI bus.
     // ESP32 SPI pins.

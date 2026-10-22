@@ -189,6 +189,40 @@ TEST(ModeSBitErrorCorrection, DecoderCorrectsTwoBitErrors) {
     EXPECT_FALSE(Decode(Flip(good, {40, 99}), false).is_valid);
 }
 
+uint16_t test_backlog = 0;
+
+// Spaced out so the duplicate filter keeps them.
+RawModeSPacket At(RawModeSPacket raw, uint64_t ms) {
+    raw.mlat_48mhz_64bit_counts = ms * 48000;
+    return raw;
+}
+
+TEST(ModeSBitErrorCorrection, DecoderSkipsTwoBitSearchesWhenBehind) {
+    RawModeSPacket two_bit = Flip(Raw(kNextOddPosition), {40, 99});
+    ModeSPacketDecoder decoder({});
+    decoder.backlog_callback = [] { return test_backlog; };
+    for (uint16_t backlog : {uint16_t(0), ModeSPacketDecoder::kMaxBacklogForTwoBitCorrection}) {
+        test_backlog = backlog;
+        decoder.raw_mode_s_packet_in_queue.Enqueue(At(two_bit, 10 * backlog));
+        // 1 bit fixes never wait.
+        decoder.raw_mode_s_packet_in_queue.Enqueue(At(Flip(Raw(kNextOddPosition), {40}), 10 * backlog + 5));
+        decoder.UpdateDecoderLoop();
+    }
+    EXPECT_EQ(decoder.decoded_mode_s_packet_out_queue.Length(), 3);
+    EXPECT_EQ(decoder.two_bit_corrections_skipped, 1u);
+
+    // Frames later in the same batch count as backlog too.
+    test_backlog = 0;
+    ModeSPacketDecoder batch({});
+    batch.backlog_callback = [] { return test_backlog; };
+    for (uint16_t i = 0; i < ModeSPacketDecoder::kMaxBacklogForTwoBitCorrection + 1; i++) {
+        batch.raw_mode_s_packet_in_queue.Enqueue(At(Flip(Raw(kNextOddPosition), {40, uint16_t(60 + i)}), 10 * i));
+    }
+    batch.UpdateDecoderLoop();
+    EXPECT_EQ(batch.two_bit_corrections_skipped, 1u);
+    EXPECT_EQ(batch.decoded_mode_s_packet_out_queue.Length(), ModeSPacketDecoder::kMaxBacklogForTwoBitCorrection);
+}
+
 TEST_F(BitErrorCorrection, CorrectedFramesUpdateTrackedAircraft) {
     EXPECT_TRUE(Ingest(Flip(Raw(kNextOddPosition), {60, 70})));  // CPR latitude bits.
     EXPECT_TRUE(last.is_valid);
@@ -303,6 +337,16 @@ TEST_F(BitErrorCorrection, AddressParitySearchesAreLimited) {
     AircraftDictionary::Metrics metrics = Metrics();
     EXPECT_EQ(metrics.corrected_frames[AircraftDictionary::kCorrectionSkipped], 1);
     EXPECT_TRUE(Ingest(reply));  // The update reset the limit.
+}
+
+TEST_F(BitErrorCorrection, AddressParitySearchesPauseUnderLoad) {
+    RawModeSPacket reply = Flip(Raw(kAltitudeReply), {9});
+    dictionary.PauseAddressParityCorrection(true);
+    EXPECT_FALSE(Ingest(reply));
+    dictionary.RecordSkippedCorrections(3);
+    EXPECT_EQ(Metrics().corrected_frames[AircraftDictionary::kCorrectionSkipped], 4);
+    dictionary.PauseAddressParityCorrection(false);
+    EXPECT_TRUE(Ingest(reply));
 }
 
 TEST_F(BitErrorCorrection, AddressParityCorrectionCanBeTurnedOff) {

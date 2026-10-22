@@ -17,6 +17,8 @@ class ModeSPacketDecoder {
     // contents (e.g. bursts of interrogation replies) are spaced further apart than this.
     static constexpr uint64_t kDuplicatePacketWindow48MHzCounts = 48000;  // 1ms.
     static constexpr uint16_t kMaxNumSources = 4;
+    // Frames waiting (this batch plus backlog_callback()) at which 2 bit searches are skipped.
+    static constexpr uint16_t kMaxBacklogForTwoBitCorrection = 4;
 
     struct PacketDecoderConfig {
         bool enable_1090_error_correction = true;
@@ -49,6 +51,11 @@ class ModeSPacketDecoder {
      * @retval True if successful, false if something broke.
      */
     bool UpdateDecoderLoop();
+
+    // Frames not yet in raw_mode_s_packet_in_queue, e.g. undemodulated captures. Optional.
+    uint16_t (*backlog_callback)() = nullptr;
+    // 2 bit searches skipped under load. Written by the decoder loop, read on core 0.
+    volatile uint32_t two_bit_corrections_skipped = 0;
 
     // Input queues.
     PFBQueue<RawModeSPacket> raw_mode_s_packet_in_queue = PFBQueue<RawModeSPacket>(

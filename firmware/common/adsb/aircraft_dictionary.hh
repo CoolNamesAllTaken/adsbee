@@ -981,7 +981,7 @@ class AircraftDictionary {
         kCorrectionAddressParity1Bit,
         kCorrectionAddressParity2Bit,
         kCorrectionRejected,
-        kCorrectionSkipped,  // Address parity replies not searched: over the per-update limit.
+        kCorrectionSkipped,  // Searches not made: over the per-update limit, or under load.
         kNumCorrectionKinds
     };
     static constexpr const char* kCorrectionKindStrs[kNumCorrectionKinds] = {
@@ -1103,6 +1103,10 @@ class AircraftDictionary {
     AircraftDictionary(AircraftDictionaryConfig config_in) : config_(config_in) {};
 
     inline void SetAddressParityCorrection(bool enable) { config_.enable_address_parity_correction = enable; }
+    // While paused (e.g. a backlog of decoded packets), address parity searches are skipped.
+    inline void PauseAddressParityCorrection(bool paused) { address_parity_correction_paused_ = paused; }
+    // Counts searches skipped elsewhere, e.g. the decoder's 2 bit searches.
+    inline void RecordSkippedCorrections(uint32_t num) { metrics_counter_.corrected_frames[kCorrectionSkipped] += num; }
 
     /**
      * Removes all aircraft from the aircraft dictionary.
@@ -1601,6 +1605,7 @@ class AircraftDictionary {
 
     AircraftDictionaryConfig config_;
     uint16_t address_parity_correction_attempts_ = 0;  // Since the last update.
+    bool address_parity_correction_paused_ = false;
 
 #ifndef ON_TI
     // Uncorrected addresses of recent replies that a fix in the address parity field would have matched.

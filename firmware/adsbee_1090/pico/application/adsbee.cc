@@ -756,6 +756,11 @@ void ADSBee::IngestAndForwardPackets() {
         return;
     }
     CPUMonitor::WorkScope work;
+    aircraft_dictionary.PauseAddressParityCorrection(num_decoded_mode_s_packets >=
+                                                     kMaxBacklogForAddressParityCorrection);
+    uint32_t two_bit_corrections_skipped = decoder.two_bit_corrections_skipped;
+    aircraft_dictionary.RecordSkippedCorrections(two_bit_corrections_skipped - two_bit_corrections_skipped_seen_);
+    two_bit_corrections_skipped_seen_ = two_bit_corrections_skipped;
     for (uint16_t i = 0;
          i < num_decoded_mode_s_packets && decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet); i++) {
         // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\tdf=%d icao_address=0x%06x",
