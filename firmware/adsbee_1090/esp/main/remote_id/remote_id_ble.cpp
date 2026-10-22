@@ -150,8 +150,8 @@ bool ConfigureAdvInstance(uint8_t instance, bool legacy) {
 // command per tick), so the scan and the other set aren't disturbed. Returns whether it is advertising afterwards.
 bool ReloadAdvInstance(uint8_t instance, const uint8_t* odid, uint16_t odid_len,
                        RawRemoteIDPacket::Transport transport) {
+    if (ble_gap_ext_adv_active(instance)) ble_gap_ext_adv_stop(instance);  // t0740 F1: no in-place data update.
     if (!SetAdvODIDPayload(instance, odid, odid_len, transport)) return false;
-    if (ble_gap_ext_adv_active(instance)) return true;
     int rc = ble_gap_ext_adv_start(instance, /*duration=*/0, /*max_events=*/0);
     if (rc != 0) {
         CONSOLE_ERROR("remote_id_ble", "ble_gap_ext_adv_start(%u) failed, rc=%d.", instance, rc);
