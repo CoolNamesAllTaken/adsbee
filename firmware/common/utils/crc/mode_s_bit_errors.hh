@@ -7,10 +7,13 @@
 
 #include "mode_s_single_bit_filter.hh"  // kBitSyndromes.
 
+// The pair filter, read for every tracked aircraft, lives in RAM: a flash cache miss costs more than the lookup. The
+// 64 kB pair table stays in flash.
 #ifdef ON_PICO
 #include "pico.h"
-// Tables read for every tracked aircraft live in RAM: a flash cache miss costs more than the lookup.
 #define MODE_S_BIT_ERRORS_RAM_TABLE __not_in_flash("mode_s_bit_errors_tables")
+#elif defined(ON_TI)
+#define MODE_S_BIT_ERRORS_RAM_TABLE __attribute__((section(".data.mode_s_bit_errors_tables")))
 #else
 #define MODE_S_BIT_ERRORS_RAM_TABLE
 #endif
@@ -132,8 +135,13 @@ constexpr PairFilter MakePairFilter() {
     }
     return f;
 }
+// GCC 13 (the TI toolchain) ignores section attributes in templates, so there it's a plain inline function.
+#ifdef ON_TI
+inline const PairFilter& GetPairFilter() {
+#else
 template <typename T = void>
 const PairFilter& GetPairFilter() {
+#endif
     MODE_S_BIT_ERRORS_RAM_TABLE static constexpr PairFilter kPairFilter = MakePairFilter();
     return kPairFilter;
 }
@@ -142,11 +150,7 @@ const PairFilter& GetPairFilter() {
  * Whether a syndrome may be a one or two bit error. Cheap check before Find().
  */
 inline bool MayBeOneOrTwoBitError(uint32_t syndrome) {
-#ifdef ON_TI
-    return true;  // No pair filter: see Find().
-#else
     return ModeSSingleBitFilter::kFilter.MayMatch(syndrome) || GetPairFilter().MayMatch(syndrome);
-#endif
 }
 
 /**
@@ -166,18 +170,6 @@ inline uint16_t Find(uint32_t syndrome, uint16_t len_bits, uint16_t first_bit, u
     if (max_bits < 2) {
         return 0;
     }
-#ifdef ON_TI
-    // Scan instead: TI clang's constant evaluation limit is too low for the table.
-    for (uint16_t a = first_bit; a < len_bits; a++) {
-        int16_t b = FindBit(syndrome ^ BitSyndrome(a, len_bits), len_bits, a + 1);
-        if (b >= 0) {
-            bits[0] = a;
-            bits[1] = static_cast<uint16_t>(b);
-            return 2;
-        }
-    }
-    return 0;
-#else
     const PairTable& table = GetPairTable();
     for (uint32_t s = PairSlotOf(syndrome);; s = (s + 1) & (kNumPairSlots - 1)) {
         uint32_t entry = table.slot[s];
@@ -197,7 +189,6 @@ inline uint16_t Find(uint32_t syndrome, uint16_t len_bits, uint16_t first_bit, u
         bits[1] = static_cast<uint16_t>(b - offset);
         return 2;
     }
-#endif
 }
 
 }  // namespace ModeSBitErrors

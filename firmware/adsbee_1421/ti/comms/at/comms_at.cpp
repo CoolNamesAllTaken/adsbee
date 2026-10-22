@@ -493,7 +493,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             CPP_AT_PRINTF(
                 ",mlat_stamped=%lu,mlat_more_pkts=%lu,mlat_more_edges=%lu,mlat_unpaired=%lu,mlat_orphans=%lu,"
                 "mlat_edge_drops=%lu,mlat_overruns=%lu,mlat_restarts=%lu,mlat_kicks=%lu,mlat_pending_clears=%lu,"
-                "mlat_clear_timeouts=%lu\r\n",
+                "mlat_clear_timeouts=%lu",
                 (unsigned long)adsbee.mlat_counters().stamped,
                 (unsigned long)adsbee.mlat_counters().unstamped_more_packets,
                 (unsigned long)adsbee.mlat_counters().unstamped_more_edges,
@@ -503,6 +503,16 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 (unsigned long)adsbee.mlat_timebase_restarts, (unsigned long)mlat_clear_dma::counters().kicks,
                 (unsigned long)mlat_clear_dma::counters().pending_clears,
                 (unsigned long)mlat_clear_dma::counters().wait_timeouts);
+            CPP_AT_PRINTF(
+                ",two_bit_found=%lu,fixed_es_1bit=%lu,fixed_es_2bit=%lu,fixed_ap_1bit=%lu,fixed_ap_2bit=%lu,"
+                "fixes_rejected=%lu,fixes_skipped=%lu\r\n",
+                (unsigned long)packet_decoder.two_bit_fixed_count,
+                (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionExtendedSquitter1Bit],
+                (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionExtendedSquitter2Bit],
+                (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionAddressParity1Bit],
+                (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionAddressParity2Bit],
+                (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionRejected],
+                (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionSkipped]);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -517,6 +527,10 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             adsbee.ResetMlatCounters();
             packet_decoder.raw_queue_overflow_count = 0;
             packet_decoder.bitflips_fixed_count = 0;
+            packet_decoder.two_bit_fixed_count = 0;
+            for (uint32_t& count : adsbee.corrected_frames) {
+                count = 0;
+            }
             subg_radio.rx_error_restart_count = 0;
             subg_radio.set_len_error_count = 0;
             adsbee.max_loop_us = 0;
@@ -1576,7 +1590,10 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "MLAT timestamp, packets left without one by reason (read with more packets than sync edges / "
                     "more edges than packets / read never paired: IRQ-paced or FIFO overflow), sync edges without "
                     "a packet, edges dropped, capture ring overflows, time base restarts, latch clears started late "
-                    "/ run between sweep frames / that did not end in time)."
+                    "/ run between sweep frames / that did not end in time); two_bit_found = extended squitters "
+                    "with a two bit fix, before the track check; fixed_* = frames accepted after a one or two bit "
+                    "fix (es = extended squitter, ap = address parity reply); fixes_rejected = fixes turned down "
+                    "by the track checks; fixes_skipped = searches skipped under load or over the 250/s limit."
                     "\r\n\tAT+RX_STATS=RESET\r\n\t"
                     "Reset all Rx stats counters.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxStatsCallback, comms_manager)},

@@ -104,6 +104,10 @@ class ADSBee {
 
     LR2021 lr2021;
     AircraftDictionary aircraft_dictionary;
+    // Packets waiting (decoded and raw) at which address parity searches are skipped, as on the ADSBee 1090.
+    static constexpr uint16_t kMaxBacklogForAddressParityCorrection = 64;
+    // Bit error corrections by AircraftDictionary::CorrectionKind, reported and reset via AT+RX_STATS.
+    uint32_t corrected_frames[AircraftDictionary::kNumCorrectionKinds] = {0};
 
     // Health / diagnostics counter, reported and reset via AT+RX_STATS. Incremented when the LR2021
     // RX FIFO reads back completely full (the poll loop fell behind; frames were likely dropped).

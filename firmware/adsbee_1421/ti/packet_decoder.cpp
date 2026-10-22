@@ -2,6 +2,7 @@
 
 #include "buffer_utils.hh"
 #include "comms.hh"
+#include "mode_s_bit_errors.hh"
 #include "settings.hh"
 
 // Host tests build DecodeOne() without the SDK, so Update() and its includes are left out there.
@@ -80,9 +81,17 @@ void PacketDecoder::DecodeOne(RawModeSPacket& raw_packet, bool df17_mode) {
         decoded_mode_s_packet_out_queue.Enqueue(decoded_packet);
         // leds.FlashLED(bsp.k1090LEDPin, 10);
     } else if (decoded_packet.CorrectSingleBitError() >= 0) {
-        // Single-bit error correction, shared with the ADSBee 1090: only DF 17/18, never in the DF field
-        // (DO-260B 2.2.4.3.4.7.3.a).
+        // Bit error corrections, shared with the ADSBee 1090: only DF 17/18, never in the DF field
+        // (DO-260B 2.2.4.3.4.7.3.a). The aircraft dictionary checks corrected frames against the aircraft's track.
+        decoded_packet.num_corrected_bits = 1;
         bitflips_fixed_count++;
+        decoded_mode_s_packet_out_queue.Enqueue(decoded_packet);
+    } else if (decoded_packet.IsSingleBitCorrectable() &&
+               ModeSBitErrors::MayBeOneOrTwoBitError(decoded_packet.crc_syndrome) &&
+               raw_mode_s_packet_queue.Length() >= kMaxBacklogForTwoBitCorrection) {
+        two_bit_corrections_skipped++;  // Behind: leave the time to valid frames.
+    } else if (decoded_packet.CorrectTwoBitError()) {
+        two_bit_fixed_count++;
         decoded_mode_s_packet_out_queue.Enqueue(decoded_packet);
     }
 }

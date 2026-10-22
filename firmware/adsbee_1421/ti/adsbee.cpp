@@ -19,7 +19,9 @@
 #include "sub_ghz_radio.hh"
 #include "uat_packet_decoder.hh"
 
-ADSBee::ADSBee(ADSBeeConfig config) : lr2021(config.lr2021_config), config_(config) {}
+ADSBee::ADSBee(ADSBeeConfig config) : lr2021(config.lr2021_config), config_(config) {
+    aircraft_dictionary.SetAddressParityCorrection(true);
+}
 
 // Set from the SYNC rising-edge ISR; cleared in EnterSyncSleep() once SYNC has dropped. The level
 // fallback in SyncSleepRequested() covers the cases where no edge ever fires (SYNC already high at
@@ -666,6 +668,11 @@ void ADSBee::IngestAndForwardPackets() {
     // Explicitly count the number of packets to process so that we don't get stuck in this loop if the decoder
     // keeps outputting packets.
     uint16_t num_decoded_mode_s_packets = packet_decoder.decoded_mode_s_packet_out_queue.Length();
+    aircraft_dictionary.PauseAddressParityCorrection(num_decoded_mode_s_packets +
+                                                         packet_decoder.raw_mode_s_packet_queue.Length() >=
+                                                     kMaxBacklogForAddressParityCorrection);
+    aircraft_dictionary.RecordSkippedCorrections(packet_decoder.two_bit_corrections_skipped);
+    packet_decoder.two_bit_corrections_skipped = 0;
     for (uint16_t i = 0;
          i < num_decoded_mode_s_packets && packet_decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet);
          i++) {
@@ -725,6 +732,9 @@ void ADSBee::PruneAircraftDictionary() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
         aircraft_dictionary.Update(timestamp_ms);
+        for (uint16_t i = 0; i < AircraftDictionary::kNumCorrectionKinds; i++) {
+            corrected_frames[i] += aircraft_dictionary.metrics.corrected_frames[i];
+        }
 
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
     }
