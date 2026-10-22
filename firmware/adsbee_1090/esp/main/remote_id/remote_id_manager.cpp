@@ -341,5 +341,6 @@ void RemoteIDManager::Update() {
     }
     ServiceTxTick();
     BLEServiceScanWatchdog();
+    BLEServiceAdvWatchdog();
     object_dictionary.device_status.remote_id_status = status_;
 }

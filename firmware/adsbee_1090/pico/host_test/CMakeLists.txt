@@ -44,6 +44,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_aircraft_dictionary_contact_modes.cc
         test_aircraft_dictionary_mode_s.cc
         test_aircraft_dictionary_allocator.cc
+        test_ble_adv_watchdog.cc
         test_ble_scan_watchdog.cc
         test_broadcast_ring.cc
         test_buffer_utils.cc
@@ -104,7 +105,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         ${ADSBEE_MODULES_DIR}/cppAT/settings # use default settings for testing
         ${ADSBEE_MODULES_DIR}/cppAT/src
         ${CMAKE_SOURCE_DIR}/application/peripherals/gnss
-        ${CMAKE_SOURCE_DIR}/../esp/main/remote_id # ble_scan_watchdog.hh
+        ${CMAKE_SOURCE_DIR}/../esp/main/remote_id # ble_adv_watchdog.hh, ble_scan_watchdog.hh
         .
         mocks
     )
