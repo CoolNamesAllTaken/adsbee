@@ -165,6 +165,7 @@ class RemoteIDManager {
     void BLETxServiceTick();  // Refreshes the advertised ODID content; call at the transmit cadence.
     void BLETxUpdateStatus();  // Sets the BLE TX status bits from what is actually advertising.
     void BLEReleaseIfIdle();  // Frees the NimBLE host and controller once neither scanning nor advertising.
+    void BLEServiceScanWatchdog();  // Resets the controller when scanning stalls (BLEScanWatchdog).
     static bool BluetoothIsSupported();  // False when Bluetooth isn't compiled into this firmware.
 
     // WiFi sniffer, in remote_id_wifi_sniffer.cpp. With attach_to_network_wifi it listens on the running AP/STA
