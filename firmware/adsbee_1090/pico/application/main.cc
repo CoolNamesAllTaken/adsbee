@@ -60,10 +60,14 @@ ESP32 esp32_ll = ESP32({});
 // Provide high-level coprocessor objects for interacting with coprocessor devices via low level class definitions.
 SPICoprocessor esp32 = SPICoprocessor(
     {.interface = esp32_ll, .tag_str = "ESP32"});  // Use the low-level ESP32 interface to communicate with the ESP32.
-ModeSPacketDecoder decoder = ModeSPacketDecoder({.enable_1090_error_correction = true});
+// Off switch for all Mode S bit error correction.
+static constexpr bool kEnable1090ErrorCorrection = true;
+ModeSPacketDecoder decoder = ModeSPacketDecoder({.enable_1090_error_correction = kEnable1090ErrorCorrection});
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
+    adsbee.aircraft_dictionary.SetAddressParityCorrection(kEnable1090ErrorCorrection);
+    decoder.backlog_callback = [] { return adsbee.CaptureQueueLength(); };
 
     // Initialize coprocessor SPI bus.
     // ESP32 SPI pins.

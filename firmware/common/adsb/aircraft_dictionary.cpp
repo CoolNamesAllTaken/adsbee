@@ -10,6 +10,7 @@
 #include "geo_utils.hh"
 #include "hal.hh"
 #include "macros.hh"
+#include "mode_s_bit_errors.hh"
 #include "nasa_cpr.hh"
 #include "opendroneid.h"  // Vendored Open Drone ID codec (decode path only).
 #include "unit_conversions.hh"
@@ -1596,6 +1597,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     if (kSwarmRecording && swarm_recorder_ != nullptr) {
         swarm_recorder_->NoteAircraftCount(metrics_counter_.num_mode_s_aircraft + metrics_counter_.num_uat_aircraft);
     }
+    address_parity_correction_attempts_ = 0;
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.
 }
@@ -1746,9 +1748,292 @@ bool AircraftDictionary::IsPreferredReportForAddress(uint32_t uid, uint32_t time
     return best_uid == uid;
 }
 
+#ifndef ON_TI  // The 1421 corrects in its own decoder.
+namespace {
+// Limits on how far a corrected frame may move an aircraft: a step plus a rate over the time since the last update.
+constexpr uint32_t kCorrectionMaxAgeMs = 60e3;
+constexpr uint32_t kCorrectionMaxReferenceAgeMs = 10e3;  // Older positions and velocities can't check a correction.
+constexpr int32_t kCorrectionAltitudeStepFt = 300;
+constexpr int32_t kCorrectionClimbRateFtPerS = 100;  // 6,000 ft/min.
+constexpr int32_t kCorrectionPositionStepM = 926;    // 0.5 NM.
+constexpr int32_t kCorrectionSpeedMPerS = 370;       // 720 kt.
+constexpr int32_t kCorrectionDeadReckoningErrorMPerS = 60;  // Turns and speed changes since the last velocity.
+constexpr float kMetersPerDegreeLatitude = 111320.0f;
+constexpr int32_t kCorrectionSpeedStepKts = 20;
+constexpr int32_t kCorrectionAccelerationKtsPerS = 5;
+constexpr int32_t kCorrectionDirectionStepDeg = 20;
+constexpr int32_t kCorrectionTurnRateDegPerS = 3;
+
+bool WithinStep(int32_t delta, int32_t step, int32_t rate_per_s, uint32_t elapsed_ms) {
+    if (elapsed_ms > kCorrectionMaxAgeMs) {
+        elapsed_ms = kCorrectionMaxAgeMs;
+    }
+    int64_t magnitude = delta < 0 ? -static_cast<int64_t>(delta) : delta;
+    return magnitude * 1000 <= static_cast<int64_t>(step) * 1000 + static_cast<int64_t>(rate_per_s) * elapsed_ms;
+}
+}  // namespace
+
+bool AircraftDictionary::AcceptCorrectedExtendedSquitter(const DecodedModeSPacket& packet) {
+    ModeSADSBPacket es(packet);
+    ModeSAircraft::AddressType address_type = ModeSAircraft::GetAddressType(es);
+    if (address_type == ModeSAircraft::kAddressTypeInvalid) {
+        return false;
+    }
+    ModeSAircraft* aircraft = GetAircraftPtr<ModeSAircraft>(ModeSAircraft::AddressToUID(es.icao_address, address_type),
+                                                            false);
+    if (aircraft == nullptr) {
+        return false;  // Corrected frames never start a track.
+    }
+    TrackFit fit = CheckAgainstTrack(es, *aircraft);
+    // A one bit fix is only turned down when the track disagrees; a two bit fix needs the track to agree.
+    return fit == kTrackFits || (fit == kTrackUnknown && packet.num_corrected_bits < 2);
+}
+
+AircraftDictionary::TrackFit AircraftDictionary::CheckAgainstTrack(const ModeSADSBPacket& es,
+                                                                   const ModeSAircraft& aircraft) {
+    // Apply the frame to a copy of the aircraft and compare.
+    uint32_t now_ms = get_time_since_boot_ms();
+    ModeSAircraft trial = aircraft;
+    trial.WriteBitFlag(ModeSAircraft::kBitFlagUpdatedBaroAltitude, false);
+    trial.WriteBitFlag(ModeSAircraft::kBitFlagUpdatedPosition, false);
+    trial.WriteBitFlag(ModeSAircraft::kBitFlagUpdatedHorizontalSpeed, false);
+    uint16_t type_code = es.type_code;
+    if (type_code >= ModeSADSBPacket::kTypeCodeAircraftID && type_code < ModeSADSBPacket::kTypeCodeSurfacePosition) {
+        if (strlen(aircraft.callsign) < ModeSAircraft::kCallSignMinNumChars) {
+            return kTrackUnknown;
+        }
+        trial.ApplyAircraftIDMessage(es);
+        return strcmp(trial.callsign, aircraft.callsign) == 0 &&
+                       trial.emitter_category_raw == aircraft.emitter_category_raw
+                   ? kTrackFits
+                   : kTrackDisagrees;
+    }
+    if (type_code >= ModeSADSBPacket::kTypeCodeAirbornePositionBaroAlt &&
+        type_code < ModeSADSBPacket::kTypeCodeAirborneVelocities) {
+        uint32_t position_age_ms = now_ms - aircraft.last_position_update_ms;
+        if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagPositionValid) ||
+            !aircraft.HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid) ||
+            position_age_ms > kCorrectionMaxReferenceAgeMs ||
+            !trial.ApplyAirbornePositionMessage(es, config_.enable_cpr_position_filter) ||
+            !trial.HasBitFlag(ModeSAircraft::kBitFlagUpdatedPosition) ||
+            !trial.HasBitFlag(ModeSAircraft::kBitFlagUpdatedBaroAltitude) ||
+            !trial.HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid)) {
+            return kTrackUnknown;
+        }
+        if (!WithinStep(trial.baro_altitude_ft - aircraft.baro_altitude_ft, kCorrectionAltitudeStepFt,
+                        kCorrectionClimbRateFtPerS, now_ms - aircraft.last_message_timestamp_ms)) {
+            return kTrackDisagrees;
+        }
+        // Expected position: dead reckoning from the last position with a fresh velocity, else the last position.
+        float expected_lat_deg = aircraft.latitude_deg;
+        float expected_lon_deg = aircraft.longitude_deg;
+        int32_t position_rate_m_per_s = kCorrectionSpeedMPerS;
+        if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagHorizontalSpeedValid) &&
+            aircraft.HasBitFlag(ModeSAircraft::kBitFlagDirectionValid) &&
+            now_ms - aircraft.last_velocity_update_ms <= kCorrectionMaxReferenceAgeMs) {
+            float distance_m = aircraft.speed_kts * (kMetersPerNauticalMile / 3600.0f) * (position_age_ms / 1000.0f);
+            float direction_rad = aircraft.direction_deg / kDegreesPerRadian;
+            float meters_per_degree_longitude =
+                kMetersPerDegreeLatitude * cosf(aircraft.latitude_deg / kDegreesPerRadian);
+            expected_lat_deg += distance_m * cosf(direction_rad) / kMetersPerDegreeLatitude;
+            expected_lon_deg += distance_m * sinf(direction_rad) / meters_per_degree_longitude;
+            position_rate_m_per_s = kCorrectionDeadReckoningErrorMPerS;
+        }
+        GeoReference expected(lat2awb(expected_lat_deg), lon2awb(expected_lon_deg));
+        uint32_t distance_m =
+            CalculateDistanceMeters(expected, lat2awb(trial.latitude_deg), lon2awb(trial.longitude_deg));
+        return distance_m <= INT32_MAX && WithinStep(static_cast<int32_t>(distance_m), kCorrectionPositionStepM,
+                                                     position_rate_m_per_s, position_age_ms)
+                   ? kTrackFits
+                   : kTrackDisagrees;
+    }
+    if (type_code == ModeSADSBPacket::kTypeCodeAirborneVelocities) {
+        uint32_t velocity_age_ms = now_ms - aircraft.last_velocity_update_ms;
+        if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagHorizontalSpeedValid) ||
+            !aircraft.HasBitFlag(ModeSAircraft::kBitFlagDirectionValid) ||
+            velocity_age_ms > kCorrectionMaxReferenceAgeMs || !trial.ApplyAirborneVelocitiesMessage(es) ||
+            !trial.HasBitFlag(ModeSAircraft::kBitFlagUpdatedHorizontalSpeed) ||
+            !trial.HasBitFlag(ModeSAircraft::kBitFlagHorizontalSpeedValid) ||
+            !trial.HasBitFlag(ModeSAircraft::kBitFlagDirectionValid)) {
+            return kTrackUnknown;
+        }
+        float turn_deg = fmodf(trial.direction_deg - aircraft.direction_deg + 540.0f, 360.0f) - 180.0f;
+        return WithinStep(trial.speed_kts - aircraft.speed_kts, kCorrectionSpeedStepKts,
+                          kCorrectionAccelerationKtsPerS, velocity_age_ms) &&
+                       WithinStep(static_cast<int32_t>(turn_deg), kCorrectionDirectionStepDeg,
+                                  kCorrectionTurnRateDegPerS, velocity_age_ms)
+                   ? kTrackFits
+                   : kTrackDisagrees;
+    }
+    return kTrackUnknown;  // Other messages carry nothing to check against the track.
+}
+
+bool AircraftDictionary::CorrectAddressParityPacket(DecodedModeSPacket& packet) {
+    uint16_t df = packet.downlink_format;
+    bool has_altitude = df == DecodedModeSPacket::kDownlinkFormatShortRangeAirToAirSurveillance ||
+                        df == DecodedModeSPacket::kDownlinkFormatAltitudeReply ||
+                        df == DecodedModeSPacket::kDownlinkFormatLongRangeAirToAirSurveillance ||
+                        df == DecodedModeSPacket::kDownlinkFormatCommBAltitudeReply;
+    bool has_squawk = df == DecodedModeSPacket::kDownlinkFormatIdentityReply ||
+                      df == DecodedModeSPacket::kDownlinkFormatCommBIdentityReply;
+    if (!has_altitude && !has_squawk) {
+        return false;  // DF=11 replies carry nothing to check.
+    }
+    if (address_parity_correction_paused_ ||
+        address_parity_correction_attempts_ >= kMaxAddressParityCorrectionAttemptsPerUpdate) {
+        metrics_counter_.corrected_frames[kCorrectionSkipped]++;
+        return false;  // Bounds the time spent searching.
+    }
+    address_parity_correction_attempts_++;
+    uint16_t len_bits = packet.raw.buffer_len_bytes * kBitsPerByte;
+    uint32_t now_ms = get_time_since_boot_ms();
+
+    // Fewest flipped bits wins; among those, exactly one aircraft must fit.
+    uint16_t best_num_bits = 3;
+    uint16_t num_fits = 0;
+    uint16_t fit_bits[2] = {0};
+    uint32_t fit_address = 0;
+    for (auto& [uid, entry] : dict) {
+        const ModeSAircraft* aircraft = std::get_if<ModeSAircraft>(&entry);
+        if (aircraft == nullptr || (aircraft->icao_address & ~0xFFFFFFu) != 0) {
+            continue;  // Only ICAO addresses answer interrogations.
+        }
+        uint32_t error_syndrome = packet.crc_syndrome ^ aircraft->icao_address;
+        if (!ModeSBitErrors::MayBeOneOrTwoBitError(error_syndrome)) {
+            continue;
+        }
+        uint16_t bits[2];
+        uint16_t num_bits =
+            ModeSBitErrors::Find(error_syndrome, len_bits, DecodedModeSPacket::kDFNumBits, best_num_bits, bits);
+        if (num_bits == 0 || num_bits > best_num_bits) {
+            continue;
+        }
+        RawModeSPacket corrected = packet.raw;
+        for (uint16_t i = 0; i < num_bits; i++) {
+            flip_bit(corrected.buffer, bits[i]);
+        }
+        DecodedModeSPacket corrected_packet(corrected);
+        bool fits;
+        bool airborne_state_known = true;
+        bool is_airborne;
+        if (has_altitude) {
+            int32_t altitude_ft = AltitudeCodeToAltitudeFt(GetNBitsFromWordBuffer(13, 19, corrected.buffer));
+            fits = aircraft->HasBitFlag(ModeSAircraft::kBitFlagBaroAltitudeValid) &&
+                   altitude_ft > kAltitudeDecodeErrorInvalid &&
+                   WithinStep(altitude_ft - aircraft->baro_altitude_ft, kCorrectionAltitudeStepFt,
+                              kCorrectionClimbRateFtPerS, now_ms - aircraft->last_message_timestamp_ms);
+            if (df == DecodedModeSPacket::kDownlinkFormatAltitudeReply ||
+                df == DecodedModeSPacket::kDownlinkFormatCommBAltitudeReply) {
+                ModeSAltitudeReplyPacket reply(corrected_packet);
+                airborne_state_known = reply.airborne_state_known;
+                is_airborne = reply.is_airborne;
+            } else {
+                is_airborne = GetNBitsFromWordBuffer(1, 5, corrected.buffer) == 0;  // Vertical status.
+            }
+        } else {
+            ModeSIdentityReplyPacket reply(corrected_packet);
+            fits = aircraft->squawk != ADSBTypes::kSquawkCodeNotYetReceived && reply.squawk == aircraft->squawk;
+            airborne_state_known = reply.airborne_state_known;
+            is_airborne = reply.is_airborne;
+        }
+        // The reply must not move the aircraft between the air and the ground.
+        fits = fits &&
+               (!airborne_state_known || is_airborne == aircraft->HasBitFlag(ModeSAircraft::kBitFlagIsAirborne));
+        if (num_bits < best_num_bits) {
+            best_num_bits = num_bits;  // A closer aircraft decides, whether it fits or not.
+            num_fits = 0;
+        }
+        if (fits) {
+            num_fits++;
+            fit_address = aircraft->icao_address;
+            fit_bits[0] = bits[0];
+            fit_bits[1] = bits[1];
+        }
+    }
+    if (best_num_bits > 2) {
+        return false;  // No tracked aircraft within two bits.
+    }
+    if (num_fits != 1) {
+        metrics_counter_.corrected_frames[kCorrectionRejected]++;
+        return false;
+    }
+    // Flips in the address parity field look the same as an untracked aircraft with a nearby address, which keeps
+    // replying with that address: stop correcting an address that repeats. The data bit flips are undone first, so
+    // the address is the sender's even when its reply had another error.
+    uint16_t first_parity_bit = len_bits - kAddressParityFieldNumBits;
+    if (fit_bits[best_num_bits - 1] >= first_parity_bit) {
+        uint32_t sender_address = packet.crc_syndrome;
+        for (uint16_t i = 0; i < best_num_bits; i++) {
+            if (fit_bits[i] < first_parity_bit) {
+                sender_address ^= ModeSBitErrors::BitSyndrome(fit_bits[i], len_bits);
+            }
+        }
+        if (RepeatsAsUncorrectedAddress(sender_address, now_ms)) {
+            metrics_counter_.corrected_frames[kCorrectionRejected]++;
+            return false;
+        }
+    }
+    RawModeSPacket corrected = packet.raw;
+    for (uint16_t i = 0; i < best_num_bits; i++) {
+        flip_bit(corrected.buffer, fit_bits[i]);
+    }
+    packet = DecodedModeSPacket(corrected);
+    if (packet.icao_address != fit_address) {
+        return false;
+    }
+    packet.num_corrected_bits = best_num_bits;
+    metrics_counter_.corrected_frames[best_num_bits == 1 ? kCorrectionAddressParity1Bit
+                                                         : kCorrectionAddressParity2Bit]++;
+    return true;
+}
+
+bool AircraftDictionary::RepeatsAsUncorrectedAddress(uint32_t address, uint32_t now_ms) {
+    // Two way set associative, so two frequent addresses that share a set both keep their counts.
+    uint32_t set = ModeSBitErrors::HashSlot(address, kRecentAddressSlotBits) & ~1u;
+    RecentAddress* slot = nullptr;
+    for (uint32_t i = set; i <= set + 1; i++) {
+        RecentAddress& recent = recent_uncorrected_addresses_[i];
+        bool live = (recent.address_and_count >> 24) != 0 && now_ms - recent.last_ms <= kRecentAddressWindowMs;
+        if (live && (recent.address_and_count & 0xFFFFFF) == (address & 0xFFFFFF)) {
+            slot = &recent;
+            break;
+        }
+        if (slot == nullptr || !live || now_ms - recent.last_ms > now_ms - slot->last_ms) {
+            slot = &recent;  // Replace an expired or the older entry.
+        }
+    }
+    uint32_t count = (slot->address_and_count & 0xFFFFFF) == (address & 0xFFFFFF) &&
+                             now_ms - slot->last_ms <= kRecentAddressWindowMs
+                         ? slot->address_and_count >> 24
+                         : 0;
+    if (count < UINT8_MAX) {
+        count++;
+    }
+    slot->address_and_count = (address & 0xFFFFFF) | count << 24;
+    slot->last_ms = now_ms;
+    return count >= kMaxUncorrectedAddressRepeats;
+}
+
+#endif
+
 bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
     // Check validity and record stats.
     int16_t source = packet.raw.source;
+
+#ifndef ON_TI
+    if (packet.is_valid && packet.num_corrected_bits > 0) {
+        if (!AcceptCorrectedExtendedSquitter(packet)) {
+            packet.is_valid = false;  // Not forwarded either.
+            metrics_counter_.corrected_frames[kCorrectionRejected]++;
+            return false;
+        }
+        metrics_counter_.corrected_frames[packet.num_corrected_bits == 1 ? kCorrectionExtendedSquitter1Bit
+                                                                         : kCorrectionExtendedSquitter2Bit]++;
+    } else if (config_.enable_address_parity_correction && packet.is_address_parity && !packet.is_valid &&
+               !ContainsAircraft(packet.icao_address)) {
+        CorrectAddressParityPacket(packet);
+    }
+#endif
 
     // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
     // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator

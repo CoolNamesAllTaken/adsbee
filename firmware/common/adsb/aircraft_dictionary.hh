@@ -963,6 +963,9 @@ class AircraftDictionary {
 
     struct AircraftDictionaryConfig {
         uint32_t aircraft_prune_interval_ms = 60e3;
+        // Address parity replies that match no aircraft get a one or two bit correction if it gives a unique tracked
+        // aircraft with a plausible altitude or squawk.
+        bool enable_address_parity_correction = false;
 #ifdef FILTER_CPR_POSITIONS
         // CPR position filter checks each new aircraft location against the previous location and requires two
         // consecutive packets within a geographic radius to confirm large jumps in aircraft location. This reduces the
@@ -970,6 +973,22 @@ class AircraftDictionary {
         bool enable_cpr_position_filter = true;
 #endif
     };
+
+    // Mode S frames accepted after a bit error correction, and corrected frames turned down.
+    enum CorrectionKind : uint8_t {
+        kCorrectionExtendedSquitter1Bit = 0,
+        kCorrectionExtendedSquitter2Bit,
+        kCorrectionAddressParity1Bit,
+        kCorrectionAddressParity2Bit,
+        kCorrectionRejected,
+        kCorrectionSkipped,  // Searches not made: over the per-update limit, or under load.
+        kNumCorrectionKinds
+    };
+    static constexpr const char* kCorrectionKindStrs[kNumCorrectionKinds] = {
+        "extended_squitter_1_bit", "extended_squitter_2_bit", "address_parity_1_bit", "address_parity_2_bit",
+        "rejected", "skipped"};
+    // Address parity searches per dictionary update (1 s). Each one checks every tracked aircraft.
+    static constexpr uint16_t kMaxAddressParityCorrectionAttemptsPerUpdate = 250;
 
     struct Metrics {
         static const uint16_t kMetricsJSONMaxLen = 1000;  // Includes null terminator.
@@ -998,6 +1017,8 @@ class AircraftDictionary {
 
         uint16_t raw_remote_id_frames = 0;    // Remote ID advertisements received (pre-decode).
         uint16_t valid_remote_id_frames = 0;  // Remote ID advertisements that decoded successfully.
+
+        uint16_t corrected_frames[kNumCorrectionKinds] = {0};  // By CorrectionKind.
 
         /**
          * Formats the metrics dictionary into a JSON packet with the following structure.
@@ -1056,7 +1077,12 @@ class AircraftDictionary {
                 snprintf(buf + chars_written, buf_len - chars_written,
                          ", \"num_mode_s_aircraft\": %u, \"num_uat_aircraft\": %u, \"num_remote_id_aircraft\": %u",
                          num_mode_s_aircraft, num_uat_aircraft, num_remote_id_aircraft);
-            chars_written += snprintf(buf + chars_written, buf_len - chars_written, "}");
+            chars_written += snprintf(buf + chars_written, buf_len - chars_written, ", \"corrected_frames\": {");
+            for (uint16_t i = 0; i < kNumCorrectionKinds; i++) {
+                chars_written += snprintf(buf + chars_written, buf_len - chars_written, "%s\"%s\": %u", i ? ", " : "",
+                                          kCorrectionKindStrs[i], corrected_frames[i]);
+            }
+            chars_written += snprintf(buf + chars_written, buf_len - chars_written, "}}");
             return chars_written;
         }
     };
@@ -1075,6 +1101,12 @@ class AircraftDictionary {
      * Constructor with config values specified.
      */
     AircraftDictionary(AircraftDictionaryConfig config_in) : config_(config_in) {};
+
+    inline void SetAddressParityCorrection(bool enable) { config_.enable_address_parity_correction = enable; }
+    // While paused (e.g. a backlog of decoded packets), address parity searches are skipped.
+    inline void PauseAddressParityCorrection(bool paused) { address_parity_correction_paused_ = paused; }
+    // Counts searches skipped elsewhere, e.g. the decoder's 2 bit searches.
+    inline void RecordSkippedCorrections(uint32_t num) { metrics_counter_.corrected_frames[kCorrectionSkipped] += num; }
 
     /**
      * Removes all aircraft from the aircraft dictionary.
@@ -1548,7 +1580,51 @@ class AircraftDictionary {
 
     // Helper functions for ingesting specific ADS-B packet types, called by IngestModeSADSBPacket.
 
+#ifndef ON_TI  // The 1421 corrects in its own decoder.
+    /**
+     * Whether an extended squitter with corrected bits may update the dictionary: its aircraft must be tracked, a one
+     * bit correction must not disagree with the track, and a two bit correction must agree with it.
+     */
+    bool AcceptCorrectedExtendedSquitter(const DecodedModeSPacket& packet);
+
+    enum TrackFit : uint8_t { kTrackFits, kTrackDisagrees, kTrackUnknown };
+    /**
+     * Compares an extended squitter with the aircraft's callsign, altitude and position, or velocity.
+     * @retval kTrackUnknown if the track has nothing recent to compare with.
+     */
+    TrackFit CheckAgainstTrack(const ModeSADSBPacket& es, const ModeSAircraft& aircraft);
+
+    /**
+     * Tries the one or two bit corrections of an address parity reply that give a tracked aircraft's address. Applies
+     * the correction if exactly one aircraft fits, with a plausible altitude or the same squawk.
+     * @retval True if the packet was corrected.
+     */
+    bool CorrectAddressParityPacket(DecodedModeSPacket& packet);
+
+#endif
+
     AircraftDictionaryConfig config_;
+    uint16_t address_parity_correction_attempts_ = 0;  // Since the last update.
+    bool address_parity_correction_paused_ = false;
+
+#ifndef ON_TI
+    // Uncorrected addresses of recent replies that a fix in the address parity field would have matched.
+    static constexpr uint16_t kAddressParityFieldNumBits = 24;
+    static constexpr uint16_t kRecentAddressSlotBits = 7;
+    static constexpr uint32_t kRecentAddressWindowMs = 60e3;
+    static constexpr uint8_t kMaxUncorrectedAddressRepeats = 2;  // From the second reply on, it's another aircraft.
+    struct RecentAddress {
+        uint32_t address_and_count = 0;  // Address in the low 24 bits, repeats in the top 8.
+        uint32_t last_ms = 0;
+    };
+    RecentAddress recent_uncorrected_addresses_[1 << kRecentAddressSlotBits];
+
+    /**
+     * Records an uncorrected address and returns whether it has repeated kMaxUncorrectedAddressRepeats times within
+     * kRecentAddressWindowMs.
+     */
+    bool RepeatsAsUncorrectedAddress(uint32_t address, uint32_t now_ms);
+#endif
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;

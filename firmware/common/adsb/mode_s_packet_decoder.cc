@@ -3,6 +3,7 @@
 #include <cstring>  // For memcmp, memcpy.
 
 #include "comms.hh"
+#include "mode_s_bit_errors.hh"
 
 // Uncomment the line below to allow duplicate packets (e.g. for testing).
 // #define DISABLE_DUPLICATE_FILTER
@@ -79,9 +80,21 @@ bool ModeSPacketDecoder::UpdateDecoderLoop() {
             int16_t bit_flip_index = decoded_packet.CorrectSingleBitError();
             if (bit_flip_index >= 0) {
                 // Corrected a single bit error.
+                decoded_packet.num_corrected_bits = 1;
                 decoded_mode_s_packet_bit_flip_locations_out_queue.Enqueue(bit_flip_index);
                 PushPacketIfNotDuplicate(decoded_packet);
                 status_str = "1FIXD     ";
+            } else if (config_.max_1090_error_correction_num_bits >= 2 &&
+                       ModeSBitErrors::MayBeOneOrTwoBitError(decoded_packet.crc_syndrome) &&
+                       num_packets_to_process - i - 1 + (backlog_callback ? backlog_callback() : 0) >=
+                           kMaxBacklogForTwoBitCorrection) {
+                // Behind on demodulation: leave the time to valid frames.
+                two_bit_corrections_skipped++;
+                status_str = "2SKIP     ";
+            } else if (config_.max_1090_error_correction_num_bits >= 2 && decoded_packet.CorrectTwoBitError()) {
+                // The aircraft dictionary checks it against the aircraft's track.
+                PushPacketIfNotDuplicate(decoded_packet);
+                status_str = "2FIXD     ";
             } else {
                 // Checksum correction failed.
                 status_str = "     NOFIX";

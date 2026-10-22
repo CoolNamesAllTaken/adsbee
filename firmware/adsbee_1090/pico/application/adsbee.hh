@@ -92,6 +92,8 @@ class ADSBee {
 
     // Captures waiting for demodulation: room for a burst that arrives faster than the loop demodulates.
     static constexpr uint16_t kCaptureQueueDepth = 16;
+    // Decoded packets waiting for ingestion at which address parity searches are skipped.
+    static constexpr uint16_t kMaxBacklogForAddressParityCorrection = 64;
 
     struct Capture {
         uint32_t samples[mode_s_soft_demod::kCaptureWords];
@@ -285,6 +287,9 @@ class ADSBee {
      * @retval True if there was at least one capture to demodulate.
      */
     bool DemodulateCaptures();
+
+    // Captures waiting for demodulation.
+    uint16_t CaptureQueueLength() { return capture_queue_.Length(); }
 
     /**
      * ISR for the timer alarm that ends the capture of a 56 bit message early, so its preamble matcher and sampler
@@ -592,6 +597,7 @@ class ADSBee {
     bool r1090_enabled_ = true;
     bool r1090_packet_queue_overflowed_ = false;
     bool r1090_capture_queue_overflowed_ = false;
+    uint32_t two_bit_corrections_skipped_seen_ = 0;  // Decoder count already added to the dictionary's metrics.
     bool bias_tee_enabled_ = false;
     uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec;
 

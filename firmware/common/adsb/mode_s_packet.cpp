@@ -24,6 +24,7 @@ const uint32_t kSquitterLastWordIngestionMask = 0xFFFFFF00;
 const uint32_t kSquitterLastWordPopCount = 24;
 
 #include "crc.hh"
+#include "mode_s_bit_errors.hh"
 #include "mode_s_single_bit_filter.hh"
 
 /** DecodedModeSPacket **/
@@ -206,6 +207,26 @@ int16_t DecodedModeSPacket::CorrectSingleBitError() {
     }
     *this = corrected_packet;
     return bit_flip_index;
+}
+
+bool DecodedModeSPacket::CorrectTwoBitError() {
+    if (!IsSingleBitCorrectable() || !ModeSBitErrors::MayBeOneOrTwoBitError(crc_syndrome)) {
+        return false;
+    }
+    uint16_t bits[2];
+    if (ModeSBitErrors::Find(crc_syndrome, RawModeSPacket::kExtendedSquitterPacketLenBits, kDFNumBits, 2, bits) != 2) {
+        return false;
+    }
+    RawModeSPacket corrected_raw = raw;
+    flip_bit(corrected_raw.buffer, bits[0]);
+    flip_bit(corrected_raw.buffer, bits[1]);
+    DecodedModeSPacket corrected_packet(corrected_raw);
+    if (!corrected_packet.is_valid) {
+        return false;
+    }
+    *this = corrected_packet;
+    num_corrected_bits = 2;
+    return true;
 }
 
 void DecodedModeSPacket::ConstructModeSPacket() {
