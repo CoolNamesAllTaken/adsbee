@@ -193,6 +193,9 @@ reflashing over UART without a debugger.
 
 Releases are drafted by CI from release tags (`.github/workflows/release.yml`):
 
+0. Before tagging an RC or a stable release, run the functional tests in
+   [RELEASE_TESTING.md](RELEASE_TESTING.md) on the CI images of the commit you will tag (for ADSBee 1090
+   this includes the Remote ID cases), and tag only when they pass.
 1. Merge the version bump to `main`, then tag the merge commit and push the tag:
    ```bash
    git tag adsbee_1421-0.3.11-rc4 origin/main

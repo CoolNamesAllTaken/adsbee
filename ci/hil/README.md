@@ -86,6 +86,7 @@ the exit status is 1 if any device failed.
 | `flash IMAGE [--force] [--host H]` | Model-specific (see below). |
 | `tx info\|play\|run\|stop TX` | Drives a transmitter (see below). |
 | `loopback [--pattern P] [--min-fraction F] [--fail-on-skip]` | RF loopback test; skipped (exit 0) with no transmitter. |
+| `remote-id CASE -d A -d B` | Remote ID release test on two ADSBee 1090s (see [below](#remote-id-release-test)). |
 | `locks` | Lock files and their holders. |
 | `lock DEVICE -- CMD...` | Runs a command while holding a device's lock. |
 
@@ -222,6 +223,50 @@ no transmitter the result is `SKIP` (exit 0, or 1 with `--fail-on-skip`).
 **Keep receivers on attenuated coax or behind attenuators.** Full transmitter output can damage a
 receiver's front end, and radiating on 1090 or 978 MHz outside a shielded setup is illegal in most
 places.
+
+## Remote ID release test
+
+`adsbee-hil remote-id` runs one case of the ADSBee 1090 Remote ID release test
+([`firmware/RELEASE_TESTING.md`](../../firmware/RELEASE_TESTING.md)) on two units in Bluetooth range
+of each other. The units hear each other, so the host needs no Bluetooth adapter.
+
+```sh
+adsbee-hil remote-id tx-both -d 1090u-a -d 1090u-b --minutes 15 --json rid.jsonl
+adsbee-hil remote-id rxtx -d user@host-a:1090u-a -d user@host-b:1090u-b \
+    --remote-hil '~/hil-venv/bin/adsbee-hil'          # units on other hosts, over ssh
+adsbee-hil remote-id guards -d 1090u-a -d 1090u-b
+```
+
+| Case | Unit A | Unit B |
+|---|---|---|
+| `rxtx` | RX + TX BT4+BT5_LR | RX + TX BT4+BT5_LR |
+| `tx-bt4` / `tx-bt5lr` / `tx-both` | TX only: BT4 / BT5_LR / both | RX only |
+| `rx-only` | RX + TX | RX only |
+| `off` | off | off (decode and heap baseline) |
+| `guards` | each `-d` unit: refuses the transports its RAM can't run next to WiFi or Ethernet (read-only) | |
+
+Each unit's side holds its lock for the whole case, records what it finds, sets `AT+LOG_LEVEL=INFO`,
+`AT+REMOTE_ID=` and `AT+REMOTE_ID_TX=` (bench UAS IDs `ADSBEEBENCHA`/`B`, ID type serial, no
+position) **without saving**, and puts everything back at the end (checked with `AT+CONFIG_HASH?`).
+It refuses to transmit from a unit whose `AT+RX_POSITION` source is FIXED or GNSS, and stops if the
+status lacks `TX_NO_POSITION`. Units without PSRAM can't run Remote ID next to the WiFi AP:
+`--wifi-ap-off` turns the AP off for the case (not saved).
+
+Every minute it prints, per unit:
+
+- **Remote ID frames/s** from the peer. With `host` in the bench file (or `--host-a/--host-b`)
+  from `/metrics` (`pip install -e 'ci/hil[ota]'` for `websockets`). Over USB only, from the peer's
+  `AIRCRAFT_JSON` contact: its RSSI changes when frames arrive, and the contact stays 60 s after the
+  last one, so prefer a networked receiver.
+- **ESP32 heap** (min/median) from the ESP32's 1 s heartbeat line (or `/metrics`).
+- **Watchdog resets** ("Bluetooth scan stalled", "Bluetooth advertising stalled"), Bluetooth host
+  resets, Remote ID errors and heap-watch pauses, from the console.
+- **ESP32 reboots** (`/metrics` uptime, or heartbeat gaps of 10 s or more) and Mode S/UAT frames/s.
+
+The verdict passes when every receiving unit heard its peer in every minute, neither unit's ESP32
+or RP2040 rebooted, the status words appeared without a save, and the settings were restored. Exit
+status 0 = pass. `--json` appends every record for later comparison (e.g. heap vs the previous
+release).
 
 ## Tests
 

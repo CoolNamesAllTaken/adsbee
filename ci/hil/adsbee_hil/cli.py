@@ -250,6 +250,52 @@ def cmd_loopback(args, bench) -> int:
     return 0
 
 
+def _receiver(bench, device: str, lock_timeout: float) -> Receiver:
+    cfg = bench.receiver(device) or config_mod.ReceiverConfig(device, "adsbee_1090u", device)
+    return make_receiver(cfg, bench, lock_timeout)
+
+
+def cmd_remote_id(args, bench) -> int:
+    from . import remote_id
+
+    if args.case == "guards":
+        ok = True
+
+        def fn(r):
+            nonlocal ok
+            ok &= remote_id.check_guards(r, log=lambda m: out(r.id, m))
+        rc = run_parallel(_select(args, bench), fn, args.jobs)
+        print(f"RESULT guards: {'PASS' if ok and not rc else 'FAIL'}")
+        return 0 if ok and not rc else 1
+    if not args.device or len(args.device) != 2:
+        print("usage: adsbee-hil remote-id CASE -d [SSH_HOST:]A -d [SSH_HOST:]B", file=sys.stderr)
+        return 2
+    a, b = (remote_id.UnitSpec.parse(d, h) for d, h in zip(args.device, (args.host_a, args.host_b)))
+    return remote_id.run_case(args.case, a, b, args.minutes, args.window, args.setup, tuple(args.uas_ids),
+                              args.wifi_ap_off, args.config, args.remote_hil, args.remote_config,
+                              args.lock_timeout, args.json)
+
+
+def cmd_remote_id_unit(args, bench) -> int:
+    """One unit's side of a remote-id case, as JSON lines on stdout (run by remote-id, locally or over ssh)."""
+    import signal
+
+    from . import remote_id
+
+    def stop(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGHUP, stop)
+    r = _receiver(bench, args.target, args.lock_timeout)
+    host = args.host or r.cfg.options.get("host")
+    summary = remote_id.run_unit(
+        r, remote_id.Role(args.rx, args.tx), args.uas_id, args.peer_uas_id, args.start_at, args.minutes * 60,
+        args.window, host, args.wifi_ap_off,
+        emit=lambda rec: print(json.dumps(rec), flush=True),
+        log=lambda m: print(f"[{r.id}] {m}", file=sys.stderr, flush=True))
+    return 1 if summary.get("errors") else 0
+
+
 def cmd_locks(args, bench) -> int:
     d = lock_mod.lock_dir(bench.lock_dir)
     print(f"lock dir: {d}")
@@ -364,6 +410,41 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-fraction", type=float, default=0.5)
     p.add_argument("--fail-on-skip", action="store_true", help="exit 1 when no transmitter is available")
     p.set_defaults(fn=cmd_loopback)
+
+    from .remote_id import CASE_HELP, DEFAULT_UAS_IDS
+    p = sub.add_parser(
+        "remote-id", parents=[sel], formatter_class=argparse.RawDescriptionHelpFormatter,
+        help="Remote ID release test: two ADSBee 1090s hear each other over Bluetooth",
+        description="Cases (A = first -d, B = second -d; a device is a bench id or serial, '-d HOST:ID' runs it "
+                    "over ssh):\n" + "\n".join(f"  {k:9s} {v}" for k, v in CASE_HELP.items()) +
+                    "\n  guards    every -d unit refuses the transports its RAM can't run next to its network")
+    p.add_argument("case", choices=sorted(CASE_HELP) + ["guards"])
+    p.add_argument("--minutes", type=float, default=15.0, help="measured time (default 15)")
+    p.add_argument("--window", type=float, default=60.0, help="seconds per window (default 60)")
+    p.add_argument("--setup", type=float, default=45.0, help="seconds from start to the first window (default 45)")
+    p.add_argument("--host-a", help="A's web host for /metrics (default: 'host' in its bench file)")
+    p.add_argument("--host-b", help="B's web host for /metrics")
+    p.add_argument("--uas-ids", nargs=2, default=list(DEFAULT_UAS_IDS), metavar=("A", "B"),
+                   help="bench UAS IDs to transmit (default %(default)s)")
+    p.add_argument("--wifi-ap-off", action="store_true",
+                   help="on a unit without PSRAM, turn the WiFi AP off for the run (turned back on after)")
+    p.add_argument("--remote-hil", default="adsbee-hil", help="adsbee-hil command on ssh hosts")
+    p.add_argument("--remote-config", help="bench file on ssh hosts")
+    p.add_argument("--json", help="append every record and the verdict to this JSON-lines file")
+    p.set_defaults(fn=cmd_remote_id)
+
+    p = sub.add_parser("remote-id-unit", help=argparse.SUPPRESS)
+    p.add_argument("target")
+    p.add_argument("--rx")
+    p.add_argument("--tx")
+    p.add_argument("--uas-id", required=True)
+    p.add_argument("--peer-uas-id")
+    p.add_argument("--start-at", type=float, required=True)
+    p.add_argument("--minutes", type=float, required=True)
+    p.add_argument("--window", type=float, default=60.0)
+    p.add_argument("--host")
+    p.add_argument("--wifi-ap-off", action="store_true")
+    p.set_defaults(fn=cmd_remote_id_unit)
 
     p = sub.add_parser("locks", help="show device locks and their holders")
     p.set_defaults(fn=cmd_locks)
