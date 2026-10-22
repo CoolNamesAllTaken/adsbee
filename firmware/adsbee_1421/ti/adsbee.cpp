@@ -515,28 +515,10 @@ void ADSBee::FeedWatchdog() {
 bool ADSBee::Update() {
     FeedWatchdog();
     UpdateLR2021();
-    UpdateReceiverLoad();
     PruneAircraftDictionary();
     UpdateRxPosition();
     IngestAndForwardPackets();
     return true;
-}
-
-void ADSBee::UpdateReceiverLoad() {
-    const uint32_t irq_drains = lr2021.irq_drain_count;
-    if (irq_drains != load_window_start_irq_drains_) {
-        packet_decoder.receiver_busy = true;  // Frames are queued in the LR2021 FIFO.
-    }
-    // The cycle counter is a register read; the millisecond clock costs too much for every pass.
-    if (CycleCounter::Since(load_window_start_cycles_) < kLoadWindowMs * (CycleCounter::kCpuHz / 1000)) {
-        return;
-    }
-    packet_decoder.receiver_busy =
-        mode_s_frames_parsed_ - load_window_start_frames_ >= kMaxFramesPerLoadWindowForCorrection ||
-        irq_drains != load_window_start_irq_drains_;
-    load_window_start_cycles_ = CycleCounter::Now();
-    load_window_start_frames_ = mode_s_frames_parsed_;
-    load_window_start_irq_drains_ = irq_drains;
 }
 
 void ADSBee::UpdateRxPosition() {
@@ -700,11 +682,7 @@ void ADSBee::IngestAndForwardPackets() {
         // decoded_packet.downlink_format,
         //              decoded_packet.icao_address);
 
-        const uint32_t ingest_start_cycles = CycleCounter::Now();
-        const bool ingested = aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet);
-        const uint32_t ingest_cycles = CycleCounter::Since(ingest_start_cycles);
-        if (ingest_cycles > ingest_max_cycles) ingest_max_cycles = ingest_cycles;
-        if (ingested) {
+        if (aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             leds.FlashLED(bsp.k1090LEDPin, 10);
             // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\taircraft_dictionary: %d aircraft",
@@ -964,6 +942,13 @@ void ADSBee::ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes, uin
     const bool df17_mode = LR2021::IsOokDF17PreambleMode(r1090_preamble_mode_);
     const uint16_t packet_len_bytes = LR2021::GetOokRxPacketLenBytes(r1090_preamble_mode_);
     uint16_t num_packets = packet_len_bytes ? (rx_len_bytes / packet_len_bytes) : 0;
+    // A read that finds frames queued in the FIFO means the main loop is behind: pause bit error searches.
+    if (num_packets >= kMinQueuedPacketsForBusy) {
+        busy_reads_left_ = kBusyReads;
+    } else if (num_packets > 0 && busy_reads_left_ > 0) {
+        busy_reads_left_--;
+    }
+    packet_decoder.receiver_busy = busy_reads_left_ > 0;
     for (uint16_t i = 0; i < num_packets; i++) {
         const uint32_t capture_start_cycles = CycleCounter::Now();
         const uint8_t* packet_start = rx_buf + i * packet_len_bytes;
@@ -986,7 +971,6 @@ void ADSBee::ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes, uin
             raw_packet.no_mlat_timestamp = false;
         }
         lr2021_frames_since_valid_++;  // Zeroed on any valid decode; feeds the validity watchdog.
-        mode_s_frames_parsed_++;
         // Record demod + raw frame metrics (valid frames are recorded during dictionary
         // ingestion). All LR2021 captures are 112-bit extended-squitter-length frames.
         aircraft_dictionary.Record1090Demod();

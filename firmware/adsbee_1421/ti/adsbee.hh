@@ -109,10 +109,10 @@ class ADSBee {
     // A search checks every tracked aircraft, so one main loop pass makes at most this many and the LR2021 FIFO keeps
     // being drained.
     static constexpr uint16_t kMaxAddressParityCorrectionsPerPass = 1;
-    // Bit error searches pause for a load window after one with this many frames (3,000/s) or an IRQ-paced drain (the
-    // LR2021 FIFO held 9 frames): above that rate their CPU time would leave the FIFO to the IRQ-paced drain.
-    static constexpr uint32_t kLoadWindowMs = 2;
-    static constexpr uint32_t kMaxFramesPerLoadWindowForCorrection = 6;
+    // Bit error searches pause for kBusyReads FIFO reads with frames after a read that found this many queued (an
+    // IRQ-paced drain reads 9): their CPU time would otherwise leave the FIFO to the IRQ-paced drain.
+    static constexpr uint16_t kMinQueuedPacketsForBusy = 6;
+    static constexpr uint16_t kBusyReads = 64;
     // Bit error corrections by AircraftDictionary::CorrectionKind, reported and reset via AT+RX_STATS.
     uint32_t corrected_frames[AircraftDictionary::kNumCorrectionKinds] = {0};
 
@@ -137,7 +137,6 @@ class ADSBee {
     uint32_t loop_count = 0;
     // Main loop cycles spent in the 1090 path (adsbee.Update() and packet_decoder.Update()).
     uint64_t rx1090_total_cycles = 0;
-    uint32_t ingest_max_cycles = 0;  // Longest aircraft dictionary ingestion of one Mode S packet (searches included).
 
     // Longest single super-loop iteration observed, in microseconds. Reported and reset via AT+RX_STATS. Every
     // millisecond spent in one iteration is a millisecond the LR2021 FIFO isn't drained and AT commands aren't
@@ -292,13 +291,7 @@ class ADSBee {
     }
     uint32_t last_drain_error_log_ms_ = 0;  // Rate-limits the drain-failure CONSOLE_ERROR (1/s).
     uint32_t lr2021_frames_since_valid_ = 0;  // Parsed frames since the last CRC-valid decode (watchdog input).
-
-    // Sets packet_decoder.receiver_busy from the frames parsed and IRQ-paced drains in the last load window.
-    void UpdateReceiverLoad();
-    uint32_t mode_s_frames_parsed_ = 0;
-    uint32_t load_window_start_cycles_ = 0;
-    uint32_t load_window_start_frames_ = 0;
-    uint32_t load_window_start_irq_drains_ = 0;
+    uint16_t busy_reads_left_ = 0;  // FIFO reads with frames until bit error searches resume.
 };
 
 extern ADSBee adsbee;

@@ -505,15 +505,14 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 (unsigned long)mlat_clear_dma::counters().wait_timeouts);
             CPP_AT_PRINTF(
                 ",two_bit_found=%lu,fixed_es_1bit=%lu,fixed_es_2bit=%lu,fixed_ap_1bit=%lu,fixed_ap_2bit=%lu,"
-                "fixes_rejected=%lu,fixes_skipped=%lu,ingest_max_cyc=%lu\r\n",
+                "fixes_rejected=%lu,fixes_skipped=%lu\r\n",
                 (unsigned long)packet_decoder.two_bit_fixed_count,
                 (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionExtendedSquitter1Bit],
                 (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionExtendedSquitter2Bit],
                 (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionAddressParity1Bit],
                 (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionAddressParity2Bit],
                 (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionRejected],
-                (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionSkipped],
-                (unsigned long)adsbee.ingest_max_cycles);
+                (unsigned long)adsbee.corrected_frames[AircraftDictionary::kCorrectionSkipped]);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -564,7 +563,6 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             adsbee.parse_capture_max_cycles = 0;
             packet_decoder.decode_max_cycles = 0;
             adsbee.max_loop_cycles = 0;
-            adsbee.ingest_max_cycles = 0;
             adsbee.loop_total_cycles = 0;
             adsbee.loop_count = 0;
             adsbee.rx1090_total_cycles = 0;
@@ -1595,8 +1593,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "/ run between sweep frames / that did not end in time); two_bit_found = extended squitters "
                     "with a two bit fix, before the track check; fixed_* = frames accepted after a one or two bit "
                     "fix (es = extended squitter, ap = address parity reply); fixes_rejected = fixes turned down "
-                    "by the track checks; fixes_skipped = searches skipped under load or over the 250/s limit; "
-                    "ingest_max_cyc = longest aircraft dictionary ingestion of one packet."
+                    "by the track checks; fixes_skipped = searches skipped under load or over the 250/s limit."
                     "\r\n\tAT+RX_STATS=RESET\r\n\t"
                     "Reset all Rx stats counters.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxStatsCallback, comms_manager)},
