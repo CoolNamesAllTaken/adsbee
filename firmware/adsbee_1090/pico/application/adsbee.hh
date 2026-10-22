@@ -97,7 +97,8 @@ class ADSBee {
 
     struct Capture {
         uint32_t samples[mode_s_soft_demod::kCaptureWords];
-        uint64_t mlat_48mhz_64bit_counts;  // Sampler start.
+        uint64_t mlat_48mhz_64bit_counts;  // Demod pin rising edge (OnDemodBegin()).
+        uint16_t mlat_jitter_sys_clk_counts;  // Sampler start is this many system clocks before that edge.
         int16_t rssi_mv;
         uint8_t num_words;
         uint8_t source;  // State machine index.

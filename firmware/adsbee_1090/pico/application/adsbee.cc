@@ -613,11 +613,11 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
         for (uint16_t i = 0; i < num_words; i++) {
             capture.samples[i] = sample_buf_[sm_index][i];
         }
-        uint16_t jitter_sys_clk_counts =
+        // The sampler start time is worked out in DemodulateCaptures(): its scaling is a division, a library call
+        // that runs from flash, and this interrupt must not wait for flash before it releases the preamble matcher.
+        capture.mlat_48mhz_64bit_counts = rx_packet_[sm_index].mlat_48mhz_64bit_counts;
+        capture.mlat_jitter_sys_clk_counts =
             mlat_jitter_counts_on_demod_begin_[sm_index] - mlat_jitter_counts_on_fifo_pull_[sm_index];
-        // Time of the sampler start. The message timestamp is derived from it once the data is demodulated.
-        capture.mlat_48mhz_64bit_counts =
-            rx_packet_[sm_index].mlat_48mhz_64bit_counts - MLATJitterCountsTo48MHzCounts(jitter_sys_clk_counts);
         capture.rssi_mv = static_cast<int16_t>(sample_rssi_mv_[sm_index]);
         capture.num_words = static_cast<uint8_t>(num_words);
         capture.source = static_cast<uint8_t>(sm_index);
@@ -666,7 +666,10 @@ bool __time_critical_func(ADSBee::DemodulateCaptures)() {
             packet.sigs_dbm = r1090_rssi::PacketMilliVoltsTodBm(capture.rssi_mv, noise_floor_mv_);
             packet.sigq_db = packet.sigs_dbm - GetNoiseFloordBm();
             packet.source = sm_index;
-            packet.mlat_48mhz_64bit_counts = capture.mlat_48mhz_64bit_counts + kFirstSampleDelay48MHzCounts +
+            // Time of the sampler start, then of the message instant after it.
+            uint64_t sampler_start_48mhz_counts =
+                capture.mlat_48mhz_64bit_counts - MLATJitterCountsTo48MHzCounts(capture.mlat_jitter_sys_clk_counts);
+            packet.mlat_48mhz_64bit_counts = sampler_start_48mhz_counts + kFirstSampleDelay48MHzCounts +
                                              result.data_start_48mhz_counts + kTimestampAfterDataStart48MHzCounts;
             if (result.len_bits == RawModeSPacket::kSquitterPacketLenBits) {
                 aircraft_dictionary.Record1090RawSquitterFrame(sm_index);

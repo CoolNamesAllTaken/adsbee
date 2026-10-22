@@ -69,6 +69,9 @@ if (ON_EMBEDDED_DEVICE)
         # string to USBD_DESC_STR_MAX - 1 = 19 characters.
         USBD_MANUFACTURER="Pants for Birds"
         USBD_PRODUCT="ADSBee 1090"
+        # Integer division runs from RAM: the receive interrupts divide (MLAT timestamps, RSSI), and a call into flash
+        # can wait microseconds for the XIP cache, which delays re-arming the preamble matchers.
+        PICO_DIVIDER_IN_RAM=1
     )
 
     # Initialize the SDK
