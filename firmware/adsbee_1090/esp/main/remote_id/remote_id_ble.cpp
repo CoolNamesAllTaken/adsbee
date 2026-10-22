@@ -303,6 +303,13 @@ void StartExtDiscovery() {
     }
 }
 
+// t0740 V7: advertising data updates run on the NimBLE host task.
+struct ble_npl_event s_adv_tick_event;
+void AdvTickEvent(struct ble_npl_event*) {
+    remote_id_manager.GetTransmitter().RefreshFromDeviceState();
+    ServiceAdvertisingPayloads();
+}
+
 void OnHostReset(int reason) {
     s_diag_resets++;
     CONSOLE_WARNING("remote_id_ble", "Bluetooth host reset, reason=%d.", reason);
@@ -341,6 +348,7 @@ bool EnsureHostInitialized() {
         CONSOLE_ERROR("remote_id_ble", "nimble_port_init failed: %d.", err);
         return false;
     }
+    ble_npl_event_init(&s_adv_tick_event, AdvTickEvent, nullptr);
     ble_hs_cfg.sync_cb = OnHostSync;
     ble_hs_cfg.reset_cb = OnHostReset;
     nimble_port_freertos_init(HostTask);
@@ -428,11 +436,7 @@ void RemoteIDManager::BLETxUpdateStatus() {
 void RemoteIDManager::BLETxServiceTick() {
     if (s_tx_legacy_configured || s_tx_coded_configured) {
         // Refresh the ODID content (position moves, message counters advance) and push it into the running instances.
-        if (!tx_.RefreshFromDeviceState()) {
-            status_ |= kStatusTxNoPosition;
-            if (!tx_.PositionSourceAllowed()) status_ |= kStatusTxPositionSourceNotAllowed;
-        }
-        ServiceAdvertisingPayloads();
+        ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_adv_tick_event);
     }
     BLETxUpdateStatus();
 }
