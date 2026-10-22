@@ -30,6 +30,7 @@
 #include "nimble/nimble_port_freertos.h"
 #include "os/os_mbuf.h"
 #include "remote_id_tx.hh"
+#include "esp_heap_caps.h"
 
 namespace {
 
@@ -52,6 +53,10 @@ uint32_t s_watched_scan_starts = 0;
 uint32_t s_last_scan_watchdog_ms = 0;
 BLEScanWatchdog s_scan_watchdog;
 std::atomic<bool> s_scan_watchdog_reset = false;  // The next host reset is the watchdog's, already logged.
+// t0756 diagnostics (not for merge).
+std::atomic<uint32_t> d_set_ok = 0, d_set_fail = 0, d_start = 0, d_start_fail = 0, d_resets = 0, d_syncs = 0,
+                      d_rid = 0, d_rid_leg = 0, d_rid_cod = 0, d_cfg_fail = 0, d_last_reset_reason = 0;
+uint32_t d_last_ms = 0;
 
 // --- Transmit state ---------------------------------------------------------------------------------------------
 // Extended advertising instance IDs. Instance 0 carries BT4 legacy advertisements (one 25-byte ODID message each, the
@@ -112,6 +117,7 @@ bool SetAdvODIDPayload(uint8_t instance, const uint8_t* odid, uint16_t odid_len,
     }
     // ble_gap_ext_adv_set_data consumes the mbuf (frees it) whether it succeeds or fails.
     int rc = ble_gap_ext_adv_set_data(instance, om);
+    if (rc == 0) d_set_ok++; else d_set_fail++;
     if (rc != 0) {
         CONSOLE_ERROR("remote_id_ble", "ble_gap_ext_adv_set_data(%u) failed, rc=%d.", instance, rc);
         return false;
@@ -138,6 +144,7 @@ bool ConfigureAdvInstance(uint8_t instance, bool legacy) {
 
     int8_t selected_tx_power = 0;
     int rc = ble_gap_ext_adv_configure(instance, &params, &selected_tx_power, nullptr, nullptr);
+    if (rc != 0) d_cfg_fail++;
     if (rc != 0) {
         CONSOLE_ERROR("remote_id_ble", "ble_gap_ext_adv_configure(%u, legacy=%d) failed, rc=%d.", instance,
                       (int)legacy, rc);
@@ -153,6 +160,8 @@ bool ReloadAdvInstance(uint8_t instance, const uint8_t* odid, uint16_t odid_len,
     if (!SetAdvODIDPayload(instance, odid, odid_len, transport)) return false;
     if (ble_gap_ext_adv_active(instance)) return true;
     int rc = ble_gap_ext_adv_start(instance, /*duration=*/0, /*max_events=*/0);
+    d_start++;
+    if (rc != 0) d_start_fail++;
     if (rc != 0) {
         CONSOLE_ERROR("remote_id_ble", "ble_gap_ext_adv_start(%u) failed, rc=%d.", instance, rc);
         return false;
@@ -253,7 +262,10 @@ int GapEventHandler(struct ble_gap_event* event, void* arg) {
             RawRemoteIDPacket::Transport transport = (d->sec_phy == BLE_HCI_LE_PHY_CODED)
                                                          ? RawRemoteIDPacket::kTransportBT5LongRange
                                                          : RawRemoteIDPacket::kTransportBT4Legacy;
-            ParseAndForward(d->data, d->length_data, d->addr.val, d->rssi, transport);
+            if (ParseAndForward(d->data, d->length_data, d->addr.val, d->rssi, transport)) {
+                d_rid++;
+                if (transport == RawRemoteIDPacket::kTransportBT5LongRange) d_rid_cod++; else d_rid_leg++;
+            }
             return 0;
         }
         default:
@@ -288,6 +300,8 @@ void StartExtDiscovery() {
 }
 
 void OnHostReset(int reason) {
+    d_resets++;
+    d_last_reset_reason = reason;
     if (s_scan_watchdog_reset.exchange(false)) return;
     CONSOLE_WARNING("remote_id_ble", "Bluetooth host reset, reason=%d.", reason);
 }
@@ -297,6 +311,7 @@ void OnHostSync() {
     // host finished syncing, so both are (re)applied here. After a host reset the controller has lost its scan and
     // advertising sets (NimBLE still marks the sets configured), so everything is set up again.
     s_tx_host_ready = true;
+    d_syncs++;
     s_scanning = false;
     s_tx_legacy_configured = false;
     s_tx_coded_configured = false;
@@ -422,6 +437,21 @@ void RemoteIDManager::BLETxServiceTick() {
 
 void RemoteIDManager::BLEServiceScanWatchdog() {
     uint32_t now_ms = get_time_since_boot_ms();
+    if (s_ble_initialized && now_ms - d_last_ms >= 10000) {
+        d_last_ms = now_ms;
+        CONSOLE_INFO("t0756diag",
+                     "rep=%lu rid=%lu/%lu/%lu scan=%d starts=%lu sd=%lu/%lu advst=%lu/%lu cfgf=%lu act=%d/%d "
+                     "want=%d/%d rst=%lu/%lu syn=%lu sync=%d heap=%lu",
+                     (unsigned long)s_num_scan_reports.load(), (unsigned long)d_rid.load(),
+                     (unsigned long)d_rid_leg.load(), (unsigned long)d_rid_cod.load(), (int)s_scanning,
+                     (unsigned long)s_num_scan_starts.load(), (unsigned long)d_set_ok.load(),
+                     (unsigned long)d_set_fail.load(), (unsigned long)d_start.load(), (unsigned long)d_start_fail.load(),
+                     (unsigned long)d_cfg_fail.load(), (int)ble_gap_ext_adv_active(kAdvInstanceLegacy),
+                     (int)ble_gap_ext_adv_active(kAdvInstanceCoded), (int)s_tx_legacy_want, (int)s_tx_coded_want,
+                     (unsigned long)d_resets.load(), (unsigned long)d_last_reset_reason.load(),
+                     (unsigned long)d_syncs.load(), (int)ble_hs_synced(),
+                     (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    }
     if (now_ms - s_last_scan_watchdog_ms < 1000) return;
     s_last_scan_watchdog_ms = now_ms;
     if (!ble_running_ || !s_scanning || !ble_hs_synced()) return;
