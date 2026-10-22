@@ -349,6 +349,17 @@ TEST_F(BitErrorCorrection, AddressParitySearchesPauseUnderLoad) {
     EXPECT_TRUE(Ingest(reply));
 }
 
+// A limit (e.g. one search per main loop pass on the ADSBee 1421) holds until the next call.
+TEST_F(BitErrorCorrection, AddressParitySearchesKeepToTheLimit) {
+    RawModeSPacket reply = Flip(Raw(kAltitudeReply), {9});
+    dictionary.LimitAddressParityCorrection(1);
+    EXPECT_TRUE(Ingest(reply));
+    EXPECT_FALSE(Ingest(reply));
+    EXPECT_EQ(Metrics().corrected_frames[AircraftDictionary::kCorrectionSkipped], 1);
+    dictionary.LimitAddressParityCorrection(1);
+    EXPECT_TRUE(Ingest(reply));
+}
+
 TEST_F(BitErrorCorrection, AddressParityCorrectionCanBeTurnedOff) {
     dictionary.SetAddressParityCorrection(false);
     EXPECT_FALSE(Ingest(Flip(Raw(kAltitudeReply), {9})));

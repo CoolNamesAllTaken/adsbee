@@ -106,6 +106,9 @@ class ADSBee {
     AircraftDictionary aircraft_dictionary;
     // Packets waiting (decoded and raw) at which address parity searches are skipped, as on the ADSBee 1090.
     static constexpr uint16_t kMaxBacklogForAddressParityCorrection = 64;
+    // A search checks every tracked aircraft, so one main loop pass makes at most this many and the LR2021 FIFO keeps
+    // being drained.
+    static constexpr uint16_t kMaxAddressParityCorrectionsPerPass = 1;
     // Bit error corrections by AircraftDictionary::CorrectionKind, reported and reset via AT+RX_STATS.
     uint32_t corrected_frames[AircraftDictionary::kNumCorrectionKinds] = {0};
 
@@ -130,6 +133,7 @@ class ADSBee {
     uint32_t loop_count = 0;
     // Main loop cycles spent in the 1090 path (adsbee.Update() and packet_decoder.Update()).
     uint64_t rx1090_total_cycles = 0;
+    uint32_t ingest_max_cycles = 0;  // Longest aircraft dictionary ingestion of one Mode S packet (searches included).
 
     // Longest single super-loop iteration observed, in microseconds. Reported and reset via AT+RX_STATS. Every
     // millisecond spent in one iteration is a millisecond the LR2021 FIFO isn't drained and AT commands aren't

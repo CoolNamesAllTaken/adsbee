@@ -1878,12 +1878,15 @@ bool AircraftDictionary::CorrectAddressParityPacket(DecodedModeSPacket& packet) 
     if (!has_altitude && !has_squawk) {
         return false;  // DF=11 replies carry nothing to check.
     }
-    if (address_parity_correction_paused_ ||
+    if (address_parity_correction_budget_ == 0 ||
         address_parity_correction_attempts_ >= kMaxAddressParityCorrectionAttemptsPerUpdate) {
         metrics_counter_.corrected_frames[kCorrectionSkipped]++;
         return false;  // Bounds the time spent searching.
     }
     address_parity_correction_attempts_++;
+    if (address_parity_correction_budget_ != kUnlimitedAddressParityCorrections) {
+        address_parity_correction_budget_--;
+    }
     uint16_t len_bits = packet.raw.buffer_len_bytes * kBitsPerByte;
     uint32_t now_ms = get_time_since_boot_ms();
 

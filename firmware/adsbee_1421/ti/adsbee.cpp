@@ -668,9 +668,11 @@ void ADSBee::IngestAndForwardPackets() {
     // Explicitly count the number of packets to process so that we don't get stuck in this loop if the decoder
     // keeps outputting packets.
     uint16_t num_decoded_mode_s_packets = packet_decoder.decoded_mode_s_packet_out_queue.Length();
-    aircraft_dictionary.PauseAddressParityCorrection(num_decoded_mode_s_packets +
-                                                         packet_decoder.raw_mode_s_packet_queue.Length() >=
-                                                     kMaxBacklogForAddressParityCorrection);
+    aircraft_dictionary.LimitAddressParityCorrection(
+        num_decoded_mode_s_packets + packet_decoder.raw_mode_s_packet_queue.Length() >=
+                kMaxBacklogForAddressParityCorrection
+            ? 0
+            : kMaxAddressParityCorrectionsPerPass);
     aircraft_dictionary.RecordSkippedCorrections(packet_decoder.two_bit_corrections_skipped);
     packet_decoder.two_bit_corrections_skipped = 0;
     for (uint16_t i = 0;
@@ -680,7 +682,11 @@ void ADSBee::IngestAndForwardPackets() {
         // decoded_packet.downlink_format,
         //              decoded_packet.icao_address);
 
-        if (aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
+        const uint32_t ingest_start_cycles = CycleCounter::Now();
+        const bool ingested = aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet);
+        const uint32_t ingest_cycles = CycleCounter::Since(ingest_start_cycles);
+        if (ingest_cycles > ingest_max_cycles) ingest_max_cycles = ingest_cycles;
+        if (ingested) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             leds.FlashLED(bsp.k1090LEDPin, 10);
             // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\taircraft_dictionary: %d aircraft",
