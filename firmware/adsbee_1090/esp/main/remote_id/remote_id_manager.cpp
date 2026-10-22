@@ -340,5 +340,6 @@ void RemoteIDManager::Update() {
         WiFiSnifferServiceHopper();
     }
     ServiceTxTick();
+    BLEServiceScanWatchdog();
     object_dictionary.device_status.remote_id_status = status_;
 }

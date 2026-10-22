@@ -18,8 +18,10 @@
 
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BT_NIMBLE_ENABLED)
 
+#include <atomic>
 #include <cstring>
 
+#include "ble_scan_watchdog.hh"
 #include "comms.hh"  // Logging.
 #include "hal.hh"    // get_time_since_boot_ms.
 #include "host/ble_gap.h"
@@ -43,6 +45,13 @@ bool s_ble_initialized = false;
 bool s_scanning = false;
 bool s_want_coded = false;
 bool s_scan_want = false;  // Receive scanning requested (may be pending until the host syncs).
+// Advertising reports received and scan starts, counted on the host task for the scan watchdog on the main task.
+std::atomic<uint32_t> s_num_scan_reports = 0;
+std::atomic<uint32_t> s_num_scan_starts = 0;
+uint32_t s_watched_scan_starts = 0;
+uint32_t s_last_scan_watchdog_ms = 0;
+BLEScanWatchdog s_scan_watchdog;
+std::atomic<bool> s_scan_watchdog_reset = false;  // The next host reset is the watchdog's, already logged.
 
 // --- Transmit state ---------------------------------------------------------------------------------------------
 // Extended advertising instance IDs. Instance 0 carries BT4 legacy advertisements (one 25-byte ODID message each, the
@@ -238,6 +247,7 @@ bool ParseAndForward(const uint8_t* adv_data, uint8_t adv_len, const uint8_t* ma
 int GapEventHandler(struct ble_gap_event* event, void* arg) {
     switch (event->type) {
         case BLE_GAP_EVENT_EXT_DISC: {
+            s_num_scan_reports++;
             const struct ble_gap_ext_disc_desc* d = &event->ext_disc;
             // Coded PHY (secondary) indicates a BT5 Long Range advertisement.
             RawRemoteIDPacket::Transport transport = (d->sec_phy == BLE_HCI_LE_PHY_CODED)
@@ -273,10 +283,12 @@ void StartExtDiscovery() {
         s_scanning = false;
     } else {
         s_scanning = true;
+        s_num_scan_starts++;
     }
 }
 
 void OnHostReset(int reason) {
+    if (s_scan_watchdog_reset.exchange(false)) return;
     CONSOLE_WARNING("remote_id_ble", "Bluetooth host reset, reason=%d.", reason);
 }
 
@@ -408,6 +420,27 @@ void RemoteIDManager::BLETxServiceTick() {
     BLETxUpdateStatus();
 }
 
+void RemoteIDManager::BLEServiceScanWatchdog() {
+    uint32_t now_ms = get_time_since_boot_ms();
+    if (now_ms - s_last_scan_watchdog_ms < 1000) return;
+    s_last_scan_watchdog_ms = now_ms;
+    if (!ble_running_ || !s_scanning || !ble_hs_synced()) return;
+
+    const uint32_t num_reports = s_num_scan_reports;
+    const uint32_t num_starts = s_num_scan_starts;
+    if (num_starts != s_watched_scan_starts) {
+        s_watched_scan_starts = num_starts;
+        s_scan_watchdog.Restart(num_reports, now_ms);
+        return;
+    }
+    if (!s_scan_watchdog.Update(num_reports, now_ms)) return;
+    // Resets the controller and syncs again; OnHostSync() restarts scanning and advertising.
+    CONSOLE_INFO("remote_id_ble", "Bluetooth scan stalled, resetting the controller.");
+    s_scan_watchdog_reset = true;
+    ble_hs_sched_reset(BLE_HS_ECONTROLLER);
+    s_scan_watchdog.Restart(num_reports, now_ms);
+}
+
 void RemoteIDManager::BLEReleaseIfIdle() {
     if (!s_ble_initialized || ble_running_ || ble_tx_legacy_running_ || ble_tx_coded_running_) return;
     // Stops the host task and frees the host and controller, which hold most of the Remote ID RAM.
@@ -440,6 +473,7 @@ void RemoteIDManager::BLETxStop() {}
 void RemoteIDManager::BLEReleaseIfIdle() {}
 void RemoteIDManager::BLETxServiceTick() {}
 void RemoteIDManager::BLETxUpdateStatus() {}
+void RemoteIDManager::BLEServiceScanWatchdog() {}
 bool RemoteIDManager::BluetoothIsSupported() { return false; }
 
 #endif  // CONFIG_BT_ENABLED && CONFIG_BT_NIMBLE_ENABLED
