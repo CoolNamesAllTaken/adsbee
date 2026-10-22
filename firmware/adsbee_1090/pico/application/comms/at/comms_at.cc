@@ -1572,6 +1572,7 @@ CPP_AT_CALLBACK(CommsManager::ATASTERIXSACSICCallback) {
             }
             settings_manager.settings.asterix_sac = static_cast<uint8_t>(sac);
             settings_manager.settings.asterix_sic = static_cast<uint8_t>(sic);
+            settings_manager.SyncToCoprocessors();  // The ESP32 encodes ASTERIX for feeds.
             CPP_AT_SUCCESS();
             break;
     }
@@ -1596,6 +1597,7 @@ CPP_AT_CALLBACK(CommsManager::ATNTPServerCallback) {
             }
             memset(settings_manager.settings.ntp_server, '\0', sizeof(settings_manager.settings.ntp_server));
             memcpy(settings_manager.settings.ntp_server, args[0].data(), args[0].size());
+            settings_manager.SyncToCoprocessors();  // The ESP32 runs the NTP client.
             CPP_AT_SUCCESS();
             break;
         }
@@ -1800,6 +1802,7 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolOutCallback) {
 
             // Assign the selected protocol to the selected interface.
             settings_manager.settings.reporting_protocols[selected_iface] = selected_protocol;
+            settings_manager.SyncToCoprocessors();  // The ESP32 starts NTP when any output uses ASTERIX.
             CPP_AT_SUCCESS();
             break;
     }
