@@ -175,6 +175,8 @@ Release tags are `<product>-M.m.p-rcN` or `<product>-M.m.p` (`kFirmwareVersionRe
 `adsbee_1090-0.9.1-rc3`, `adsbee_1421-0.3.10`. Pushing one runs `.github/workflows/release.yml`, which builds that
 product and drafts a GitHub release (see [Releases](README.md#releases)).
 
+Before a release tag, run [RELEASE_TESTING.md](RELEASE_TESTING.md) (per-product checklists, bench rules, Remote ID cases).
+
 ### Release notes: pictures and graphs
 Add pictures and graphs to the release notes where they help.
 - Show users what is new (a screenshot cropped to the feature) or how performance differs from the previous
