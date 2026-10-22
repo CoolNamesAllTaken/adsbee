@@ -515,10 +515,28 @@ void ADSBee::FeedWatchdog() {
 bool ADSBee::Update() {
     FeedWatchdog();
     UpdateLR2021();
+    UpdateReceiverLoad();
     PruneAircraftDictionary();
     UpdateRxPosition();
     IngestAndForwardPackets();
     return true;
+}
+
+void ADSBee::UpdateReceiverLoad() {
+    const uint32_t irq_drains = lr2021.irq_drain_count;
+    if (irq_drains != load_window_start_irq_drains_) {
+        packet_decoder.receiver_busy = true;  // Frames are queued in the LR2021 FIFO.
+    }
+    // The cycle counter is a register read; the millisecond clock costs too much for every pass.
+    if (CycleCounter::Since(load_window_start_cycles_) < kLoadWindowMs * (CycleCounter::kCpuHz / 1000)) {
+        return;
+    }
+    packet_decoder.receiver_busy =
+        mode_s_frames_parsed_ - load_window_start_frames_ >= kMaxFramesPerLoadWindowForCorrection ||
+        irq_drains != load_window_start_irq_drains_;
+    load_window_start_cycles_ = CycleCounter::Now();
+    load_window_start_frames_ = mode_s_frames_parsed_;
+    load_window_start_irq_drains_ = irq_drains;
 }
 
 void ADSBee::UpdateRxPosition() {
@@ -669,8 +687,8 @@ void ADSBee::IngestAndForwardPackets() {
     // keeps outputting packets.
     uint16_t num_decoded_mode_s_packets = packet_decoder.decoded_mode_s_packet_out_queue.Length();
     aircraft_dictionary.LimitAddressParityCorrection(
-        num_decoded_mode_s_packets + packet_decoder.raw_mode_s_packet_queue.Length() >=
-                kMaxBacklogForAddressParityCorrection
+        packet_decoder.receiver_busy || num_decoded_mode_s_packets + packet_decoder.raw_mode_s_packet_queue.Length() >=
+                                            kMaxBacklogForAddressParityCorrection
             ? 0
             : kMaxAddressParityCorrectionsPerPass);
     aircraft_dictionary.RecordSkippedCorrections(packet_decoder.two_bit_corrections_skipped);
@@ -968,6 +986,7 @@ void ADSBee::ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes, uin
             raw_packet.no_mlat_timestamp = false;
         }
         lr2021_frames_since_valid_++;  // Zeroed on any valid decode; feeds the validity watchdog.
+        mode_s_frames_parsed_++;
         // Record demod + raw frame metrics (valid frames are recorded during dictionary
         // ingestion). All LR2021 captures are 112-bit extended-squitter-length frames.
         aircraft_dictionary.Record1090Demod();

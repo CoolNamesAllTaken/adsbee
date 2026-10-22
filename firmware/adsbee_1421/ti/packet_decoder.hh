@@ -9,6 +9,9 @@ class PacketDecoder {
     static constexpr uint16_t kDecodedModeSPacketQueueDepth = 100;
     // Raw packets waiting at which 2 bit searches are skipped, as on the ADSBee 1090.
     static constexpr uint16_t kMaxBacklogForTwoBitCorrection = 4;
+    // Set by ADSBee while the receiver is busy (see ADSBee::kMaxFramesPerLoadWindowForCorrection): 2 bit searches are
+    // skipped.
+    bool receiver_busy = false;
 
     PacketDecoder();
 

@@ -156,7 +156,7 @@ TEST_F(PacketDecoderTest, CorrectsTwoBitErrorsOutsideTheDFField) {
     EXPECT_EQ(decoder->bitflips_fixed_count, 0u);
 }
 
-// Two bit searches are skipped while raw packets wait, and counted. One bit fixes still happen.
+// Two bit searches are skipped while raw packets wait or the receiver is busy, and counted. One bit fixes still happen.
 TEST_F(PacketDecoderTest, SkipsTwoBitSearchesWhenBehind) {
     std::mt19937 rng(3);
     const RawModeSPacket frame = MakeCapture(17, rng);
@@ -176,6 +176,10 @@ TEST_F(PacketDecoderTest, SkipsTwoBitSearchesWhenBehind) {
     EXPECT_TRUE(out.is_valid);
     EXPECT_EQ(decoder->two_bit_corrections_skipped, 1u);
     EXPECT_EQ(decoder->two_bit_fixed_count, 1u);
+
+    decoder->receiver_busy = true;
+    EXPECT_EQ(Decode(FlipBit(FlipBit(frame, 40), 90), false, out), 0);
+    EXPECT_EQ(decoder->two_bit_corrections_skipped, 2u);
 }
 
 // Other 112 bit formats are never corrected, with two bit errors either.

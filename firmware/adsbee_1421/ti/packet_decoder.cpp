@@ -88,7 +88,7 @@ void PacketDecoder::DecodeOne(RawModeSPacket& raw_packet, bool df17_mode) {
         decoded_mode_s_packet_out_queue.Enqueue(decoded_packet);
     } else if (decoded_packet.IsSingleBitCorrectable() &&
                ModeSBitErrors::MayBeOneOrTwoBitError(decoded_packet.crc_syndrome) &&
-               raw_mode_s_packet_queue.Length() >= kMaxBacklogForTwoBitCorrection) {
+               (receiver_busy || raw_mode_s_packet_queue.Length() >= kMaxBacklogForTwoBitCorrection)) {
         two_bit_corrections_skipped++;  // Behind: leave the time to valid frames.
     } else if (decoded_packet.CorrectTwoBitError()) {
         two_bit_fixed_count++;
