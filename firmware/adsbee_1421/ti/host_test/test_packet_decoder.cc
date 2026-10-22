@@ -1,5 +1,5 @@
-// ADSBee 1421 PacketDecoder: single-bit correction (the rule itself is tested in the ADSBee 1090 host tests) and
-// forwarding of address-parity frames.
+// ADSBee 1421 PacketDecoder: one and two bit correction and forwarding of address-parity frames. The aircraft
+// dictionary's track checks for corrected frames are shared with the ADSBee 1090 and tested in its host tests.
 #include <cstring>
 #include <memory>
 #include <random>
@@ -77,6 +77,7 @@ TEST_F(PacketDecoderTest, CorrectsDF17AndDF18OutsideTheDFField) {
                     ASSERT_EQ(num_out, 1) << "DF " << df << " bit " << i << " df17_mode " << df17_mode;
                     EXPECT_EQ(decoder->bitflips_fixed_count, fixed_before + 1) << "DF " << df << " bit " << i;
                     EXPECT_TRUE(out.is_valid) << "DF " << df << " bit " << i;
+                    EXPECT_EQ(out.num_corrected_bits, 1) << "DF " << df << " bit " << i;
                     EXPECT_TRUE(SameBuffer(out.raw, frame)) << "DF " << df << " bit " << i;
                 }
             }
@@ -125,4 +126,71 @@ TEST_F(PacketDecoderTest, ForwardsAddressParityFramesUnchanged) {
         }
     }
     EXPECT_EQ(decoder->bitflips_fixed_count, 0u);
+}
+
+// DF 17/18: every two bit error outside the DF field is corrected and marked for the dictionary's track check.
+TEST_F(PacketDecoderTest, CorrectsTwoBitErrorsOutsideTheDFField) {
+    std::mt19937 rng(2);
+    for (uint16_t df : {17, 18}) {
+        const RawModeSPacket frame = MakeCapture(df, rng);
+        for (uint16_t i = 0; i < RawModeSPacket::kExtendedSquitterPacketLenBits; i++) {
+            for (uint16_t j = i + 1; j < RawModeSPacket::kExtendedSquitterPacketLenBits; j++) {
+                DecodedModeSPacket out;
+                const int num_out = Decode(FlipBit(FlipBit(frame, i), j), false, out);
+                if (i < DecodedModeSPacket::kDFNumBits) {
+                    // Errors in the DF field are never corrected.
+                    if (num_out > 0) {
+                        EXPECT_FALSE(out.is_valid) << "DF " << df << " bits " << i << ", " << j;
+                    }
+                    continue;
+                }
+                ASSERT_EQ(num_out, 1) << "DF " << df << " bits " << i << ", " << j;
+                EXPECT_TRUE(out.is_valid) << "DF " << df << " bits " << i << ", " << j;
+                EXPECT_EQ(out.num_corrected_bits, 2) << "DF " << df << " bits " << i << ", " << j;
+                EXPECT_TRUE(SameBuffer(out.raw, frame)) << "DF " << df << " bits " << i << ", " << j;
+            }
+        }
+    }
+    const uint32_t num_pairs = (112 - 5) * (112 - 6) / 2;
+    EXPECT_EQ(decoder->two_bit_fixed_count, 2 * num_pairs);
+    EXPECT_EQ(decoder->bitflips_fixed_count, 0u);
+}
+
+// Two bit searches are skipped while raw packets wait or the receiver is busy, and counted. One bit fixes still happen.
+TEST_F(PacketDecoderTest, SkipsTwoBitSearchesWhenBehind) {
+    std::mt19937 rng(3);
+    const RawModeSPacket frame = MakeCapture(17, rng);
+    for (uint16_t i = 0; i < PacketDecoder::kMaxBacklogForTwoBitCorrection; i++) {
+        decoder->raw_mode_s_packet_queue.Enqueue(frame);
+    }
+    DecodedModeSPacket out;
+    EXPECT_EQ(Decode(FlipBit(FlipBit(frame, 40), 90), false, out), 0);
+    EXPECT_EQ(decoder->two_bit_corrections_skipped, 1u);
+    EXPECT_EQ(decoder->two_bit_fixed_count, 0u);
+    ASSERT_EQ(Decode(FlipBit(frame, 40), false, out), 1);
+    EXPECT_TRUE(out.is_valid);
+
+    RawModeSPacket waiting;
+    decoder->raw_mode_s_packet_queue.Dequeue(waiting);  // Now below the limit.
+    ASSERT_EQ(Decode(FlipBit(FlipBit(frame, 40), 90), false, out), 1);
+    EXPECT_TRUE(out.is_valid);
+    EXPECT_EQ(decoder->two_bit_corrections_skipped, 1u);
+    EXPECT_EQ(decoder->two_bit_fixed_count, 1u);
+
+    decoder->receiver_busy = true;
+    EXPECT_EQ(Decode(FlipBit(FlipBit(frame, 40), 90), false, out), 0);
+    EXPECT_EQ(decoder->two_bit_corrections_skipped, 2u);
+}
+
+// Other 112 bit formats are never corrected, with two bit errors either.
+TEST_F(PacketDecoderTest, DropsOtherExtendedFormatsWithTwoBitErrors) {
+    std::mt19937 rng(22);
+    for (uint16_t df : {19, 22, 24}) {
+        const RawModeSPacket frame = MakeCapture(df, rng);
+        for (uint16_t i = DecodedModeSPacket::kDFNumBits; i < RawModeSPacket::kExtendedSquitterPacketLenBits; i += 7) {
+            DecodedModeSPacket out;
+            EXPECT_EQ(Decode(FlipBit(FlipBit(frame, i), 111 - i / 2), false, out), 0) << "DF " << df << " bit " << i;
+        }
+    }
+    EXPECT_EQ(decoder->two_bit_fixed_count, 0u);
 }

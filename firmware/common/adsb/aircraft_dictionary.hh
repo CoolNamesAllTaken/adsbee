@@ -1104,7 +1104,11 @@ class AircraftDictionary {
 
     inline void SetAddressParityCorrection(bool enable) { config_.enable_address_parity_correction = enable; }
     // While paused (e.g. a backlog of decoded packets), address parity searches are skipped.
-    inline void PauseAddressParityCorrection(bool paused) { address_parity_correction_paused_ = paused; }
+    inline void PauseAddressParityCorrection(bool paused) {
+        address_parity_correction_budget_ = paused ? 0 : kUnlimitedAddressParityCorrections;
+    }
+    // Allows at most num address parity searches until the next call, e.g. one per main loop pass on a single core.
+    inline void LimitAddressParityCorrection(uint16_t num) { address_parity_correction_budget_ = num; }
     // Counts searches skipped elsewhere, e.g. the decoder's 2 bit searches.
     inline void RecordSkippedCorrections(uint32_t num) { metrics_counter_.corrected_frames[kCorrectionSkipped] += num; }
 
@@ -1580,7 +1584,6 @@ class AircraftDictionary {
 
     // Helper functions for ingesting specific ADS-B packet types, called by IngestModeSADSBPacket.
 
-#ifndef ON_TI  // The 1421 corrects in its own decoder.
     /**
      * Whether an extended squitter with corrected bits may update the dictionary: its aircraft must be tracked, a one
      * bit correction must not disagree with the track, and a two bit correction must agree with it.
@@ -1601,13 +1604,11 @@ class AircraftDictionary {
      */
     bool CorrectAddressParityPacket(DecodedModeSPacket& packet);
 
-#endif
-
     AircraftDictionaryConfig config_;
     uint16_t address_parity_correction_attempts_ = 0;  // Since the last update.
-    bool address_parity_correction_paused_ = false;
+    static constexpr uint16_t kUnlimitedAddressParityCorrections = UINT16_MAX;
+    uint16_t address_parity_correction_budget_ = kUnlimitedAddressParityCorrections;  // Searches until the next limit.
 
-#ifndef ON_TI
     // Uncorrected addresses of recent replies that a fix in the address parity field would have matched.
     static constexpr uint16_t kAddressParityFieldNumBits = 24;
     static constexpr uint16_t kRecentAddressSlotBits = 7;
@@ -1624,7 +1625,6 @@ class AircraftDictionary {
      * kRecentAddressWindowMs.
      */
     bool RepeatsAsUncorrectedAddress(uint32_t address, uint32_t now_ms);
-#endif
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;

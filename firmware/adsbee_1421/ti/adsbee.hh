@@ -104,6 +104,17 @@ class ADSBee {
 
     LR2021 lr2021;
     AircraftDictionary aircraft_dictionary;
+    // Packets waiting (decoded and raw) at which address parity searches are skipped, as on the ADSBee 1090.
+    static constexpr uint16_t kMaxBacklogForAddressParityCorrection = 64;
+    // A search checks every tracked aircraft, so one main loop pass makes at most this many and the LR2021 FIFO keeps
+    // being drained.
+    static constexpr uint16_t kMaxAddressParityCorrectionsPerPass = 1;
+    // Bit error searches pause for kBusyReads FIFO reads with frames after a read that found this many queued (an
+    // IRQ-paced drain reads 9): their CPU time would otherwise leave the FIFO to the IRQ-paced drain.
+    static constexpr uint16_t kMinQueuedPacketsForBusy = 6;
+    static constexpr uint16_t kBusyReads = 64;
+    // Bit error corrections by AircraftDictionary::CorrectionKind, reported and reset via AT+RX_STATS.
+    uint32_t corrected_frames[AircraftDictionary::kNumCorrectionKinds] = {0};
 
     // Health / diagnostics counter, reported and reset via AT+RX_STATS. Incremented when the LR2021
     // RX FIFO reads back completely full (the poll loop fell behind; frames were likely dropped).
@@ -280,6 +291,7 @@ class ADSBee {
     }
     uint32_t last_drain_error_log_ms_ = 0;  // Rate-limits the drain-failure CONSOLE_ERROR (1/s).
     uint32_t lr2021_frames_since_valid_ = 0;  // Parsed frames since the last CRC-valid decode (watchdog input).
+    uint16_t busy_reads_left_ = 0;  // FIFO reads with frames until bit error searches resume.
 };
 
 extern ADSBee adsbee;
