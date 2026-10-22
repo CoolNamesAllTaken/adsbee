@@ -210,7 +210,7 @@ int16_t DecodedModeSPacket::CorrectSingleBitError() {
 }
 
 bool DecodedModeSPacket::CorrectTwoBitError() {
-    if (!IsSingleBitCorrectable()) {
+    if (!IsSingleBitCorrectable() || !ModeSBitErrors::MayBeOneOrTwoBitError(crc_syndrome)) {
         return false;
     }
     uint16_t bits[2];
