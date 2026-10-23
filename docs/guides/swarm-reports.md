@@ -1,6 +1,6 @@
 # Swarm Reports
 
-An ADSBee 1090 can report to a swarm server once an hour: range per direction and altitude, message and aircraft counts, and its firmware versions. The server shows range maps and status for all your receivers. Off by default.
+An ADSBee 1090 can report to a swarm server once an hour: range per direction and altitude for Mode S, UAT and Remote ID, message and aircraft counts, and its firmware versions. The server shows range maps and status for all your receivers. Off by default.
 
 ## Turn on
 
@@ -26,8 +26,16 @@ A self-hosted server works the same: give its URL as `server`.
 * Unique ID, ESP32 MAC address, firmware versions, the Automatic Updates setting, uptime.
 * Receiver position, only when its source is `FIXED` (not 0, 0) or `GNSS` with a fix.
 * Per period: valid Mode S, extended squitter and UAT messages, most and distinct aircraft.
-* Range: farthest aircraft per 10° sector and altitude band, in 2 km steps. Only with that position, and only for aircraft heard directly (no TIS-B or ADS-R) with 2 consistent position decodes.
-  Positions beyond the radio horizon of their altitude band are dropped and counted. If 10% or more of an hour's positions, from 5 or more aircraft, are dropped, that hour's range is withheld and the server shows "check position". This catches gross errors of about 200 km or more (a sign flip, a wrong country), not a position that is only somewhat off.
+* Range per protocol: the farthest position per 10° sector and height band. Only with that position, only for positions heard directly (no TIS-B or ADS-R), each after 2 position decodes.
+
+  | Map | From | Bands | Step |
+  |---|---|---|---|
+  | `mode_s` | 1090 MHz ADS-B | Altitude (baro, else GNSS): 0, 1k, 2k, 4k, 6k, 10k, 15k, 20k, 25k, 30k, 35k, 40k+ ft | 2 km |
+  | `uat` | 978 MHz UAT ADS-B | Same as `mode_s` | 2 km |
+  | `remote_id` | Remote ID drones | Height above the receiver (GNSS): 0, 100, 200, 300, 400, 500, 700, 1k, 1.5k, 2k, 3k, 5k+ ft | 50 m, up to 12.75 km |
+
+  A protocol with nothing heard in the period is left out.
+  Positions beyond the radio horizon of their band are dropped and counted. If 10% or more of an hour's positions, from 5 or more aircraft or drones, are dropped, that hour's range is withheld and the server shows "check position". This catches gross errors of about 200 km or more (a sign flip, a wrong country), not a position that is only somewhat off.
 * OTA keys, to adsbee.aero only (to verify the unit is genuine).
 
 Needs WiFi station or Ethernet. The first report goes 2-5 minutes after power-up, turning it on, or changing the server or token. A failed report is retried after 1, 2, 4, ... minutes (up to the report period, longer if the server asks) and merged into the next one, so no period is lost.

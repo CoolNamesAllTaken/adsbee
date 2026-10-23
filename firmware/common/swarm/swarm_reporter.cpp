@@ -218,16 +218,26 @@ size_t SwarmReporter::BuildBody(char* buf, size_t buf_size, const AutoUpdatePlat
     } else if (pending_.RangeImplausible()) {
         w.Printf(",\"range_withheld\":\"implausible\",\"range_dropped\":%lu", (unsigned long)pending_.guard.num_dropped);
     } else {
-        w.Printf(",\"range_dropped\":%lu", (unsigned long)pending_.guard.num_dropped);
+        w.Printf(",\"range_dropped\":%lu,\"ranges\":{", (unsigned long)pending_.guard.num_dropped);
+        // One map per protocol with data; none at all gives an empty object.
         uint8_t bitmap[RangeMap::kBitmapLenBytes];
         uint8_t values[RangeMap::kNumBins];
-        uint16_t num_values = pending_.range.Encode(bitmap, values);
-        w.Printf(",\"range\":{\"sectors\":%u,\"bands\":%u,\"unit_m\":%lu,\"changed\":\"", RangeMap::kNumSectors,
-                 RangeMap::kNumBands, (unsigned long)RangeMap::kUnitMeters);
-        if (char* tail = w.Tail(4 * ((sizeof(bitmap) + 2) / 3))) w.Advance(Base64Encode(bitmap, sizeof(bitmap), tail));
-        w.Printf("\",\"max\":\"");
-        if (char* tail = w.Tail(4 * ((num_values + 2) / 3))) w.Advance(Base64Encode(values, num_values, tail));
-        w.Printf("\"}");
+        bool first = true;
+        for (uint8_t p = 0; p < SwarmRecorder::kNumProtocols; p++) {
+            uint16_t num_values = pending_.ranges[p].Encode(bitmap, values);
+            if (num_values == 0) continue;
+            w.Printf("%s\"%s\":{\"sectors\":%u,\"bands\":%u,\"unit_m\":%lu,\"changed\":\"", first ? "" : ",",
+                     SwarmRecorder::kProtocolNames[p], RangeMap::kNumSectors, RangeMap::kNumBands,
+                     (unsigned long)SwarmRecorder::kProtocolUnitMeters[p]);
+            first = false;
+            if (char* tail = w.Tail(4 * ((sizeof(bitmap) + 2) / 3))) {
+                w.Advance(Base64Encode(bitmap, sizeof(bitmap), tail));
+            }
+            w.Printf("\",\"max\":\"");
+            if (char* tail = w.Tail(4 * ((num_values + 2) / 3))) w.Advance(Base64Encode(values, num_values, tail));
+            w.Printf("\"}");
+        }
+        w.Printf("}");
     }
     w.Printf("}");
     return w.len();

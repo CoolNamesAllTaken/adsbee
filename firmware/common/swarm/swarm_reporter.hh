@@ -26,7 +26,7 @@ class SwarmPlatform {
 };
 
 /**
- * Swarm device protocol v1: one POST {server}/api/swarm/v1/report per period with the range map and counts. A report
+ * Swarm device protocol v1: one POST {server}/api/swarm/v1/report per period with the range maps and counts. A report
  * that fails stays pending with its seq and start; later periods merge into it until the server takes it.
  */
 class SwarmReporter {
@@ -65,7 +65,7 @@ class SwarmReporter {
 
     enum Result : uint8_t { kOK, kNoAnswer, kNoIdentity, kRejected, kRateLimited, kServerError, kRemoved, kBadRequest };
 
-    static constexpr uint16_t kBodyMaxLen = 2048;
+    static constexpr uint16_t kBodyMaxLen = 3072;  // Three full range maps with OTA keys: 2,915 Bytes.
 
     SwarmReporter(SwarmPlatform& platform, const char* version, const Config& config, uint32_t first_seq = 0);
     SwarmReporter(SwarmPlatform& platform, const char* version) : SwarmReporter(platform, version, Config()) {}
