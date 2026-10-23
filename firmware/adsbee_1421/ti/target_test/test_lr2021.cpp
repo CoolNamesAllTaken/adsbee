@@ -504,7 +504,7 @@ UTEST(LR2021, IrqChainQuiescentOnQuietBench) {
     LR2021TestAccessor acc(adsbee.lr2021);
     ASSERT_TRUE(acc.HasValidHandle());
 
-    // With the receiver configured and no (or light) traffic, the RX FIFO sits below the 126-byte
+    // With the receiver configured and no (or light) traffic, the RX FIFO sits below the 154-byte
     // high threshold, so the LR2021's DIO6 IRQ output -> LR_IRQ pin must read low and the chain must
     // be quiescent with no filled staging slots pending beyond what the loop can consume.
     ASSERT_TRUE(adsbee.lr2021.DrainIdle() || true);  // Drain may be mid-loop-sweep; that's fine.

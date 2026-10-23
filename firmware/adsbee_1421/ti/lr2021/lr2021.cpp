@@ -329,7 +329,7 @@ bool LR2021::SetOokADSB(SettingsManager::R1090PreambleMode preamble_mode, uint8_
         }
     }
     // Set up the FIFO. The high threshold doubles as the IRQ-paced drain valve: kIrqRxFifo latches
-    // (and the DIO6 IRQ line rises) only once 9 whole packets have accumulated, i.e. only when the
+    // (and the DIO6 IRQ line rises) only once 11 whole packets have accumulated, i.e. only when the
     // main loop's routine level-read sweep is falling behind. The loop drain does NOT gate on this
     // flag (it reads the level unconditionally), so sub-threshold packets still flow with loop
     // latency.
