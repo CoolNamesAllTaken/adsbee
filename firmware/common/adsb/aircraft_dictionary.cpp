@@ -2654,9 +2654,9 @@ bool AircraftDictionary::IngestRawRemoteIDPacket(const RawRemoteIDPacket& packet
             aircraft->WriteBitFlag(RemoteIDAircraft::kBitFlagHeightValid, true);
         }
     }
-    UpdateDistanceAndBearingIfMoved(*aircraft, position_before,
-                                    uas_data.LocationValid && (uas_data.Location.Latitude != 0.0 ||
-                                                               uas_data.Location.Longitude != 0.0));
+    bool position_message = kSwarmRecording && uas_data.LocationValid &&
+                            (uas_data.Location.Latitude != 0.0 || uas_data.Location.Longitude != 0.0);
+    UpdateDistanceAndBearingIfMoved(*aircraft, position_before, position_message);
 
     // System: operator (pilot) location + operator geometric altitude.
     if (uas_data.SystemValid) {

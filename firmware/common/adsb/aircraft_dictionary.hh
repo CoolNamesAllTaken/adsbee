@@ -894,11 +894,14 @@ class RemoteIDAircraft : public Aircraft {
     uint8_t ua_type = 0;      // ODID_uatype_t: aircraft category (aeroplane, multirotor, helicopter, ...).
     uint8_t operational_status = 0;  // ODID_status_t: 0=undeclared, 1=ground, 2=airborne, 3=emergency, 4=remote-id-fail.
     uint8_t height_type = 0;         // ODID_Height_reference_t: 0=above takeoff, 1=above ground.
-    uint8_t num_position_decodes = 0;  // Location messages with a position in a row, up to 2. Sits in padding.
 
     int8_t last_message_signal_strength_dbm = 0;  // RSSI of the most recent advertisement, in dBm.
     RawRemoteIDPacket::Transport transport = RawRemoteIDPacket::kTransportInvalid;  // Last transport the UA was heard on.
     uint8_t source_mac[6] = {0};  // Transmitter MAC / BLE address the UID was derived from.
+#ifdef SWARM_RECORDING
+    // Location messages with a position in a row, up to 2. Sits in padding; swarm builds only, so others are unchanged.
+    uint8_t num_position_decodes = 0;
+#endif
 
     int32_t height_above_takeoff_ft = 0;  // UA height above takeoff or ground per height_type. Valid iff flag set.
 
