@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 
-from . import conf, queries, rollout as rollouts, services
+from . import conf, queries, ranges, rollout as rollouts, services
 from .api_device import error, limited
 from .models import ApiToken, Device, Rollout
 
@@ -99,6 +99,13 @@ def _window(request) -> tuple[datetime, datetime]:
     if (until - since).days > MAX_WINDOW_DAYS:
         raise services.SwarmError(f'at most {MAX_WINDOW_DAYS} days at a time')
     return since, until
+
+
+def _protocol(request) -> str:
+    protocol = request.GET.get('protocol') or ranges.LEGACY
+    if protocol not in ranges.PROTOCOLS:
+        raise services.SwarmError(f"protocol is {', '.join(ranges.PROTOCOLS)}")
+    return protocol
 
 
 def device_json(device: Device) -> dict:
@@ -194,8 +201,9 @@ def device_restore(request, pk: int):
 
 @user_api('GET')
 def range_map(request):
-    """?device=<id> (repeatable; none: the whole swarm), since, until."""
+    """?device=<id> (repeatable; none: the whole swarm), since, until, protocol."""
     since, until = _window(request)
+    protocol = _protocol(request)
     chosen = _devices(request)
     ids = request.GET.getlist('device')
     if ids:
@@ -205,7 +213,7 @@ def range_map(request):
             raise services.SwarmError('device is an id') from exc
         if chosen.count() != len(set(ids)):
             return error(404, 'not_found')
-    return _json(queries.swarm_range(chosen, since, until))
+    return _json(queries.swarm_range(chosen, since, until, protocol))
 
 
 @user_api('GET')

@@ -38,6 +38,17 @@ def bee():
     return Bee.make(0, seed=7)
 
 
+def save_sample(sample, values=None, protocol='aircraft', unit=2000):
+    """Save `sample` with one range map (none if `values` is empty)."""
+    from adsbee_swarm.models import SampleRange
+    sample.save()
+    if values:
+        row = SampleRange(sample=sample, protocol=protocol, unit_m=unit)
+        row.set_ranges(values)
+        row.save()
+    return sample
+
+
 def post_report(client, token, body, **extra):
     return client.post('/api/swarm/v1/report', data=json.dumps(body), content_type='application/json',
                        HTTP_AUTHORIZATION=f'Bearer {token}', **extra)

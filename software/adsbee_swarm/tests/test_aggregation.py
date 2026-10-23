@@ -6,14 +6,13 @@ from django.utils import timezone
 from adsbee_swarm import queries, ranges
 from adsbee_swarm.models import Device, Sample
 
+from .conftest import save_sample
+
 pytestmark = pytest.mark.django_db
 
 
-def _sample(device, start, values, span=Sample.HOUR, **stats):
-    sample = Sample(device=device, start=start, span_s=span, reports=1, **stats)
-    sample.set_ranges(values)
-    sample.save()
-    return sample
+def _sample(device, start, values, span=Sample.HOUR, protocol='aircraft', **stats):
+    return save_sample(Sample(device=device, start=start, span_s=span, reports=1, **stats), values, protocol)
 
 
 @pytest.fixture

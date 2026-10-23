@@ -6,7 +6,7 @@
 {% endblock %}
 {% block content %}
 <div class="bar"><h1>Bees <small title="Active bees">{{ rows|length }}</small></h1>{% include "adsbee_swarm/_windows.html" %}</div>
-<div id="map" class="map" title="Circles: farthest aircraft heard in the window"></div>
+<div id="map" class="map" title="Circles: farthest {% if protocol == 'remote_id' %}drone{% else %}aircraft{% endif %} heard in the window"></div>
 {{ markers|json_script:"markers" }}
 <script>
 (function () {
@@ -32,7 +32,7 @@
 <table class="list">
 <thead><tr><th title="Label">⚑</th><th title="Unique ID">ID</th><th title="Product">⌂</th><th title="Firmware (RP2040)">⚙</th>
 <th title="Automatic updates (AT+AUTO_UPDATE)">⟳</th><th title="Firmware target from a rollout">⇪</th>
-<th title="Farthest aircraft in the window">↔ km</th><th title="Last report">◷</th></tr></thead>
+<th title="Farthest {% if protocol == 'remote_id' %}drone{% else %}aircraft{% endif %} in the window">↔ km</th><th title="Last report">◷</th></tr></thead>
 <tbody>
 {% for d in rows %}
 <tr>
@@ -42,7 +42,7 @@
   <td class="mono">{{ d.version|default:"?" }}</td>
   <td>{% if d.auto_update %}<span title="On">✔</span>{% else %}<span class="dim" title="Off: targets are not installed">✕</span>{% endif %}</td>
   <td class="mono">{% if d.firmware_target %}{{ d.firmware_target.tag }}{% else %}<span class="dim">—</span>{% endif %}</td>
-  <td>{% if d.max_range_m %}{% widthratio d.max_range_m 1000 1 %}{% else %}<span class="dim">—</span>{% endif %}</td>
+  <td>{% if d.max_range_m %}{% if d.max_range_m < 10000 %}{{ d.max_range_km|floatformat:1 }}{% else %}{% widthratio d.max_range_m 1000 1 %}{% endif %}{% else %}<span class="dim">—</span>{% endif %}</td>
   <td>{% if d.last_dt %}<span class="{% if d.last_dt < stale_before %}dim{% endif %}" title="{{ d.last_dt|date:'c' }}">{{ d.last_dt|date:"M j, H:i" }}</span>{% else %}<span class="dim">never</span>{% endif %}</td>
 </tr>
 {% empty %}

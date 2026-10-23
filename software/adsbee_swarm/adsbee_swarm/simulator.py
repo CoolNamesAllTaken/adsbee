@@ -4,7 +4,9 @@ Simulated bees posting realistic reports, for demos and tests. No Django needed 
     python -m adsbee_swarm.simulator --server http://localhost:8000 --token <enroll token> --bees 4
 
 Range shapes: the radio horizon for each altitude band, 4.12 km * (sqrt(h_rx) + sqrt(h_aircraft)),
-trimmed per bee by a few terrain shadows and the traffic that happens to be up there.
+trimmed per bee by a few terrain shadows and the traffic that happens to be up there. With
+`protocols`, a report carries Mode S, UAT (fewer, lower, shorter) and Remote ID (a few drones,
+up to a few km) maps in `ranges`; without, one mixed `range` as older firmware sends.
 `manage.py swarm_simulate` stores weeks of history at once (no rate limits, past timestamps).
 """
 from __future__ import annotations
@@ -75,7 +77,16 @@ class Bee:
         meters = horizon * self.quality * factor * rng.uniform(.6, 1.0)
         return int(min(meters, 400_000)) if meters > 2000 else None
 
-    def report(self, period_s: int = 3600, rng: random.Random | None = None, unit_m: int = ranges.DEFAULT_UNIT_M) -> dict:
+    def drones_m(self, rng: random.Random) -> dict:
+        """Remote ID: a few drones, mostly below 400 ft above the bee, a few km out at most."""
+        heard = {}
+        for _ in range(rng.randint(0, 6)):
+            band = min(int(rng.expovariate(0.5)), ranges.BANDS - 1)
+            heard[ranges.bin_index(band, rng.randrange(ranges.SECTORS))] = int(rng.uniform(150, 4000) * self.quality)
+        return heard
+
+    def report(self, period_s: int = 3600, rng: random.Random | None = None, unit_m: int = ranges.DEFAULT_UNIT_M,
+               protocols: bool = False) -> dict:
         rng = rng or random.Random()
         start = self.uptime_s
         self.uptime_s += period_s
@@ -86,7 +97,15 @@ class Bee:
                 meters = self.reach_m(band, sector, rng)
                 if meters:
                     heard[ranges.bin_index(band, sector)] = meters
-        changed, maxes = ranges.encode(heard, unit_m)
+        if protocols:
+            # UAT: general aviation, below 18k ft, fewer of them.
+            uat = {i: int(m * rng.uniform(.5, .9)) for i, m in heard.items()
+                   if i // ranges.SECTORS < 7 and rng.random() < .4}
+            maps = {'mode_s': (heard, ranges.DEFAULT_UNIT_M), 'uat': (uat, ranges.DEFAULT_UNIT_M),
+                    'remote_id': (self.drones_m(rng), ranges.PROTOCOLS['remote_id'].unit_m)}
+            range_fields = {'ranges': {name: _wire(values, unit) for name, (values, unit) in maps.items() if values}}
+        else:
+            range_fields = {'range': _wire(heard, unit_m)}
         busy = rng.uniform(.3, 1.2)
         aircraft = int(rng.uniform(20, 90) * busy)
         return {
@@ -98,9 +117,13 @@ class Bee:
             'stats': {'modes_valid': int(aircraft * 900 * busy), 'es_valid': int(aircraft * 400 * busy),
                       'uat_adsb': int(aircraft * 3), 'uat_uplink': rng.randint(0, 600),
                       'aircraft_max': aircraft, 'aircraft_unique': int(aircraft * rng.uniform(2.5, 4))},
-            'range': {'sectors': ranges.SECTORS, 'bands': ranges.BANDS, 'unit_m': unit_m,
-                      'changed': changed, 'max': maxes},
+            **range_fields,
         }
+
+
+def _wire(values: dict, unit_m: int) -> dict:
+    changed, maxes = ranges.encode(values, unit_m)
+    return {'sectors': ranges.SECTORS, 'bands': ranges.BANDS, 'unit_m': unit_m, 'changed': changed, 'max': maxes}
 
 
 def post(server: str, token: str, body: dict) -> tuple[int, dict]:
@@ -121,12 +144,13 @@ def main(argv=None):
     parser.add_argument('--rounds', type=int, default=1, help='reports per bee')
     parser.add_argument('--every', type=float, default=0, help='seconds between rounds')
     parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--legacy', action='store_true', help='one mixed range, as older firmware sends')
     args = parser.parse_args(argv)
     bees = [Bee.make(i, args.seed) for i in range(args.bees)]
     rng = random.Random(args.seed)
     for round_ in range(args.rounds):
         for bee in bees:
-            status, body = post(args.server, args.token, bee.report(rng=rng))
+            status, body = post(args.server, args.token, bee.report(rng=rng, protocols=not args.legacy))
             print(f'{bee.unique_id} seq={bee.seq} -> {status} {json.dumps(body)}')
         if args.every and round_ + 1 < args.rounds:
             time.sleep(args.every)

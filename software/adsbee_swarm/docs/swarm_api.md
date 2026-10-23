@@ -25,7 +25,11 @@ The default server is `https://adsbee.aero`.
   "period": {"start_uptime_s": 8745, "len_s": 3600},
   "rx_position": {"lat": 37.1, "lon": -122.1, "alt_m": 30, "source": "fixed"},
   "stats": {"modes_valid": 0, "es_valid": 0, "uat_adsb": 0, "uat_uplink": 0, "aircraft_max": 0, "aircraft_unique": 0},
-  "range": {"sectors": 36, "bands": 12, "unit_m": 2000, "changed": "<base64, 54 bytes>", "max": "<base64>"}
+  "ranges": {
+    "mode_s": {"sectors": 36, "bands": 12, "unit_m": 2000, "changed": "<base64, 54 bytes>", "max": "<base64>"},
+    "uat": {"sectors": 36, "bands": 12, "unit_m": 2000, "changed": "..", "max": ".."},
+    "remote_id": {"sectors": 36, "bands": 12, "unit_m": 50, "changed": "..", "max": ".."}
+  }
 }
 ```
 
@@ -34,28 +38,38 @@ The default server is `https://adsbee.aero`.
 | `ota_keys` | Sent only to the default `adsbee.aero` host. Checked by the server's device verifier, if it has one. |
 | `unique_id` | RP2040 flash UID, 16 hex digits. |
 | `seq` | +1 per report, reset at boot. |
-| `rx_position` | Required for `range`. Without it, send `null` and no `range`; the server keeps the stats and drops any range. |
-| `range.changed` | Bitmap of present bins, standard base64 with padding. Bin `i` = byte `i/8`, bit `i%8` (LSB first). |
-| `range.max` | One byte per set bit, in bin order: `ceil(distance_m / unit_m)`, clamped 1..255. |
-| Bin | `band*36 + sector`. Sector = `floor(true bearing receiver→aircraft / 10°)`, 0 = north. |
-| Bands (ft, baro; geometric if no baro) | [0,1k) [1k,2k) [2k,4k) [4k,6k) [6k,10k) [10k,15k) [15k,20k) [20k,25k) [25k,30k) [30k,35k) [35k,40k) [40k,∞) |
+| `rx_position` | Required for `ranges`. Without it, send `null` and no `ranges`; the server keeps the stats and drops any range. |
+| `ranges` | One map per protocol. A protocol with no bins in the period is omitted; `{}` is valid. |
+| `range` | Older firmware: one map for every aircraft, stored as protocol `aircraft`. Never with `ranges`. |
+| `changed` | Bitmap of present bins, standard base64 with padding. Bin `i` = byte `i/8`, bit `i%8` (LSB first). |
+| `max` | One byte per set bit, in bin order: `ceil(distance_m / unit_m)`, clamped 1..255. |
+| Bin | `band*36 + sector`. Sector = `floor(true bearing receiver→target / 10°)`, 0 = north. |
 
-**Position guards.** `rx_position` and `range` go only with a FIXED position or a GNSS fix; 0,0
+| Protocol | Positions | `unit_m` | Bands (ft) |
+|---|---|---|---|
+| `mode_s` | 1090 ES (DF17/18) | 2000 | altitude (baro, else geometric): [0,1k) [1k,2k) [2k,4k) [4k,6k) [6k,10k) [10k,15k) [15k,20k) [20k,25k) [25k,30k) [30k,35k) [35k,40k) [40k,∞) |
+| `uat` | 978 UAT ADS-B | 2000 | as `mode_s` |
+| `remote_id` | 2.4 GHz Remote ID drones (max 12.75 km) | 50 | height above the receiver (geodetic alt − rx `alt_m`, floored at 0): [0,100) [100,200) [200,300) [300,400) [400,500) [500,700) [700,1k) [1k,1.5k) [1.5k,2k) [2k,3k) [3k,5k) [5k,∞) |
+| `range` (old) | Mode S and UAT | any | as `mode_s` |
+
+Another `unit_m`, an unknown protocol, or both `range` and `ranges` is a 400.
+
+**Position guards.** `rx_position` and `ranges` go only with a FIXED position or a GNSS fix; 0,0
 counts as none. A position beyond the horizon for its band is dropped:
 `limit_km = 1.15 * 4.12 * (sqrt(h_rx_m) + sqrt(h_band_top_m)) + 20` (h_rx floored at 0; the top
-band uses 60k ft). When drops reach 10% of counted positions and 5 distinct aircraft, the period's
-map is withheld. Optional fields:
+band uses 60k ft, or 10k ft for `remote_id`). When drops reach 10% of counted positions and 5
+distinct aircraft or drones (counted over every protocol), the period's maps are withheld. Optional fields:
 
 | Field | Meaning |
 |---|---|
-| `range_withheld` | `"no_position"` or `"implausible"`: only when `range` is omitted for that reason |
+| `range_withheld` | `"no_position"` or `"implausible"`: only when `ranges` is omitted for that reason |
 | `range_dropped` | positions dropped as beyond the horizon |
 
-The server applies the same limit to every bin (one `unit_m` of rounding allowed) and ignores the
-rest, counting them as `bins_ignored`. A device whose last report withheld its range, dropped
+The server applies the same limit to every bin of every protocol (one `unit_m` of rounding
+allowed) and ignores the rest, counting them as `bins_ignored`. A device whose last report withheld its range, dropped
 positions or had bins ignored has `check_position: true` in the user API.
 
-A position counts after 2 consistent decodes of the aircraft. Report once per period (default 3600 s,
+A position counts after 2 consistent decodes of the aircraft or drone. Report once per period (default 3600 s,
 ±60 s jitter); the first report goes 2–5 min after boot. On failure, max-merge new data into the
 pending map and retry with backoff, holding at most one map.
 
@@ -64,7 +78,7 @@ pending map and retry with backoff, holding at most one map.
 | Compared with the last stored report | Server |
 |---|---|
 | Same `seq`, `start_uptime_s` and `len_s` | Duplicate: 200, not stored |
-| Same `seq` and `start_uptime_s`, longer `len_s` | Merged retry, a superset: replaces that report's stats; its range is max-merged |
+| Same `seq` and `start_uptime_s`, longer `len_s` | Merged retry, a superset: replaces that report's stats; its maps are max-merged per protocol |
 | Same `seq` and `start_uptime_s`, shorter `len_s` | Stale copy: 200, not stored |
 | Anything else | New report |
 
@@ -100,14 +114,34 @@ rollout is a 404.
 | GET | `/devices` | Bees (`?removed=1` adds removed ones) |
 | GET, PATCH, DELETE | `/devices/{id}` | Read; set `label`, `note`, `location` (`null` = as reported); remove |
 | POST | `/devices/{id}/restore` | Accept a removed bee again |
-| GET | `/range?device=&since=&until=` | Max per bin over the window: per bee `max_m` (12 bands × 36 sectors, meters or null) and `sector_max_m`; `swarm` = max over bees |
+| GET | `/range?device=&since=&until=&protocol=` | Max per bin over the window: per bee `max_m` (12 bands × 36 sectors, meters or null) and `sector_max_m`; `swarm` = max over bees |
 | GET | `/stats?device=&since=&until=&step=hour\|day` | Counts summed; `aircraft_*` maxed per bee, then summed |
 | GET, POST | `/rollouts` | List / start |
 | GET, POST | `/rollouts/{id}` | Read; `{"action": "promote" \| "pause" \| "resume" \| "cancel"}` |
 
+### Range by protocol
+
+`protocol` is `aircraft` (default), `mode_s`, `uat` or `remote_id`. `aircraft` is the max over
+Mode S, UAT and older firmware's mixed maps; older firmware's maps appear only there. Remote ID is
+never mixed in. `protocols` lists the ones with data for the chosen bees in the window (hide the
+rest); `band_basis` says what the bands measure.
+
+```
+GET /api/swarm/v1/range?protocol=remote_id&device=4
+{"since": "2026-10-16T20:00:00+00:00", "until": "2026-10-23T20:00:00+00:00",
+ "protocol": "remote_id", "protocols": ["mode_s", "uat", "remote_id", "aircraft"],
+ "sectors": 36, "bands": 12, "sector_deg": 10, "band_basis": "height_above_rx",
+ "band_edges_ft": [[0, 100], [100, 200], ..., [5000, null]],
+ "devices": [{"id": 4, "label": "Attic", "unique_id": "E6614C311B5B6F2A", "position": {...},
+              "check_position": false, "max_m": [[1200, null, ...], ...], "sector_max_m": [...],
+              "bins": 5, "max_range_m": 3650}],
+ "swarm": {"max_m": [[...]], "sector_max_m": [...]}}
+```
+
 Windows default to the last 7 days and span at most 400 days. Every report lands in its bee's
-hourly row and its daily row; windows over 3 days, and `step=day`, read daily rows. Hourly rows
-are kept 90 days, daily rows indefinitely (`manage.py swarm_retention`).
+hourly row and its daily row, with one range map per protocol; windows over 3 days, and `step=day`,
+read daily rows. Hourly rows are kept 90 days, daily rows indefinitely (`manage.py swarm_retention`
+rebuilds each day per protocol before its hours go).
 
 ### Rollouts
 

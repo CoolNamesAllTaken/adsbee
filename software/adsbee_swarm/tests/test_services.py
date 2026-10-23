@@ -51,8 +51,9 @@ def test_simulated_reports_parse_and_look_like_a_receiver():
     bee = Bee.make(2)
     report = protocol.parse(bee.report())
     assert report.rx_position['alt_m'] == bee.alt_m and report.seq == 1
-    high = max(m for i, m in report.ranges.items() if i >= 11 * 36)
-    low = max((m for i, m in report.ranges.items() if i < 36), default=0)
+    (unit, values), = report.maps.values()
+    high = max(m for i, m in values.items() if i >= 11 * 36)
+    low = max((m for i, m in values.items() if i < 36), default=0)
     assert high > low and high <= 400_000
 
 
