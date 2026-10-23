@@ -1,8 +1,8 @@
 # adsbee_swarm
 
-A swarm server for ADSBee receivers. Each bee reports hourly: message counts, a range map, its
-firmware. You get a map of your bees, how far each one hears per altitude, and staged firmware
-targets. It is a reusable Django app (GPL-3.0) with a plain reference UI; adsbee.aero runs the same
+A swarm server for ADSBee receivers. Each bee reports hourly: message counts, range maps (Mode S,
+UAT, Remote ID), its firmware. You get a map of your bees, how far each one hears per altitude and
+protocol, and staged firmware targets. It is a reusable Django app (GPL-3.0) with a plain reference UI; adsbee.aero runs the same
 app behind its own pages.
 
 - Protocol and API: [docs/swarm_api.md](docs/swarm_api.md), [adsbee_swarm/openapi.yaml](adsbee_swarm/openapi.yaml)
@@ -26,6 +26,11 @@ TLS certificate. `swarm_account` also does `grant`, `revoke`, `disable`, `enable
 Each bee gets an hourly and a daily row from its first report; windows over 3 days read the daily
 rows. Retention runs daily in the `app` container (`manage.py swarm_retention`): hourly rows older
 than 90 days are deleted, daily rows are kept. Change it with `ADSBEE_SWARM_HOURLY_RETENTION_DAYS`.
+
+Updating: the container runs `migrate` on start. Migrations `0003_sample_range` and
+`0004_remove_sample_range_map` move each stored range map to its own row as protocol `aircraft`
+(older firmware's Mode S and UAT mixed); it stays under ✈ (all aircraft). Back up the database
+first; going back past 0003 merges per-protocol maps into one and drops Remote ID.
 
 ## Point a bee at it
 
@@ -59,6 +64,6 @@ poetry install --with dev
 poetry run pytest
 poetry run python manage.py migrate && poetry run python manage.py createcachetable
 poetry run python manage.py swarm_account create demo --password demo
-poetry run python manage.py swarm_simulate demo --bees 5 --hours 168
+poetry run python manage.py swarm_simulate demo --bees 5 --hours 168   # --legacy: one mixed range
 DJANGO_DEBUG=1 poetry run python manage.py runserver
 ```

@@ -1,5 +1,5 @@
 """
-Range maps: 12 altitude bands x 36 bearing sectors, one max distance per bin.
+Range maps: 12 height bands x 36 bearing sectors, one max distance per bin, one map per protocol.
 
 On the wire (docs/swarm_api.md) a map is a 54-byte bitmap of present bins plus one byte per present
 bin, in bin order, each `ceil(distance / unit_m)`. Stored the same way: `pack` writes the bitmap then
@@ -17,11 +17,35 @@ BANDS = 12
 BINS = SECTORS * BANDS
 BITMAP_BYTES = BINS // 8
 SECTOR_DEG = 360 // SECTORS
-#: Band floors in feet; the last band has no ceiling.
+#: Aircraft band floors in feet (baro, else geometric altitude); the last band has no ceiling.
 BAND_FLOORS_FT = [0, 1000, 2000, 4000, 6000, 10000, 15000, 20000, 25000, 30000, 35000, 40000]
+#: Remote ID band floors in feet above the receiver.
+REMOTE_ID_FLOORS_FT = [0, 100, 200, 300, 400, 500, 700, 1000, 1500, 2000, 3000, 5000]
 DEFAULT_UNIT_M = 2000
 
 Map = dict[int, int]
+
+
+class Protocol:
+    def __init__(self, floors_ft: list[int], top_ft: int, unit_m: int | None, basis: str):
+        self.floors_ft, self.top_ft, self.unit_m, self.basis = floors_ft, top_ft, unit_m, basis
+
+
+#: What a report's `ranges` may hold, and `aircraft`: an old report's `range` (Mode S and UAT
+#: mixed). `top_ft` is the top band's ceiling for the horizon limit; `unit_m` the one a report must
+#: use (None: any); `basis` what the bands measure.
+PROTOCOLS = {
+    'mode_s': Protocol(BAND_FLOORS_FT, 60000, 2000, 'altitude'),
+    'uat': Protocol(BAND_FLOORS_FT, 60000, 2000, 'altitude'),
+    'remote_id': Protocol(REMOTE_ID_FLOORS_FT, 10000, 50, 'height_above_rx'),
+    'aircraft': Protocol(BAND_FLOORS_FT, 60000, None, 'altitude'),
+}
+#: Reported in `ranges`.
+REPORTED = ('mode_s', 'uat', 'remote_id')
+#: Stored rows each user-facing protocol reads: `aircraft` is the max over every aircraft map.
+SOURCES = {'mode_s': ('mode_s',), 'uat': ('uat',), 'remote_id': ('remote_id',),
+           'aircraft': ('mode_s', 'uat', 'aircraft')}
+LEGACY = 'aircraft'
 
 
 class RangeError(ValueError):
@@ -32,27 +56,27 @@ def bin_index(band: int, sector: int) -> int:
     return band * SECTORS + sector
 
 
-#: The top band's ceiling for the horizon limit.
-TOP_BAND_CEILING_FT = 60000
 FT_M = 0.3048
 
 
-def horizon_limit_m(band: int, rx_alt_m: float | None) -> float:
-    """The farthest a position in `band` can plausibly be (CONTRACT, position guards):
+def horizon_limit_m(band: int, rx_alt_m: float | None, protocol: str = LEGACY) -> float:
+    """The farthest a position in `band` can plausibly be (position guards):
     1.15 * 4.12 km * (sqrt(h_rx) + sqrt(h_band_top)) + 20 km, heights in meters, h_rx floored at 0."""
-    top_ft = BAND_FLOORS_FT[band + 1] if band + 1 < BANDS else TOP_BAND_CEILING_FT
+    table = PROTOCOLS[protocol]
+    top_ft = table.floors_ft[band + 1] if band + 1 < BANDS else table.top_ft
     return (1.15 * 4.12 * (math.sqrt(max(rx_alt_m or 0.0, 0.0)) + math.sqrt(top_ft * FT_M)) + 20) * 1000
 
 
-def within_horizon(values: Map, rx_alt_m: float | None, unit_m: int) -> tuple[Map, int]:
+def within_horizon(values: Map, rx_alt_m: float | None, unit_m: int, protocol: str = LEGACY) -> tuple[Map, int]:
     """(the bins inside their band's horizon limit, how many were not). A value is rounded up to
     `unit_m` on the wire, so a bin up to one unit past the limit still counts."""
-    kept = {i: m for i, m in values.items() if m <= horizon_limit_m(i // SECTORS, rx_alt_m) + unit_m}
+    kept = {i: m for i, m in values.items() if m <= horizon_limit_m(i // SECTORS, rx_alt_m, protocol) + unit_m}
     return kept, len(values) - len(kept)
 
 
-def band_edges_ft() -> list[list[int | None]]:
-    return [[floor, BAND_FLOORS_FT[i + 1] if i + 1 < BANDS else None] for i, floor in enumerate(BAND_FLOORS_FT)]
+def band_edges_ft(protocol: str = LEGACY) -> list[list[int | None]]:
+    floors = PROTOCOLS[protocol].floors_ft
+    return [[floor, floors[i + 1] if i + 1 < BANDS else None] for i, floor in enumerate(floors)]
 
 
 def _bits(bitmap: bytes) -> list[int]:

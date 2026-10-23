@@ -10,6 +10,8 @@ from adsbee_swarm import conf, protocol, queries, retention
 from adsbee_swarm.models import Device, Sample
 from adsbee_swarm.simulator import Bee
 
+from .conftest import save_sample
+
 pytestmark = pytest.mark.django_db
 
 
@@ -18,10 +20,8 @@ def device(owner):
     return Device.objects.create(account=owner.account, product='adsbee_1090', unique_id='E6614C311B5B6F2A')
 
 
-def _hour(device, start, values, unit=2000, **stats):
-    sample = Sample(device=device, start=start, unit_m=unit, reports=1, **stats)
-    sample.set_ranges(values)
-    sample.save()
+def _hour(device, start, values, unit=2000, protocol='aircraft', **stats):
+    save_sample(Sample(device=device, start=start, reports=1, **stats), values, protocol, unit)
 
 
 def _days(device):
@@ -70,9 +70,7 @@ def test_long_windows_read_days_and_short_ones_hours(device):
     day = now.replace(hour=0) - timedelta(days=10)
     Sample.objects.create(device=device, start=day, span_s=Sample.DAY, es_valid=50)
     _hour(device, day + timedelta(hours=2), {7: 4000}, es_valid=50)
-    daily = Sample(device=device, start=day + timedelta(days=1), span_s=Sample.DAY)
-    daily.set_ranges({3: 90000})
-    daily.save()
+    save_sample(Sample(device=device, start=day + timedelta(days=1), span_s=Sample.DAY), {3: 90000})
     assert queries.device_range(device, now - timedelta(days=30), now) == {3: 90000}, "> 3 days: daily rows"
     assert queries.device_range(device, day, day + timedelta(days=1)) == {7: 4000}, "short: hourly rows"
     series = queries.stats_series([device], now - timedelta(days=30), now, 'day')

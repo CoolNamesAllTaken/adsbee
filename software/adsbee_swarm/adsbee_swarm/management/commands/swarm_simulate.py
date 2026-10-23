@@ -18,8 +18,9 @@ class Command(BaseCommand):
         parser.add_argument('--bees', type=int, default=5)
         parser.add_argument('--hours', type=int, default=24 * 7)
         parser.add_argument('--seed', type=int, default=1)
+        parser.add_argument('--legacy', action='store_true', help='one mixed range, as older firmware sends')
 
-    def handle(self, username, bees, hours, seed, **options):
+    def handle(self, username, bees, hours, seed, legacy=False, **options):
         account = Account.objects.filter(user__username=username).first()
         if account is None:
             raise CommandError(f'no account {username}')
@@ -32,5 +33,5 @@ class Command(BaseCommand):
                 device.label = bee.label
                 device.save(update_fields=['label'])
             for hour in range(hours, 0, -1):
-                protocol.store(device, protocol.parse(bee.report(rng=rng)), now - timedelta(hours=hour - 1))
+                protocol.store(device, protocol.parse(bee.report(rng=rng, protocols=not legacy)), now - timedelta(hours=hour - 1))
             self.stdout.write(f'{bee.label}: {bee.unique_id} {hours} h')

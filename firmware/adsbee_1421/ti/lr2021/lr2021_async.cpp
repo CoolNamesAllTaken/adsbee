@@ -15,7 +15,7 @@
 // The loop drain is an UNCONDITIONAL level-read sweep, started every ADSBee::kLR2021SweepIntervalUs:
 // GetRxFifoLevel -> ReadRxFifo -> (only when the LR_IRQ line reads high) GetAndClearFifoIrqFlags +
 // GetAndClearIrq. It deliberately does not gate on the
-// kIrqRxFifo flag: with the FIFO high threshold at kIrqDrainThresholdBytes (9 packets), sub-threshold
+// kIrqRxFifo flag: with the FIFO high threshold at kIrqDrainThresholdBytes (11 packets), sub-threshold
 // packets would otherwise never be read. The clear tail keeps the latched IRQ line (and its edge
 // generation for the IRQ-paced chain, lr2021_irq_drain.cpp) healthy whenever it is seen high.
 //

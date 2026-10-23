@@ -4,6 +4,9 @@ The device report, v1 (docs/swarm_api.md): validated into a `Report`, then store
 Retries (the device keeps seq and period.start_uptime_s until a report is acknowledged):
 same seq, start and len_s is a duplicate and is not stored; same seq and start with a longer len_s
 is the earlier report widened, so it replaces that report's stats and max-merges its range.
+
+Range maps: `ranges` holds one per protocol (mode_s, uat, remote_id); older firmware sends one
+`range` for every aircraft, stored as protocol `aircraft`.
 """
 from __future__ import annotations
 
@@ -16,7 +19,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import conf, ranges
-from .models import PEAK_STATS, REPORTED_STATS, STATS, WITHHELD, Device, Sample
+from .models import PEAK_STATS, REPORTED_STATS, STATS, WITHHELD, Device, Sample, SampleRange
 
 UNIQUE_ID = re.compile(r'^[0-9A-F]{16}$')
 MAC = re.compile(r'^[0-9A-F]{2}(:[0-9A-F]{2}){5}$')
@@ -42,8 +45,8 @@ class Report:
     len_s: int
     rx_position: dict | None
     stats: dict
-    unit_m: int = ranges.DEFAULT_UNIT_M
-    ranges: ranges.Map = field(default_factory=dict)
+    #: {protocol: (unit_m, {bin: meters})}, bins past the horizon already left out.
+    maps: dict[str, tuple[int, ranges.Map]] = field(default_factory=dict)
     #: Why there is no range: '', 'no_position' or 'implausible' (the bee's, or ours).
     range_withheld: str = ''
 
@@ -103,16 +106,34 @@ def parse(data) -> Report:
     report.range_withheld = withheld
     report.stats['range_dropped'] = _int(data, 'range_dropped') if 'range_dropped' in data else 0
     report.stats['bins_ignored'] = 0
-    if data.get('range') is not None:
-        unit, values = _range(data['range'])
-        if report.rx_position is None:
-            report.range_withheld = report.range_withheld or 'no_position'
-        else:
-            # Defense for firmware without the guards: a bin past its band's horizon is not real.
-            report.ranges, report.stats['bins_ignored'] = ranges.within_horizon(
-                values, report.rx_position['alt_m'], unit)
-            report.unit_m = unit
+    maps = _maps(data)
+    if maps and report.rx_position is None:
+        report.range_withheld = report.range_withheld or 'no_position'
+    elif maps:
+        # Defense for firmware without the guards: a bin past its band's horizon is not real.
+        for protocol, (unit, values) in maps.items():
+            kept, ignored = ranges.within_horizon(values, report.rx_position['alt_m'], unit, protocol)
+            report.stats['bins_ignored'] += ignored
+            if kept:
+                report.maps[protocol] = (unit, kept)
     return report
+
+
+def _maps(data: dict) -> dict[str, tuple[int, ranges.Map]]:
+    """`ranges` ({protocol: map}), else `range` as protocol `aircraft`."""
+    legacy, per_protocol = data.get('range'), data.get('ranges')
+    if per_protocol is not None:
+        if legacy is not None:
+            raise ReportError('send range or ranges, not both')
+        if not isinstance(per_protocol, dict):
+            raise ReportError('ranges must be an object')
+        unknown = sorted(set(per_protocol) - set(ranges.REPORTED))
+        if unknown:
+            raise ReportError(f"ranges has unknown protocol {unknown[0]!r}; known: {', '.join(ranges.REPORTED)}")
+        return {protocol: _range(value, protocol) for protocol, value in per_protocol.items()}
+    if legacy is not None:
+        return {ranges.LEGACY: _range(legacy, ranges.LEGACY)}
+    return {}
 
 
 def _position(value) -> dict | None:
@@ -130,16 +151,23 @@ def _position(value) -> dict | None:
     return None if position['lat'] == 0 and position['lon'] == 0 else position
 
 
-def _range(value) -> tuple[int, ranges.Map]:
+def _range(value, protocol: str) -> tuple[int, ranges.Map]:
+    name = 'range' if protocol == ranges.LEGACY else f'ranges.{protocol}'
     if not isinstance(value, dict):
-        raise ReportError('range must be an object')
+        raise ReportError(f'{name} must be an object')
     if value.get('sectors') != ranges.SECTORS or value.get('bands') != ranges.BANDS:
-        raise ReportError(f'range must be {ranges.SECTORS} sectors x {ranges.BANDS} bands')
-    unit = _int(value, 'unit_m', 1, 1_000_000)
+        raise ReportError(f'{name} must be {ranges.SECTORS} sectors x {ranges.BANDS} bands')
+    try:
+        unit = _int(value, 'unit_m', 1, 1_000_000)
+    except ReportError as exc:
+        raise ReportError(f'{name}.{exc}') from exc
+    required = ranges.PROTOCOLS[protocol].unit_m
+    if required is not None and unit != required:
+        raise ReportError(f'{name}.unit_m must be {required}')
     try:
         return unit, ranges.decode(value.get('changed'), value.get('max'), unit)
     except ranges.RangeError as exc:
-        raise ReportError(str(exc)) from exc
+        raise ReportError(f'{name}: {exc}') from exc
 
 
 def hour_of(moment: datetime) -> datetime:
@@ -162,11 +190,18 @@ def _apply(sample: Sample, report: Report, replaced: dict) -> None:
         sample.reports += 1
     if WITHHELD.index(report.range_withheld) > WITHHELD.index(sample.range_withheld or ''):
         sample.range_withheld = report.range_withheld
-    if report.ranges:
-        merged = ranges.merge(sample.ranges(), report.ranges)
-        sample.unit_m = max(sample.unit_m if sample.range_map else 0, report.unit_m)
-        sample.set_ranges(merged)
     sample.save()
+    for protocol, (unit, values) in report.maps.items():
+        row = SampleRange.objects.select_for_update().filter(sample=sample, protocol=protocol).first()
+        if row is None:
+            row = SampleRange(sample=sample, protocol=protocol, unit_m=unit)
+            merged = dict(values)
+        else:
+            merged = ranges.merge(row.ranges(), values)
+            # Coarsen to the largest unit either came in.
+            row.unit_m = max(row.unit_m, unit)
+        row.set_ranges(merged)
+        row.save()
 
 
 def ingest(device: Device, report: Report, now: datetime | None = None) -> bool:

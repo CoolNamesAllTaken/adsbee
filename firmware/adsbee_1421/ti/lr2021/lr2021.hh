@@ -297,7 +297,7 @@ class LR2021 {
     struct MlatSweep {
         uint32_t level_request_counter = 0;  // Just before the NSS falling edge of the GetRxFifoLevel request.
         uint32_t level_answer_counter = 0;   // After the LR2021 sampled the level.
-        bool clear_tail_ran = false;         // LR_IRQ was high: the FIFO held 9 packets or more at some point.
+        bool clear_tail_ran = false;         // LR_IRQ was high: the FIFO held 11 packets or more at some point.
     };
     const MlatSweep& mlat_sweep() const { return mlat_sweep_; }
 
@@ -309,18 +309,20 @@ class LR2021 {
     // check) + GetAndClearIrq to drop the latched IRQ line -- with zero busy-waiting and zero main-loop
     // involvement. The main
     // loop later parses filled slots via NextFilledSlot()/ReleaseSlot(). This is a latency/backpressure
-    // valve: with the threshold at 9 packets it stays silent while the routine loop drain keeps up.
+    // valve: with the threshold at 11 packets it stays silent while the routine loop drain keeps up.
 
     // One 14-byte-packet-aligned FIFO packet (all preamble modes; see static_assert in lr2021.cpp).
     static constexpr uint16_t kOokFifoPacketLenBytes = 14;
-    // RX FIFO high threshold and chain read size: 9 whole packets. Leaves 256-126 = 130 B (~1.1 ms of
-    // saturated 1090 traffic) of overflow margin while a ~300 us chain runs.
-    static constexpr uint16_t kIrqDrainThresholdBytes = 9 * kOokFifoPacketLenBytes;  // 126
+    // RX FIFO high threshold and chain read size: 11 whole packets. Leaves 256-154 = 102 B (~0.9 ms of
+    // saturated 1090 traffic) of overflow margin while a ~300 us chain runs. A chain read takes over a loop drain's
+    // read, and reads taken while the FIFO ran this deep get no MLAT stamps: a higher threshold gives a slow main
+    // loop pass more room before that happens.
+    static constexpr uint16_t kIrqDrainThresholdBytes = 11 * kOokFifoPacketLenBytes;  // 154
     // A healthy chain finishes in ~300 us; a chain stuck longer than this is cancelled by
     // ServiceRxDrain() at thread level.
     static constexpr uint32_t kIrqChainTimeoutMs = 10;
-    // Staging slots the chain fills until the main loop parses them, 9 packets each. With the FIFO's own 18 packets,
-    // 6 slots ride out a main loop pass of about 18 ms at 4000 frames/s before the FIFO overflows.
+    // Staging slots the chain fills until the main loop parses them, 11 packets each. With the FIFO's own 18 packets,
+    // 6 slots ride out a main loop pass of about 21 ms at 4000 frames/s before the FIFO overflows.
     static constexpr uint8_t kNumIrqDrainSlots = 6;
 
     // Staging slot: filled by the chain (ISR/SWI context), parsed and released by the main loop.

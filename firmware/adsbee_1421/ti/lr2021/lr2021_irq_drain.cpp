@@ -1,11 +1,11 @@
 // IRQ-paced LR2021 RX FIFO drain chain.
 //
 // The LR2021's DIO6 is configured (SetOokADSB) as an IRQ output for kIrqRxFifo, which latches when
-// the RX FIFO crosses kIrqDrainThresholdBytes (9 packets). The line lands on the CC1314's LR_IRQ pin
+// the RX FIFO crosses kIrqDrainThresholdBytes (11 packets). The line lands on the CC1314's LR_IRQ pin
 // (rising-edge GPIO interrupt). When the edge fires, this chain empties the FIFO entirely from
 // interrupt context -- no main-loop involvement, no busy-waiting:
 //
-//   LR_IRQ edge (GPIO HWI) ─ claim drain, post ReadRxFifo(2+126) DMA into a staging slot
+//   LR_IRQ edge (GPIO HWI) ─ claim drain, post ReadRxFifo(2+154) DMA into a staging slot
 //   SPI completion (SWI)   ─ mark slot filled, arm BUSY-fall interrupt, raise NSS
 //   LR_BUSY falls (GPIO HWI) ─ post the next frame: GetAndClearFifoIrqFlags (2 frames, overflow
 //                              check on the readback) -> GetAndClearIrq (2 frames)
@@ -25,8 +25,8 @@
 // ServiceRxDrain.
 //
 // Why no level read: a fresh edge with the line STILL HIGH means the FIFO crossed the threshold and
-// has not since been drained below it, so >= 126 bytes are present, and because every drain path
-// pops whole 14-byte packets the leading 126 bytes are exactly 9 whole packets. HandleIrqLine
+// has not since been drained below it, so >= 154 bytes are present, and because every drain path
+// pops whole 14-byte packets the leading 154 bytes are exactly 11 whole packets. HandleIrqLine
 // enforces the "still high" part with a live line-level check -- the GPIO EVFLAGS latch outlives the
 // chip-side line, and GPIO HWIs are the lowest NVIC priority (not 0xC0; ti_drivers_config.c sets
 // ~0), so a delayed dispatch can arrive after the loop drain already cleared and drained. Restarts
@@ -133,7 +133,7 @@ void LR2021::HandleIrqLine() {
         // sit at the LOWEST NVIC priority (ti_drivers_config.c GPIO intPriority = ~0), so RF-core /
         // SPI HWIs (0xa0) can delay this dispatch long enough for the loop drain to run its clear
         // tail (dropping the line) and drain the FIFO below the threshold. Starting a chain here
-        // would blind-read 126 bytes from a FIFO that may hold fewer, popping the read pointer past
+        // would blind-read 154 bytes from a FIFO that may hold fewer, popping the read pointer past
         // the write pointer and tearing the stream.
         irq_stale_edges = irq_stale_edges + 1;
         return;
@@ -279,8 +279,8 @@ void LR2021::HandleChainFrameComplete() {
             }
             if (chain_rx_scratch_[2] & kFifoIrqFlagsResyncMask) {
                 // Full/Overflow/Underflow may have torn the stream. The chain never reads the FIFO
-                // level, so the Full sub-flag is its only fullness signal (2 x 126 == 252 < 256:
-                // chain reads alone strand the last partial packet of a full FIFO). Flag for the
+                // level, so the Full sub-flag is its only fullness signal (256 B is not a whole number of
+                // packets: chain reads alone strand the last partial packet of a full FIFO). Flag for the
                 // thread-level flush/realign in ADSBee::UpdateLR2021.
                 fifo_overflow_count = fifo_overflow_count + 1;
                 fifo_overflow_pending = true;
