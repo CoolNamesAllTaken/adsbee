@@ -4,7 +4,7 @@
 <div class="bar"><h1>{{ device }} {% if device.check_position %}<span class="tag warn" title="Check position: {% if device.range_withheld == 'no_position' %}the bee has no position (set a fixed one or let GNSS get a fix), so it sent no range{% elif device.range_withheld == 'implausible' %}too many aircraft looked farther than possible, so it sent no range{% else %}{{ device.range_dropped|add:device.bins_ignored }} positions were farther than possible from this position{% endif %}">⚠</span>{% endif %}{% if device.removed %}<span class="tag bad" title="Removed: reports are refused">✕</span>{% endif %}</h1>{% include "adsbee_swarm/_windows.html" %}</div>
 <div class="cols">
   <div>
-    <figure class="overall">{{ overall|safe }}<figcaption title="Max over every altitude band; rings every 50 km">all altitudes{% if max_km %} · {{ max_km }} km{% endif %}</figcaption></figure>
+    <figure class="overall">{{ overall|safe }}<figcaption title="Max over every {% if height_above_rx %}height{% else %}altitude{% endif %} band; rings every 50 km or a quarter of the farthest">{% if height_above_rx %}all heights{% else %}all altitudes{% endif %}{% if max_km %} · {{ max_km }} km{% endif %}</figcaption></figure>
   </div>
   <div class="card">
     <dl class="facts">
@@ -28,7 +28,7 @@
     </form>
   </div>
 </div>
-<h2 title="Farthest aircraft per 10° sector, per altitude band">Range by altitude</h2>
+{% if height_above_rx %}<h2 title="Farthest drone per 10° sector, per band of height above the bee">Range by height</h2>{% else %}<h2 title="Farthest aircraft per 10° sector, per altitude band">Range by altitude</h2>{% endif %}
 <div class="grid">{% for p in plots %}<figure>{{ p.svg|safe }}<figcaption>{{ p.title }}</figcaption></figure>{% endfor %}</div>
 <h2 title="Per {% if window == '24h' or window == '7d' %}hour{% else %}day{% endif %}; hover a bar">Traffic</h2>
 <div class="charts">{% for c in charts %}<figure class="chart"><figcaption title="{{ c.title }}">{{ c.label }}</figcaption>{{ c.svg|safe }}<div class="axis-t"><span>{{ c.first }}</span><span>{{ c.last }}</span></div></figure>{% endfor %}</div>

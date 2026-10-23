@@ -1,6 +1,7 @@
 """
     User ── Account ──< ApiToken             one login per account; privileges are flags
-               └──< Device ──< Sample        hourly (later daily) stats + range map
+               └──< Device ──< Sample        hourly and daily stats
+                                 └──< SampleRange   one range map per protocol
                └──< Rollout >──< Device      a firmware target for all, a label, or chosen bees
 
 An account's enroll token (what a bee is given with AT+SWARM) and its API tokens are stored as
@@ -128,7 +129,7 @@ PEAK_STATS = ('aircraft_max', 'aircraft_unique')
 
 
 class Sample(models.Model):
-    """One device's hour (span 3600) or, after retention, day (86400): summed counts, max range."""
+    """One device's hour (span 3600) or day (86400): summed counts; range maps in `SampleRange`."""
     HOUR, DAY = 3600, 86400
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='samples')
     start = models.DateTimeField()
@@ -143,21 +144,42 @@ class Sample(models.Model):
     range_dropped = models.BigIntegerField(default=0)
     bins_ignored = models.BigIntegerField(default=0)
     range_withheld = models.CharField(max_length=16, blank=True)
-    unit_m = models.PositiveIntegerField(default=ranges.DEFAULT_UNIT_M)
-    #: `ranges.pack`: 54-byte bitmap, then one byte per present bin.
-    range_map = models.BinaryField(null=True, blank=True)
 
     class Meta:
         ordering = ['start']
         constraints = [models.UniqueConstraint(fields=['device', 'start', 'span_s'], name='swarm_sample_unique')]
         indexes = [models.Index(fields=['device', 'span_s', 'start'])]
 
+    def range_maps(self) -> dict[str, ranges.Map]:
+        """{stored protocol: map}."""
+        return {row.protocol: row.ranges() for row in self.range_rows.all()}
+
+    def ranges(self, protocol: str = ranges.LEGACY) -> ranges.Map:
+        """The map a user sees for `protocol`: `aircraft` is the max over every aircraft map."""
+        merged: ranges.Map = {}
+        for name, values in self.range_maps().items():
+            if name in ranges.SOURCES[protocol]:
+                ranges.merge(merged, values)
+        return merged
+
+
+class SampleRange(models.Model):
+    """A sample's range map for one protocol (`ranges.PROTOCOLS`): max distance per bin."""
+    sample = models.ForeignKey(Sample, on_delete=models.CASCADE, related_name='range_rows')
+    protocol = models.CharField(max_length=16)
+    unit_m = models.PositiveIntegerField(default=ranges.DEFAULT_UNIT_M)
+    #: `ranges.pack`: 54-byte bitmap, then one byte per present bin.
+    range_map = models.BinaryField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['sample', 'protocol'], name='swarm_sample_range_unique')]
+
     def ranges(self) -> ranges.Map:
         return ranges.unpack(self.range_map, self.unit_m)
 
     def set_ranges(self, values: ranges.Map) -> None:
-        """Store `values`, coarsening to the largest unit any of them came in."""
-        self.range_map = ranges.pack(values, self.unit_m) if values else None
+        """Store `values` in `unit_m` steps (rounded up)."""
+        self.range_map = ranges.pack(values, self.unit_m)
 
 
 class Rollout(models.Model):

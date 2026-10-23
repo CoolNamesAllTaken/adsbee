@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone as tz
 
 
 from . import ranges
-from .models import PEAK_STATS, STATS, Device, Sample
+from .models import PEAK_STATS, STATS, Device, Sample, SampleRange
 
 
 #: Windows longer than this read daily rows (kept from the first report); shorter ones hourly.
@@ -21,11 +21,23 @@ def _samples(devices, since: datetime, until: datetime, span: int | None = None)
     return rows.order_by('start')
 
 
-def device_range(device: Device, since: datetime, until: datetime) -> ranges.Map:
+def _range_rows(devices, since: datetime, until: datetime):
+    return SampleRange.objects.filter(sample__in=_samples(devices, since, until).values('pk'))
+
+
+def device_range(device: Device, since: datetime, until: datetime, protocol: str = ranges.LEGACY) -> ranges.Map:
+    """Max per bin over the window. `aircraft`: over Mode S, UAT and old firmware's mixed maps."""
     merged: ranges.Map = {}
-    for sample in _samples([device], since, until).only('range_map', 'unit_m').exclude(range_map=None):
-        ranges.merge(merged, sample.ranges())
+    for row in _range_rows([device], since, until).filter(protocol__in=ranges.SOURCES[protocol]).only(
+            'range_map', 'unit_m'):
+        ranges.merge(merged, row.ranges())
     return merged
+
+
+def protocols_with_data(devices, since: datetime, until: datetime) -> list[str]:
+    """Which `ranges.SOURCES` keys have a map in the window, in `PROTOCOLS` order."""
+    stored = set(_range_rows(devices, since, until).values_list('protocol', flat=True).distinct())
+    return [name for name in ranges.PROTOCOLS if stored & set(ranges.SOURCES[name])]
 
 
 def range_payload(device: Device, merged: ranges.Map) -> dict:
@@ -35,17 +47,21 @@ def range_payload(device: Device, merged: ranges.Map) -> dict:
             'max_range_m': max(merged.values(), default=None)}
 
 
-def swarm_range(devices, since: datetime, until: datetime) -> dict:
-    """Per bee its bands x sectors maxima; `swarm` is the max per bin over all of them."""
+def swarm_range(devices, since: datetime, until: datetime, protocol: str = ranges.LEGACY) -> dict:
+    """Per bee its bands x sectors maxima for `protocol`; `swarm` is the max per bin over all of
+    them. `protocols`: the ones with data for these bees in the window."""
+    devices = list(devices)
     per_device = []
     swarm: ranges.Map = {}
     for device in devices:
-        merged = device_range(device, since, until)
+        merged = device_range(device, since, until, protocol)
         ranges.merge(swarm, merged)
         per_device.append(range_payload(device, merged))
-    return {'since': since.isoformat(), 'until': until.isoformat(),
+    return {'since': since.isoformat(), 'until': until.isoformat(), 'protocol': protocol,
+            'protocols': protocols_with_data(devices, since, until),
             'sectors': ranges.SECTORS, 'bands': ranges.BANDS, 'sector_deg': ranges.SECTOR_DEG,
-            'band_edges_ft': ranges.band_edges_ft(), 'devices': per_device,
+            'band_basis': ranges.PROTOCOLS[protocol].basis,
+            'band_edges_ft': ranges.band_edges_ft(protocol), 'devices': per_device,
             'swarm': {'max_m': ranges.matrix(swarm), 'sector_max_m': ranges.sector_max(swarm)}}
 
 

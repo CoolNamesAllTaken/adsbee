@@ -3,7 +3,8 @@ Each bee keeps a daily row beside its hourly ones from the first report (protoco
 long windows read days. Retention (run daily: `manage.py swarm_retention`):
 
 1. Every day whose hourly rows are about to go (older than HOURLY_RETENTION_DAYS, whole days)
-   has its daily row rebuilt from those hours first: counts summed, peaks and range maxed.
+   has its daily row rebuilt from those hours first: counts summed, peaks and range maxed (per
+   protocol).
    A day the ingest path already got right is left as it is; one it did not (rows stored
    before daily rows existed, a crash between the two writes) is fixed and counted.
 2. Those hourly rows are deleted.
@@ -20,7 +21,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import conf, ranges
-from .models import PEAK_STATS, STATS, WITHHELD, Sample
+from .models import PEAK_STATS, STATS, WITHHELD, Sample, SampleRange
 
 FIELDS = ('reports', *STATS)
 
@@ -32,38 +33,45 @@ def _day(moment: datetime) -> datetime:
 def rebuild_day(device_id: int, day: datetime, hours: list[Sample]) -> bool:
     """The daily row as its hours add up. True when it was missing or different."""
     totals = dict.fromkeys(FIELDS, 0)
-    merged: ranges.Map = {}
-    unit = 0
+    merged: dict[str, ranges.Map] = {}
+    units: dict[str, int] = {}
     withheld = max((s.range_withheld or '' for s in hours), key=WITHHELD.index, default='')
     for sample in hours:
         totals['reports'] += sample.reports
         for name in STATS:
             value = getattr(sample, name)
             totals[name] = max(totals[name], value) if name in PEAK_STATS else totals[name] + value
-        if sample.range_map:
-            ranges.merge(merged, sample.ranges())
-            unit = max(unit, sample.unit_m)
+        for row in sample.range_rows.all():
+            ranges.merge(merged.setdefault(row.protocol, {}), row.ranges())
+            units[row.protocol] = max(units.get(row.protocol, 0), row.unit_m)
+    # What the daily rows should hold: each protocol in its coarsest unit, rounded up.
+    expected = {protocol: SampleRange(protocol=protocol, unit_m=units[protocol]) for protocol in merged}
+    for protocol, row in expected.items():
+        row.set_ranges(merged[protocol])
     with transaction.atomic():
         daily = Sample.objects.select_for_update().filter(device_id=device_id, start=day, span_s=Sample.DAY).first()
-        expected = Sample(device_id=device_id, start=day, span_s=Sample.DAY, unit_m=unit or ranges.DEFAULT_UNIT_M,
-                          range_withheld=withheld, **totals)
-        expected.set_ranges(merged)
-        if daily is not None and all(getattr(daily, f) == getattr(expected, f) for f in FIELDS) \
-                and daily.range_withheld == withheld and daily.ranges() == expected.ranges():
+        stored = {row.protocol: row for row in daily.range_rows.all()} if daily is not None else {}
+        same_ranges = stored.keys() == expected.keys() and all(
+            stored[p].ranges() == expected[p].ranges() for p in expected)
+        if daily is not None and same_ranges and daily.range_withheld == withheld \
+                and all(getattr(daily, f) == totals[f] for f in FIELDS):
             return False
         if daily is None:
-            daily = expected
-        else:
-            for name in FIELDS:
-                setattr(daily, name, getattr(expected, name))
-            daily.unit_m, daily.range_map, daily.range_withheld = expected.unit_m, expected.range_map, withheld
+            daily = Sample(device_id=device_id, start=day, span_s=Sample.DAY)
+        for name in FIELDS:
+            setattr(daily, name, totals[name])
+        daily.range_withheld = withheld
         daily.save()
+        daily.range_rows.exclude(protocol__in=list(expected)).delete()
+        for protocol, row in expected.items():
+            SampleRange.objects.update_or_create(sample=daily, protocol=protocol,
+                                                 defaults={'unit_m': row.unit_m, 'range_map': row.range_map})
         return True
 
 
 def _hours_by_day(rows) -> dict:
     groups: dict = defaultdict(list)
-    for sample in rows.order_by('device_id', 'start').iterator():
+    for sample in rows.order_by('device_id', 'start').prefetch_related('range_rows').iterator(chunk_size=2000):
         groups[(sample.device_id, _day(sample.start))].append(sample)
     return groups
 

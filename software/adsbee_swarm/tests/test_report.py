@@ -39,7 +39,7 @@ def test_without_a_position_the_range_is_dropped_and_stats_kept(client, owner, b
     body['rx_position'] = None
     assert post_report(client, owner.token, body).status_code == 200
     sample = Sample.objects.get(span_s=Sample.HOUR)
-    assert sample.range_map is None and sample.modes_valid == body['stats']['modes_valid']
+    assert sample.range_maps() == {} and sample.modes_valid == body['stats']['modes_valid']
 
 
 def test_two_reports_in_an_hour_sum_counts_and_max_peaks_and_range(client, owner, bee):
@@ -230,7 +230,7 @@ def test_a_withheld_range_is_stored_and_flagged(client, owner, bee, withheld):
     body.update(range_withheld=withheld, range_dropped=14)
     assert post_report(client, owner.token, body).status_code == 200
     sample = Sample.objects.get(span_s=Sample.HOUR)
-    assert (sample.range_withheld, sample.range_dropped, sample.range_map) == (withheld, 14, None)
+    assert (sample.range_withheld, sample.range_dropped, sample.range_maps()) == (withheld, 14, {})
     assert Sample.objects.get(span_s=Sample.DAY).range_withheld == withheld
     device = Device.objects.get()
     assert (device.range_withheld, device.range_dropped, device.check_position) == (withheld, 14, True)
@@ -255,7 +255,7 @@ def test_a_position_at_0_0_is_no_position(client, owner, bee):
     body['rx_position'].update(lat=0, lon=0)
     assert post_report(client, owner.token, body).status_code == 200
     sample = Sample.objects.get(span_s=Sample.HOUR)
-    assert sample.range_map is None and sample.range_withheld == 'no_position'
+    assert sample.range_maps() == {} and sample.range_withheld == 'no_position'
     assert Device.objects.get().rx_lat is None
 
 

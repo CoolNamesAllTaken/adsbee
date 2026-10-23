@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Account, ApiToken, Device, Rollout, Sample
+from .models import Account, ApiToken, Device, Rollout, Sample, SampleRange
 
 
 @admin.register(Account)
@@ -30,7 +30,15 @@ class RolloutAdmin(admin.ModelAdmin):
     filter_horizontal = ('devices', 'test_devices')
 
 
+class SampleRangeInline(admin.TabularInline):
+    model = SampleRange
+    fields = ('protocol', 'unit_m')
+    readonly_fields = ('protocol', 'unit_m')
+    extra = 0
+
+
 @admin.register(Sample)
 class SampleAdmin(admin.ModelAdmin):
+    inlines = [SampleRangeInline]
     list_display = ('device', 'start', 'span_s', 'reports', 'es_valid', 'aircraft_max')
     list_filter = ('span_s',)

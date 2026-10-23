@@ -19,6 +19,8 @@ components:
     until: {name: until, in: query, schema: {type: string, format: date-time}, description: "Default: now. At most 400 days after since."}
     device: {name: device, in: query, schema: {type: array, items: {type: integer}}, style: form, explode: true,
              description: "Device ids; none: every bee of the account."}
+    protocol: {name: protocol, in: query, schema: {type: string, enum: [aircraft, mode_s, uat, remote_id], default: aircraft},
+               description: "aircraft: max over Mode S, UAT and older firmware's mixed maps. remote_id: drones, bands by height above the bee."}
   responses:
     Error:
       description: Error
@@ -38,7 +40,7 @@ components:
       properties:
         sectors: {type: integer, enum: [36]}
         bands: {type: integer, enum: [12]}
-        unit_m: {type: integer, minimum: 1}
+        unit_m: {type: integer, minimum: 1, description: "In ranges: 2000 for mode_s and uat, 50 for remote_id."}
         changed: {type: string, format: byte, description: "54-byte bitmap; bin i = byte i/8, bit i%8 (LSB first). Bin = band*36 + sector."}
         max: {type: string, format: byte, description: "One byte (1..255) per set bit, in bin order: ceil(distance_m / unit_m)."}
     Report:
@@ -68,7 +70,16 @@ components:
             uat_uplink: {type: integer}
             aircraft_max: {type: integer}
             aircraft_unique: {type: integer}
-        range: {allOf: [{$ref: '#/components/schemas/Range'}], nullable: true, description: "Ignored without rx_position. Bins past their band's horizon limit are ignored."}
+        range: {allOf: [{$ref: '#/components/schemas/Range'}], nullable: true, description: "Older firmware: every aircraft in one map (stored as protocol aircraft). Ignored without rx_position. Bins past their band's horizon limit are ignored."}
+        ranges:
+          type: object
+          nullable: true
+          description: "One map per protocol; protocols with no bins are omitted ({} is valid). Not with range. Ignored without rx_position."
+          additionalProperties: false
+          properties:
+            mode_s: {$ref: '#/components/schemas/Range'}
+            uat: {$ref: '#/components/schemas/Range'}
+            remote_id: {$ref: '#/components/schemas/Range'}
         range_withheld: {type: string, enum: [no_position, implausible], description: "Only when range is omitted for that reason."}
         range_dropped: {type: integer, minimum: 0, description: "Positions the bee dropped as beyond the horizon."}
     ReportAnswer:
@@ -118,9 +129,12 @@ components:
       properties:
         since: {type: string, format: date-time}
         until: {type: string, format: date-time}
+        protocol: {type: string, enum: [aircraft, mode_s, uat, remote_id]}
+        protocols: {type: array, items: {type: string, enum: [mode_s, uat, remote_id, aircraft]}, description: "Protocols with data for these bees in the window, in this order."}
         sectors: {type: integer}
         bands: {type: integer}
         sector_deg: {type: integer}
+        band_basis: {type: string, enum: [altitude, height_above_rx], description: "altitude: baro, else geometric. height_above_rx: remote_id."}
         band_edges_ft: {type: array, items: {type: array, items: {type: integer, nullable: true}}}
         devices:
           type: array
@@ -263,7 +277,7 @@ paths:
   /api/swarm/v1/range:
     get:
       summary: Range map, max per bin over the window, per bee and for the swarm
-      parameters: [{$ref: '#/components/parameters/device'}, {$ref: '#/components/parameters/since'}, {$ref: '#/components/parameters/until'}]
+      parameters: [{$ref: '#/components/parameters/device'}, {$ref: '#/components/parameters/since'}, {$ref: '#/components/parameters/until'}, {$ref: '#/components/parameters/protocol'}]
       responses: {'200': {description: Map, content: {application/json: {schema: {$ref: '#/components/schemas/RangeMap'}}}}}
   /api/swarm/v1/stats:
     get:
