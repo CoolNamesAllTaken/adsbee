@@ -321,8 +321,8 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
                                      aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedPosition) ||
                                      aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedDirection);
     data.SetMiscIndicator(track_heading_value,
-                          aircraft_updated_position,                              // Aircraft report updated?
-                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne)  // Aircraft is airborne?
+                          aircraft_updated_position,  // Aircraft report updated?
+                          !aircraft.IsOnGround()      // Aircraft is airborne?
     );
     data.navigation_integrity_category = aircraft.navigation_integrity_category;
     data.navigation_accuracy_category_position = aircraft.navigation_accuracy_category_position;

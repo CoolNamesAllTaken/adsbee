@@ -207,32 +207,67 @@ TEST_F(AirGround, AllCallCapabilityWithoutADSB) {
 }
 
 // Every output reads the same state.
-TEST_F(AirGround, OutputsKeepADSBAirborneAfterAModeSGroundReply) {
-    inc_time_since_boot_ms(100);
-    ASSERT_TRUE(Ingest(AltitudeReply(1, 10050, true)));
-    const ModeSAircraft& aircraft = *Aircraft();
+// On-ground as each output reports it: JSON on_ground, ASTERIX GBS, GDL90 not-airborne.
+struct OutputGround {
+    bool json, asterix, gdl90;
+};
 
+OutputGround OutputsOnGround(const ModeSAircraft& aircraft) {
+    OutputGround out = {};
     char json[1024];
-    ASSERT_GT(WriteAircraftJSONModeSAircraftStr(json, aircraft), 0);
-    EXPECT_EQ(strstr(json, "on_ground"), nullptr) << json;
+    EXPECT_GT(WriteAircraftJSONModeSAircraftStr(json, aircraft), 0);
+    out.json = strstr(json, "\"on_ground\":1") != nullptr;
 
     ASTERIXReporter::ReportContext ctx;
     ctx.sac = 1;
     ctx.sic = 2;
     ctx.timestamp_ms = get_time_since_boot_ms();
     ASTERIXReporter::CAT021TargetReport report;
-    ASSERT_TRUE(ASTERIXReporter::BuildCAT021Report(report, aircraft, ctx));
-    EXPECT_FALSE(report.on_ground);
+    ModeSAircraft positioned = aircraft;  // ASTERIX reports only aircraft with a position.
+    positioned.WriteBitFlag(ModeSAircraft::kBitFlagPositionValid, true);
+    EXPECT_TRUE(ASTERIXReporter::BuildCAT021Report(report, positioned, ctx));
+    out.asterix = report.on_ground;
 
     GDL90Reporter gdl90;
     uint8_t frame[GDL90Reporter::kGDL90MessageMaxLenBytes];
     uint16_t frame_len = gdl90.WriteGDL90TargetReportMessage(frame, sizeof(frame), aircraft, false);
-    ASSERT_GT(frame_len, 0);
+    EXPECT_GT(frame_len, 0);
     uint8_t msg[GDL90Reporter::kGDL90MessageMaxLenBytes];
     uint16_t msg_len = 0;
     for (uint16_t i = 1; i + 1 < frame_len; i++) {  // Strip flag bytes and escapes.
         msg[msg_len++] = frame[i] == 0x7D ? frame[++i] ^ 0x20 : frame[i];
     }
-    ASSERT_GE(msg_len, 13);
-    EXPECT_TRUE(msg[12] & 0b1000);  // Misc indicators: airborne.
+    EXPECT_GE(msg_len, 13);
+    out.gdl90 = msg_len >= 13 && !(msg[12] & 0b1000);  // Misc indicators: airborne bit.
+    return out;
+}
+
+TEST_F(AirGround, OutputsKeepADSBAirborneAfterAModeSGroundReply) {
+    inc_time_since_boot_ms(100);
+    ASSERT_TRUE(Ingest(AltitudeReply(1, 10050, true)));
+    OutputGround out = OutputsOnGround(*Aircraft());
+    EXPECT_FALSE(out.json);
+    EXPECT_FALSE(out.asterix);
+    EXPECT_FALSE(out.gdl90);
+}
+
+TEST_F(AirGround, NewAircraftIsNotOnGroundUntilAMessageSaysSo) {
+    // 0.9.1-rc9 showed every new aircraft on the ground until its first airborne ADS-B message, and the web UI kept
+    // that on_ground:1 after it.
+    constexpr uint32_t kOther = 0xA12345;
+    ASSERT_TRUE(Ingest(AllCallReply(6, kOther)));  // CA=6: air or ground.
+    const ModeSAircraft* other = Aircraft(kOther);
+    ASSERT_NE(other, nullptr);
+    EXPECT_FALSE(other->IsOnGround());
+    OutputGround out = OutputsOnGround(*other);
+    EXPECT_FALSE(out.json);
+    EXPECT_FALSE(out.asterix);
+    EXPECT_FALSE(out.gdl90);
+
+    ASSERT_TRUE(Ingest(AllCallReply(4, kOther)));  // CA=4: on the ground.
+    EXPECT_TRUE(other->IsOnGround());
+    out = OutputsOnGround(*other);
+    EXPECT_TRUE(out.json);
+    EXPECT_TRUE(out.asterix);
+    EXPECT_TRUE(out.gdl90);
 }

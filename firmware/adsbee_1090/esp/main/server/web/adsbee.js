@@ -1598,6 +1598,8 @@ function acSource(ac) {
     return ac.link === 'uat' ? 'adsb_uat' : 'adsb_1090';  // Firmware without "link" only sent 1090 as direct ADS-B.
 }
 
+const kTrueOnlyFields = ['on_ground', 'alert', 'spi', 'emergency'];
+
 class AircraftStore {
     constructor() {
         this.aircraft = new Map();  // key (hex) → latest merged data
@@ -1612,7 +1614,10 @@ class AircraftStore {
         const key = ac.hex;
         let prev = this.aircraft.get(key) || {};
         if (prev.src && prev.src !== src) prev = {};  // Don't mix fields from two sources; the trail carries over.
-        this.aircraft.set(key, { ...prev, ...ac, key, src, srcLabel: TRAFFIC_SOURCES[src].label });
+        const merged = { ...prev, ...ac, key, src, srcLabel: TRAFFIC_SOURCES[src].label };
+        // The firmware sends these only while true, so a report without one clears it.
+        for (const f of kTrueOnlyFields) if (!(f in ac)) delete merged[f];
+        this.aircraft.set(key, merged);
         this.lastSeen.set(key, Date.now());
         if (ac.lat != null && ac.lon != null) {
             const t = this.trails.get(key) || [];
@@ -2169,5 +2174,5 @@ class AircraftTable {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { isOtherTextEntry, whereplaneMapUrl, webSocketRefused, AircraftWebSocket, UplinkWebSocket, MapWeather,
-        receiverIdUuid, parseFeedReceiverIdLine };
+        receiverIdUuid, parseFeedReceiverIdLine, AircraftStore };
 }

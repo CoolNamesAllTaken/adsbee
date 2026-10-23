@@ -563,6 +563,7 @@ bool ModeSAircraft::SetAirGroundFromModeS(bool airborne, int32_t altitude_ft, ui
         }
     }
     WriteBitFlag(kBitFlagIsAirborne, airborne);
+    air_ground_known_ = true;
     return true;
 }
 

@@ -401,7 +401,14 @@ class ModeSAircraft : public Aircraft {
         WriteBitFlag(kBitFlagIsAirborne, airborne);
         last_adsb_air_ground_ms = timestamp_ms;
         adsb_air_ground_heard_ = true;
+        air_ground_known_ = true;
     }
+
+    /**
+     * On the ground, for every output (JSON on_ground, ASTERIX GBS, GDL90 airborne). False until a message has given
+     * air/ground: kBitFlagIsAirborne starts cleared, which would otherwise show every new aircraft on the ground.
+     */
+    inline bool IsOnGround() const { return air_ground_known_ && !HasBitFlag(kBitFlagIsAirborne); }
 
     /**
      * Air/ground from a Mode S reply (flight status, vertical status or capability). Ignored while ADS-B decides
@@ -530,6 +537,7 @@ class ModeSAircraft : public Aircraft {
 
    private:
     bool adsb_air_ground_heard_ = false;  // An ADS-B message has given air/ground (last_adsb_air_ground_ms is set).
+    bool air_ground_known_ = false;       // An ADS-B message or Mode S reply has given air/ground.
 
     struct CPRPacket {
         // SetCPRLatLon values.
