@@ -381,7 +381,7 @@ bool ModeSAircraft::ApplyAircraftIDMessage(const ModeSADSBPacket& packet) {
 bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet, uint32_t ref_lat_awb32,
                                                 uint32_t ref_lon_awb32, bool filter_cpr_position,
                                                 bool ref_position_valid) {
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, false);
+    SetAirGroundFromADSB(false, last_message_timestamp_ms);
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitC)) {
         // Assign NIC based on NIC supplement bits A (bit 0) and C (bit 2) and received TypeCode. DO-260C Table 2-11.
@@ -549,8 +549,26 @@ bool ModeSAircraft::ApplyNoPositionMessage(const ModeSADSBPacket& packet) {
     return true;
 }
 
+bool ModeSAircraft::SetAirGroundFromModeS(bool airborne, int32_t altitude_ft, uint32_t timestamp_ms) {
+    // As in readsb: replies have no parity check of their own, and some transponders report a wrong flight status.
+    if (adsb_air_ground_heard_ && timestamp_ms - last_adsb_air_ground_ms < kADSBAirGroundHoldMs) {
+        return false;
+    }
+    if (!airborne) {
+        if (altitude_ft == INT32_MIN && HasBitFlag(kBitFlagBaroAltitudeValid)) {
+            altitude_ft = baro_altitude_ft;
+        }
+        if (altitude_ft != INT32_MIN && altitude_ft > kMaxGroundAltitudeFt) {
+            return false;
+        }
+    }
+    WriteBitFlag(kBitFlagIsAirborne, airborne);
+    air_ground_known_ = true;
+    return true;
+}
+
 bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, bool filter_cpr_position) {
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    SetAirGroundFromADSB(true, last_message_timestamp_ms);
     uint16_t type_code = packet.type_code;
 
     bool decode_successful = true;
@@ -782,7 +800,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
 }
 
 bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet) {
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    SetAirGroundFromADSB(true, last_message_timestamp_ms);
     bool decode_successful = true;
 
     // Decode horizontal velocity.
@@ -2161,13 +2179,14 @@ bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReply
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
         return false;  // unable to find or create new aircraft in dictionary
     }
+    uint32_t timestamp_ms = get_time_since_boot_ms();
     if (packet.airborne_state_known) {
-        aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.is_airborne);
+        aircraft_ptr->SetAirGroundFromModeS(packet.is_airborne, INT32_MIN, timestamp_ms);
     }
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert, packet.has_alert);
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.has_ident);
     aircraft_ptr->squawk = packet.squawk;
-    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_timestamp_ms = timestamp_ms;
     aircraft_ptr->IncrementNumFramesReceived(packet.raw.buffer_len_bytes ==
                                              RawModeSPacket::kExtendedSquitterPacketLenBytes);
 
@@ -2202,8 +2221,11 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReply
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
         return false;  // unable to find or create new aircraft in dictionary
     }
+    uint32_t timestamp_ms = get_time_since_boot_ms();
     if (packet.airborne_state_known) {
-        aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.is_airborne);
+        aircraft_ptr->SetAirGroundFromModeS(
+            packet.is_airborne, packet.altitude_ft > kAltitudeDecodeErrorInvalid ? packet.altitude_ft : INT32_MIN,
+            timestamp_ms);
     }
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert, packet.has_alert);
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.has_ident);
@@ -2215,7 +2237,7 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReply
         aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, false);
     }
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
-    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_timestamp_ms = timestamp_ms;
     aircraft_ptr->IncrementNumFramesReceived(packet.raw.buffer_len_bytes ==
                                              RawModeSPacket::kExtendedSquitterPacketLenBytes);
 
@@ -2236,11 +2258,13 @@ bool AircraftDictionary::IngestModeSAirAirSurveillancePacket(const DecodedModeSP
     if (aircraft_ptr == nullptr) {
         return false;  // unable to find or create new aircraft in dictionary
     }
-    // Bit 6 - Vertical Status (VS): 0 = airborne, 1 = on the ground.
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne,
-                               GetNBitsFromWordBuffer(1, 5, packet.raw.buffer) == 0);
+    uint32_t timestamp_ms = get_time_since_boot_ms();
     // Bits 20-32 - Altitude Code (AC), same encoding as DF=4.
     int32_t altitude_ft = AltitudeCodeToAltitudeFt(GetNBitsFromWordBuffer(13, 19, packet.raw.buffer));
+    // Bit 6 - Vertical Status (VS): 0 = airborne, 1 = on the ground.
+    aircraft_ptr->SetAirGroundFromModeS(GetNBitsFromWordBuffer(1, 5, packet.raw.buffer) == 0,
+                                        altitude_ft > kAltitudeDecodeErrorInvalid ? altitude_ft : INT32_MIN,
+                                        timestamp_ms);
     if (altitude_ft > kAltitudeDecodeErrorInvalid) {
         aircraft_ptr->baro_altitude_ft = altitude_ft;
         aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
@@ -2248,7 +2272,7 @@ bool AircraftDictionary::IngestModeSAirAirSurveillancePacket(const DecodedModeSP
         aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, false);
     }
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
-    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_timestamp_ms = timestamp_ms;
     aircraft_ptr->IncrementNumFramesReceived(packet.raw.buffer_len_bytes ==
                                              RawModeSPacket::kExtendedSquitterPacketLenBytes);
 
@@ -2283,10 +2307,17 @@ bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPa
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_timestamp_ms = timestamp_ms;
 
     // Update aircaft transponder capability.
     aircraft_ptr->transponder_capability = packet.capability;
+    // CA = 4 and 5 say on the ground or airborne; 0, 6 and 7 don't say.
+    if (packet.capability == DecodedModeSPacket::kCALevel2PlusTransponderOnSurfaceCanSetCA7 ||
+        packet.capability == DecodedModeSPacket::kCALevel2PlusTransponderAirborneCanSetCA7) {
+        aircraft_ptr->SetAirGroundFromModeS(
+            packet.capability == DecodedModeSPacket::kCALevel2PlusTransponderAirborneCanSetCA7, INT32_MIN, timestamp_ms);
+    }
 
     return true;
 }

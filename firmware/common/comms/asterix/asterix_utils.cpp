@@ -248,7 +248,7 @@ bool ASTERIXReporter::BuildCAT021Report(CAT021TargetReport& report, const ModeSA
     report.address_type =
         address_type >= ModeSAircraft::kFirstNonICAOAddressType ? kAddressTypeAnonymous : kAddressTypeICAO;
     report.altitude_reporting_capability = kARCUnknown;  // The altitude's Q bit isn't kept.
-    report.on_ground = !aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne);
+    report.on_ground = aircraft.IsOnGround();
     report.has_service_id = true;
     report.service_id = ModeSAircraft::IsRebroadcast(address_type) ? kServiceID1090ESRebroadcast : kServiceID1090ES;
 
