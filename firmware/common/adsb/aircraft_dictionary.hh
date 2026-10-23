@@ -154,6 +154,11 @@ class ModeSAircraft : public Aircraft {
     static constexpr uint16_t kCallSignMaxNumChars = 8;
     static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
 
+    // ADS-B position and velocity messages decide air/ground; Mode S replies only once none has arrived for this long.
+    static constexpr uint32_t kADSBAirGroundHoldMs = 30e3;
+    // Above this, a Mode S reply saying "on the ground" is a transponder fault (highest airport: 14,472 ft).
+    static constexpr int32_t kMaxGroundAltitudeFt = 18000;
+
     enum BitFlag : uint32_t {
         kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
         kBitFlagBaroAltitudeValid = 1,
@@ -383,13 +388,37 @@ class ModeSAircraft : public Aircraft {
     /**
      * Set or clear a bit on the Aircraft.
      */
-    inline void WriteBitFlag(BitFlag bit, bool value) {
-        if (bit == kBitFlagIsAirborne && HasBitFlag(kBitFlagIsAirborne) != value) {
-            // Reset CPR packets when the airborne state changes, since position decoding may be invalid now.
+    inline void WriteBitFlag(BitFlag bit, bool value) { value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit); }
+
+    /**
+     * Air/ground from an ADS-B position or velocity message. A change clears the CPR packets, since airborne and
+     * surface positions don't pair.
+     */
+    inline void SetAirGroundFromADSB(bool airborne, uint32_t timestamp_ms) {
+        if (HasBitFlag(kBitFlagIsAirborne) != airborne) {
             ClearCPRPackets();
         }
-        value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit);
+        WriteBitFlag(kBitFlagIsAirborne, airborne);
+        last_adsb_air_ground_ms = timestamp_ms;
+        adsb_air_ground_heard_ = true;
+        air_ground_known_ = true;
     }
+
+    /**
+     * On the ground, for every output (JSON on_ground, ASTERIX GBS, GDL90 airborne). False until a message has given
+     * air/ground: kBitFlagIsAirborne starts cleared, which would otherwise show every new aircraft on the ground.
+     */
+    inline bool IsOnGround() const { return air_ground_known_ && !HasBitFlag(kBitFlagIsAirborne); }
+
+    /**
+     * Air/ground from a Mode S reply (flight status, vertical status or capability). Ignored while ADS-B decides
+     * (kADSBAirGroundHoldMs), and "on the ground" above kMaxGroundAltitudeFt is ignored. Leaves the CPR packets alone.
+     * @param[in] airborne Air/ground state the reply gives.
+     * @param[in] altitude_ft Altitude in the same reply, or INT32_MIN if it has none (the last baro altitude is used).
+     * @param[in] timestamp_ms Local time of the reply.
+     * @retval True if the state was taken.
+     */
+    bool SetAirGroundFromModeS(bool airborne, int32_t altitude_ft, uint32_t timestamp_ms);
 
     /**
      * Write a value for a NIC supplement bit. Used to piece together a NIC from separate messages, so that the NIC can
@@ -414,6 +443,7 @@ class ModeSAircraft : public Aircraft {
     uint32_t num_frames_received = 0;  // Valid frames received since the aircraft was added, never reset.
 
     uint16_t transponder_capability = 0;
+    uint32_t last_adsb_air_ground_ms = 0;  // Local time of the last ADS-B message that gave air/ground.
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint8_t num_position_decodes = 0;  // Accepted positions in a row, up to 2. Sits in padding.
@@ -506,6 +536,9 @@ class ModeSAircraft : public Aircraft {
     bool ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& packet);
 
    private:
+    bool adsb_air_ground_heard_ = false;  // An ADS-B message has given air/ground (last_adsb_air_ground_ms is set).
+    bool air_ground_known_ = false;       // An ADS-B message or Mode S reply has given air/ground.
+
     struct CPRPacket {
         // SetCPRLatLon values.
         uint32_t received_timestamp_ms = 0;  // [ms] time since boot when packet was recorded

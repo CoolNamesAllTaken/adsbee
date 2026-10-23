@@ -339,10 +339,9 @@ TEST(ASTERIXUtils, BuildCAT021ReportModeSFilters) {
     no_position.WriteBitFlag(ModeSAircraft::kBitFlagPositionValid, false);
     EXPECT_FALSE(ASTERIXReporter::BuildCAT021Report(r, no_position, ctx));
 
-
     // Surface targets keep their position but leave the airborne velocity items out.
     ModeSAircraft surface = AirborneModeSAircraft();
-    surface.WriteBitFlag(ModeSAircraft::kBitFlagIsAirborne, false);
+    surface.SetAirGroundFromADSB(false, 3000);  // A surface position message.
     ASSERT_TRUE(ASTERIXReporter::BuildCAT021Report(r, surface, ctx));
     EXPECT_TRUE(r.on_ground);
     EXPECT_FALSE(r.has_ground_vector);

@@ -223,7 +223,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
         n = n < max ? n : max;
     }
 
-    if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne)) {
+    if (aircraft.IsOnGround()) {
         n += snprintf(buf + n, max - n, ",\"on_ground\":1");
         n = n < max ? n : max;
     }
