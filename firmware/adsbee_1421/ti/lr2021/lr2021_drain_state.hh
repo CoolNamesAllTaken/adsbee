@@ -28,7 +28,7 @@ enum class LR2021DrainState : uint8_t {
     // IRQ-paced chain (advanced from the GPIO HWIs and the SPI completion SWI; the thread only
     // backstops). Must stay the LAST block: LR2021DrainIsChainState() tests >= kChainFifoWait.
     kChainFifoWait,          // Waiting (BUSY edge / thread assist) to post ReadRxFifo(threshold).
-    kChainFifoRead,          // ReadRxFifo (2 + 126 B) DMA into a staging slot in flight.
+    kChainFifoRead,          // ReadRxFifo (2 + 154 B) DMA into a staging slot in flight.
     kChainClearFifoWait,     // Waiting to post the GetAndClearFifoIrqFlags opcode frame.
     kChainClearFifo,         // GetAndClearFifoIrqFlags frame 1 (2 B) in flight.
     kChainClearFifoRspWait,  // Waiting to post the GetAndClearFifoIrqFlags response frame.

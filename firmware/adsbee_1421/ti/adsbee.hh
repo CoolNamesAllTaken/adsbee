@@ -240,7 +240,7 @@ class ADSBee {
 
     // Shortest time between the starts of two loop drain sweeps. The LR2021 can miss a preamble while it serves a
     // command, so polling the FIFO less often receives more packets. A packet waits up to this long in the FIFO;
-    // the IRQ-paced chain empties a FIFO that reaches 9 packets sooner.
+    // the IRQ-paced chain empties a FIFO that reaches kIrqDrainThresholdBytes sooner.
     static constexpr uint32_t kLR2021SweepIntervalUs = 4000;
 
     // Timestamp of the last async RX drain's StartRxDrain() call, for lr2021_drain_max_us and the sweep interval.
