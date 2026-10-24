@@ -503,6 +503,29 @@ TEST(SwarmReporter, FullBodyFits) {
     printf("Largest body: %zu Bytes\n", platform.bodies[0].size());
 }
 
+// Each report allocates only its own length: the measured length is exact, one Byte less doesn't fit.
+TEST(SwarmReporter, BodyLengthMeasuredExactly) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    AutoUpdatePlatform::Identity identity;
+    ASSERT_TRUE(platform.GetIdentity(identity));
+    std::vector<char> buf(SwarmReporter::kBodyMaxLen);
+    for (int fill : {0, 1, 3}) {
+        SwarmRecorder live;
+        for (int p = 0; p < fill; p++) memset(live.ranges[p].bins, 200, sizeof(live.ranges[p].bins) / (p + 1));
+        AddSecond(live, 1000, 500, 20, 3, 40);
+        reporter.TakePeriod(live, 3600, FixedPosition());
+        for (bool keys : {false, true}) {
+            size_t measured = reporter.BuildBody(nullptr, 0, identity, keys, 3600);
+            ASSERT_GT(measured, 0u);
+            EXPECT_EQ(reporter.BuildBody(buf.data(), buf.size(), identity, keys, 3600), measured);
+            EXPECT_EQ(strlen(buf.data()), measured);
+            EXPECT_EQ(reporter.BuildBody(buf.data(), measured + 1, identity, keys, 3600), measured);
+            EXPECT_EQ(reporter.BuildBody(buf.data(), measured, identity, keys, 3600), 0u);
+        }
+    }
+}
+
 // Positions reach the range map once an aircraft has two accepted decodes.
 TEST(SwarmRecorder, DictionaryRecordsConfirmedPositions) {
     AircraftDictionary dictionary;
@@ -998,6 +1021,15 @@ TEST(SwarmRecorder, DictionaryRecordsDronesAfterTwoLocationMessages) {
     EXPECT_EQ(drones.bins[2 * 36 + 0], 23);  // 1112 m.
     EXPECT_TRUE(recorder.ranges[SwarmRecorder::kModeS].Empty());
     EXPECT_TRUE(recorder.ranges[SwarmRecorder::kUAT].Empty());
+
+    // Next period: still hovering, recorded again from its next message.
+    recorder.Clear();
+    inc_time_since_boot_ms(100);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_TRUE(recorder.RangeEmpty());
+    ASSERT_TRUE(dictionary.IngestRawRemoteIDPacket(DroneLocation(1, 37.01, -122.0, 120)));
+    ASSERT_EQ(NumBins(drones), 1);
+    EXPECT_EQ(drones.bins[2 * 36 + 0], 23);
 
     // Flies on: the distance is recomputed once a second and recorded.
     inc_time_since_boot_ms(100);

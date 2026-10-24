@@ -1700,7 +1700,7 @@ class AircraftDictionary {
     template <typename T>
     void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before, bool position_message = false) {
         PositionSnapshot after = PositionSnapshot::Of(aircraft);
-        bool confirmed_now = false;
+        bool record_in_place = false;
         if constexpr (kRecordsRange<T>) {
             bool moved = after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg;
             // Remote ID repeats a hovering drone's position unchanged, so every Location message with one counts.
@@ -1708,7 +1708,11 @@ class AircraftDictionary {
             if (!after.valid) {
                 aircraft.num_position_decodes = 0;
             } else if (decoded && aircraft.num_position_decodes < 2) {
-                confirmed_now = ++aircraft.num_position_decodes == 2;
+                record_in_place = ++aircraft.num_position_decodes == 2;
+            }
+            // A confirmed drone counts in every period it is heard, hovering or not.
+            if constexpr (std::is_same_v<T, RemoteIDAircraft>) {
+                record_in_place = decoded && aircraft.num_position_decodes == 2;
             }
         }
         if (after.valid != before.valid || (after.valid && aircraft.distance_m == Aircraft::kDistanceUnknown)) {
@@ -1716,8 +1720,8 @@ class AircraftDictionary {
             RecordRange(aircraft);
         } else if (after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg) {
             aircraft.distance_reference_epoch = kDistanceEpochStale;
-        } else if (confirmed_now && aircraft.distance_reference_epoch == reference_epoch_) {
-            RecordRange(aircraft);  // Confirmed in place: the distance won't be recomputed.
+        } else if (record_in_place && aircraft.distance_reference_epoch == reference_epoch_) {
+            RecordRange(aircraft);  // Confirmed or heard again in place: the distance won't be recomputed.
         }
     }
 

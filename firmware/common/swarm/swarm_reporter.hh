@@ -65,7 +65,8 @@ class SwarmReporter {
 
     enum Result : uint8_t { kOK, kNoAnswer, kNoIdentity, kRejected, kRateLimited, kServerError, kRemoved, kBadRequest };
 
-    static constexpr uint16_t kBodyMaxLen = 3072;  // Three full range maps with OTA keys: 2,915 Bytes.
+    // Largest body sent; each report allocates only its own length. Three full range maps with OTA keys: 2,915 Bytes.
+    static constexpr uint16_t kBodyMaxLen = 3072;
 
     SwarmReporter(SwarmPlatform& platform, const char* version, const Config& config, uint32_t first_seq = 0);
     SwarmReporter(SwarmPlatform& platform, const char* version) : SwarmReporter(platform, version, Config()) {}
@@ -117,7 +118,7 @@ class SwarmReporter {
     static bool IsDefaultServer(const char* server);
     // Standard base64 with padding. dest needs 4 * ceil(len / 3) + 1 Bytes.
     static size_t Base64Encode(const uint8_t* data, size_t len, char* dest);
-    // Builds the report JSON. Returns its length, or 0 if it doesn't fit.
+    // Builds the report JSON. Returns its length, or 0 if it doesn't fit. A null buf only measures the length.
     size_t BuildBody(char* buf, size_t buf_size, const AutoUpdatePlatform::Identity& identity, bool include_ota_keys,
                      uint32_t uptime_s) const;
     static const char* ResultToStr(Result result);
