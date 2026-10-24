@@ -3,11 +3,14 @@
 #include <vector>
 
 #include "aircraft_dictionary.hh"
-#include "swarm_reporter.hh"
+#include "fec.hh"
 #include "geo_utils.hh"
 #include "gtest/gtest.h"
 #include "hal.hh"
+#include "opendroneid.h"
 #include "range_map.hh"
+#include "swarm_reporter.hh"
+#include "uat_packet.hh"
 
 namespace {
 
@@ -204,19 +207,19 @@ TEST(SwarmRecorder, UniqueAircraftEstimate) {
 TEST(SwarmRecorder, MergeTakesMaximaAndSums) {
     SwarmRecorder a, b;
     AddSecond(a, 10, 20, 3, 4, 50);
-    a.range.bins[7] = 10;
+    a.ranges[SwarmRecorder::kModeS].bins[7] = 10;
     AddSecond(b, 1, 2, 3, 4, 70);
     AddSecond(b, 1, 2, 3, 4, 60);
-    b.range.bins[7] = 5;
-    b.range.bins[8] = 9;
+    b.ranges[SwarmRecorder::kModeS].bins[7] = 5;
+    b.ranges[SwarmRecorder::kModeS].bins[8] = 9;
     a.Merge(b);
     EXPECT_EQ(a.stats.modes_valid, 12u);
     EXPECT_EQ(a.stats.es_valid, 24u);
     EXPECT_EQ(a.stats.uat_adsb, 9u);
     EXPECT_EQ(a.stats.uat_uplink, 12u);
     EXPECT_EQ(a.stats.aircraft_max, 70);
-    EXPECT_EQ(a.range.bins[7], 10);
-    EXPECT_EQ(a.range.bins[8], 9);
+    EXPECT_EQ(a.ranges[SwarmRecorder::kModeS].bins[7], 10);
+    EXPECT_EQ(a.ranges[SwarmRecorder::kModeS].bins[8], 9);
 }
 
 TEST(SwarmReporter, DefaultServerOnly) {
@@ -236,11 +239,11 @@ TEST(SwarmReporter, ReportBodyFollowsProtocolV1) {
     SwarmRecorder live;
     AddSecond(live, 100, 200, 3, 4, 17);
     live.MarkAircraft(0xABCDEF);
-    live.RecordPosition(50000, DegToBam16(45.0f), 12000, 1);
+    live.RecordPosition(SwarmRecorder::kModeS, 50000, DegToBam16(45.0f), 12000, 1);
     platform.now_ms = 3700 * 1000;
     reporter.Restart(live, 100 * 1000);  // Period starts at uptime 100 s.
     AddSecond(live, 100, 200, 3, 4, 17);
-    live.RecordPosition(50000, DegToBam16(45.0f), 12000, 1);
+    live.RecordPosition(SwarmRecorder::kModeS, 50000, DegToBam16(45.0f), 12000, 1);
     reporter.TakePeriod(live, 3700 * 1000, FixedPosition());
     EXPECT_EQ(live.stats.modes_valid, 0u);  // The live period starts over.
 
@@ -263,7 +266,11 @@ TEST(SwarmReporter, ReportBodyFollowsProtocolV1) {
     EXPECT_NE(body.find("\"stats\":{\"modes_valid\":100,\"es_valid\":200,\"uat_adsb\":3,\"uat_uplink\":4,"
                         "\"aircraft_max\":17,\"aircraft_unique\":0}"),
               std::string::npos);
-    EXPECT_NE(body.find("\"range\":{\"sectors\":36,\"bands\":12,\"unit_m\":2000,"), std::string::npos);
+    EXPECT_NE(body.find(",\"range_dropped\":0,\"ranges\":{\"mode_s\":{\"sectors\":36,\"bands\":12,\"unit_m\":2000,"),
+              std::string::npos);
+    EXPECT_EQ(body.find("\"range\":"), std::string::npos);  // Replaced by ranges.
+    EXPECT_EQ(body.find("\"uat\""), std::string::npos);    // No data: left out.
+    EXPECT_EQ(body.find("\"remote_id\""), std::string::npos);
     std::vector<uint8_t> bitmap = Base64Decode(JsonString(body, "changed"));
     std::vector<uint8_t> values = Base64Decode(JsonString(body, "max"));
     ASSERT_EQ(bitmap.size(), 54u);
@@ -280,20 +287,20 @@ TEST(SwarmReporter, NoOTAKeysToOtherServersAndNoPositionFromAircraft) {
     FakeSwarmPlatform platform;
     SwarmReporter reporter(platform, "0.9.1-rc9");
     SwarmRecorder live;
-    live.RecordPosition(50000, 0, 0, 1);
+    live.RecordPosition(SwarmRecorder::kModeS, 50000, 0, 0, 1);
     reporter.TakePeriod(live, 60000, FixedPosition());
     reporter.Send("http://192.168.1.10:8000", kToken);
     ASSERT_EQ(platform.bodies.size(), 1u);
     EXPECT_EQ(platform.urls[0], "http://192.168.1.10:8000/api/swarm/v1/report");
     EXPECT_EQ(platform.bodies[0].find("ota_keys"), std::string::npos);
-    EXPECT_NE(platform.bodies[0].find("\"range\":{"), std::string::npos);
+    EXPECT_NE(platform.bodies[0].find("\"ranges\":{\"mode_s\":{"), std::string::npos);
 
     // An aircraft-derived position (UsablePosition() false): no rx_position, no range, stats still go.
     reporter.TakePeriod(live, 120000, SwarmReporter::DeviceState());
     reporter.Send("http://192.168.1.10:8000", kToken);
     const std::string& body = platform.bodies[1];
     EXPECT_EQ(body.find("rx_position"), std::string::npos);
-    EXPECT_EQ(body.find("\"range\""), std::string::npos);
+    EXPECT_EQ(body.find("\"ranges\""), std::string::npos);
     EXPECT_EQ(body.find("range_dropped"), std::string::npos);
     EXPECT_NE(body.find("\"stats\":{"), std::string::npos);
     EXPECT_NE(body.find(",\"range_withheld\":\"no_position\"}"), std::string::npos) << body;
@@ -305,7 +312,7 @@ TEST(SwarmReporter, FailedReportMergesWithSameSeqAndStart) {
     SwarmRecorder live;
     reporter.Restart(live, 200 * 1000);
     AddSecond(live, 10, 20, 0, 0, 5);
-    live.RecordPosition(10000, DegToBam16(5.0f), 500, 1);   // bin 0: 5
+    live.RecordPosition(SwarmRecorder::kModeS, 10000, DegToBam16(5.0f), 500, 1);   // bin 0: 5
     live.MarkAircraft(1);
     reporter.TakePeriod(live, 3800 * 1000, FixedPosition());
 
@@ -319,8 +326,8 @@ TEST(SwarmReporter, FailedReportMergesWithSameSeqAndStart) {
 
     // The next period merges into the pending report.
     AddSecond(live, 1, 2, 0, 0, 9);
-    live.RecordPosition(4000, DegToBam16(5.0f), 500, 1);    // Smaller: bin 0 stays 5.
-    live.RecordPosition(30000, DegToBam16(15.0f), 500, 1);  // bin 1: 15
+    live.RecordPosition(SwarmRecorder::kModeS, 4000, DegToBam16(5.0f), 500, 1);    // Smaller: bin 0 stays 5.
+    live.RecordPosition(SwarmRecorder::kModeS, 30000, DegToBam16(15.0f), 500, 1);  // bin 1: 15
     live.MarkAircraft(2);
     reporter.TakePeriod(live, 3860 * 1000, FixedPosition());
     platform.status = 503;
@@ -357,8 +364,7 @@ TEST(SwarmReporter, FailedReportMergesWithSameSeqAndStart) {
     EXPECT_EQ(JsonNumber(platform.bodies[3], "seq"), 1);
     EXPECT_EQ(JsonNumber(platform.bodies[3], "start_uptime_s"), 3980);
     EXPECT_EQ(JsonNumber(platform.bodies[3], "modes_valid"), 0);
-    EXPECT_NE(platform.bodies[3].find("\"changed\":\"AAAA"), std::string::npos);  // Empty map.
-    EXPECT_NE(platform.bodies[3].find("\"max\":\"\""), std::string::npos);
+    EXPECT_NE(platform.bodies[3].find("\"range_dropped\":0,\"ranges\":{}}"), std::string::npos);  // No data.
 }
 
 TEST(SwarmReporter, RangeStaysOutIfAnyMergedPeriodLackedAFixedPosition) {
@@ -373,7 +379,7 @@ TEST(SwarmReporter, RangeStaysOutIfAnyMergedPeriodLackedAFixedPosition) {
     reporter.TakePeriod(live, 3660 * 1000, FixedPosition());
     platform.answer = true;
     reporter.Send("https://adsbee.aero", kToken);
-    EXPECT_EQ(platform.bodies[1].find("\"range\""), std::string::npos);
+    EXPECT_EQ(platform.bodies[1].find("\"ranges\""), std::string::npos);
 }
 
 TEST(SwarmReporter, ResponseSetsPeriodAndFirmwareTarget) {
@@ -483,14 +489,41 @@ TEST(SwarmReporter, FullBodyFits) {
     FakeSwarmPlatform platform;
     SwarmReporter reporter(platform, "0.9.1-rc9");
     SwarmRecorder live;
-    for (int i = 0; i < RangeMap::kNumBins; i++) live.range.bins[i] = 255;
+    for (RangeMap& map : live.ranges) memset(map.bins, 255, sizeof(map.bins));
     AddSecond(live, UINT32_MAX / 2, UINT32_MAX / 2, UINT32_MAX / 2, UINT32_MAX / 2, UINT16_MAX);
     reporter.TakePeriod(live, 4000000000u, FixedPosition());
     reporter.Send("https://adsbee.aero", kToken);
     ASSERT_EQ(platform.bodies.size(), 1u);
     EXPECT_GT(platform.bodies[0].size(), 1000u);
     EXPECT_LT(platform.bodies[0].size(), SwarmReporter::kBodyMaxLen);
-    EXPECT_EQ(Base64Decode(JsonString(platform.bodies[0], "max")).size(), 432u);
+    for (const char* protocol : SwarmRecorder::kProtocolNames) {
+        std::string map = platform.bodies[0].substr(platform.bodies[0].find(std::string("\"") + protocol + "\":{"));
+        EXPECT_EQ(Base64Decode(JsonString(map, "max")).size(), 432u) << protocol;
+    }
+    printf("Largest body: %zu Bytes\n", platform.bodies[0].size());
+}
+
+// Each report allocates only its own length: the measured length is exact, one Byte less doesn't fit.
+TEST(SwarmReporter, BodyLengthMeasuredExactly) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc9");
+    AutoUpdatePlatform::Identity identity;
+    ASSERT_TRUE(platform.GetIdentity(identity));
+    std::vector<char> buf(SwarmReporter::kBodyMaxLen);
+    for (int fill : {0, 1, 3}) {
+        SwarmRecorder live;
+        for (int p = 0; p < fill; p++) memset(live.ranges[p].bins, 200, sizeof(live.ranges[p].bins) / (p + 1));
+        AddSecond(live, 1000, 500, 20, 3, 40);
+        reporter.TakePeriod(live, 3600, FixedPosition());
+        for (bool keys : {false, true}) {
+            size_t measured = reporter.BuildBody(nullptr, 0, identity, keys, 3600);
+            ASSERT_GT(measured, 0u);
+            EXPECT_EQ(reporter.BuildBody(buf.data(), buf.size(), identity, keys, 3600), measured);
+            EXPECT_EQ(strlen(buf.data()), measured);
+            EXPECT_EQ(reporter.BuildBody(buf.data(), measured + 1, identity, keys, 3600), measured);
+            EXPECT_EQ(reporter.BuildBody(buf.data(), measured, identity, keys, 3600), 0u);
+        }
+    }
 }
 
 // Positions reach the range map once an aircraft has two accepted decodes.
@@ -507,7 +540,7 @@ TEST(SwarmRecorder, DictionaryRecordsConfirmedPositions) {
     };
     auto num_bins = [&]() {
         int n = 0;
-        for (uint8_t b : recorder.range.bins) n += b != 0;
+        for (uint8_t b : recorder.ranges[SwarmRecorder::kModeS].bins) n += b != 0;
         return n;
     };
     // 48.3 N 18.2 E: one decode, not recorded yet.
@@ -531,7 +564,7 @@ TEST(SwarmRecorder, DictionaryRecordsConfirmedPositions) {
     EXPECT_EQ(aircraft->num_position_decodes, 2);
     ASSERT_EQ(num_bins(), 1);
     uint8_t band = RangeMap::AltitudeBand(aircraft->baro_altitude_ft);
-    EXPECT_EQ(recorder.range.bins[band * 36 + 1], 24);  // 46897 m at 18.41 deg.
+    EXPECT_EQ(recorder.ranges[SwarmRecorder::kModeS].bins[band * 36 + 1], 24);  // 46897 m at 18.41 deg.
     EXPECT_EQ(recorder.UniqueAircraft(), 1);
 
     // Without a recorder nothing is touched.
@@ -619,7 +652,7 @@ void FeedTraffic(SwarmRecorder& recorder, double rx_lat, double rx_lon) {
             uint32_t distance_m;
             uint16_t bam;
             DistanceAndBearing(rx_lat, rx_lon, lat, lon, distance_m, bam);
-            recorder.RecordPosition(distance_m, bam, alt_ft, 0xA00000 + aircraft);
+            recorder.RecordPosition(SwarmRecorder::kModeS, distance_m, bam, alt_ft, 0xA00000 + aircraft);
         }
     }
 }
@@ -634,18 +667,18 @@ TEST(SwarmRecorder, HorizonLimitPerBand) {
             uint32_t limit_m = static_cast<uint32_t>(HorizonKm(rx_m, SwarmRecorder::kBandTopFt[band]) * 1000);
             int32_t alt_ft = band == 0 ? 0 : SwarmRecorder::kBandTopFt[band - 1];  // Bottom of the band.
             recorder.Clear();
-            recorder.RecordPosition(limit_m - 100, 0, alt_ft, 1);
-            recorder.RecordPosition(limit_m + 100, 0, alt_ft, 2);
+            recorder.RecordPosition(SwarmRecorder::kModeS, limit_m - 100, 0, alt_ft, 1);
+            recorder.RecordPosition(SwarmRecorder::kModeS, limit_m + 100, 0, alt_ft, 2);
             EXPECT_EQ(recorder.guard.num_positions, 2u) << rx_m << " m, band " << int(band);
             EXPECT_EQ(recorder.guard.num_dropped, 1u) << rx_m << " m, band " << int(band);
-            EXPECT_EQ(recorder.range.bins[band * 36], RangeMap::DistanceValue(limit_m - 100));
+            EXPECT_EQ(recorder.ranges[SwarmRecorder::kModeS].bins[band * 36], RangeMap::DistanceValue(limit_m - 100));
         }
     }
     // 30 m antenna, 0-1k ft band: 1.15 * 4.12 * (5.48 + 17.46) + 20 = 128.7 km.
     SwarmRecorder recorder;
     recorder.SetReceiverAltitude(30);
-    recorder.RecordPosition(128000, 0, 500, 1);
-    recorder.RecordPosition(129500, 0, 500, 2);
+    recorder.RecordPosition(SwarmRecorder::kModeS, 128000, 0, 500, 1);
+    recorder.RecordPosition(SwarmRecorder::kModeS, 129500, 0, 500, 2);
     EXPECT_EQ(recorder.guard.num_dropped, 1u);
 }
 
@@ -678,8 +711,8 @@ TEST(SwarmRecorder, WithholdNeedsTenPercentFromFiveAircraft) {
     recorder.SetReceiverAltitude(0);
     auto feed = [&](int good, int bad, int bad_aircraft) {
         recorder.Clear();
-        for (int i = 0; i < good; i++) recorder.RecordPosition(10000, 0, 30000, 100 + i % 7);
-        for (int i = 0; i < bad; i++) recorder.RecordPosition(400000, 0, 500, 1 + i % bad_aircraft);
+        for (int i = 0; i < good; i++) recorder.RecordPosition(SwarmRecorder::kModeS, 10000, 0, 30000, 100 + i % 7);
+        for (int i = 0; i < bad; i++) recorder.RecordPosition(SwarmRecorder::kModeS, 400000, 0, 500, 1 + i % bad_aircraft);
     };
     feed(90, 10, 5);  // 10 %, 5 aircraft.
     EXPECT_TRUE(recorder.RangeImplausible());
@@ -696,9 +729,9 @@ TEST(SwarmRecorder, WithholdNeedsTenPercentFromFiveAircraft) {
     SwarmRecorder a, b;
     a.SetReceiverAltitude(0);
     b.SetReceiverAltitude(0);
-    for (int i = 0; i < 3; i++) a.RecordPosition(400000, 0, 500, 1 + i);
-    for (int i = 0; i < 3; i++) b.RecordPosition(400000, 0, 500, 3 + i);  // Aircraft 3 in both.
-    for (int i = 0; i < 20; i++) b.RecordPosition(1000, 0, 500, 9);
+    for (int i = 0; i < 3; i++) a.RecordPosition(SwarmRecorder::kModeS, 400000, 0, 500, 1 + i);
+    for (int i = 0; i < 3; i++) b.RecordPosition(SwarmRecorder::kModeS, 400000, 0, 500, 3 + i);  // Aircraft 3 in both.
+    for (int i = 0; i < 20; i++) b.RecordPosition(SwarmRecorder::kModeS, 1000, 0, 500, 9);
     a.Merge(b);
     EXPECT_EQ(a.guard.num_positions, 26u);
     EXPECT_EQ(a.guard.num_dropped, 6u);
@@ -711,20 +744,309 @@ TEST(SwarmReporter, WithheldMapSaysWhyAndCountsDrops) {
     SwarmReporter reporter(platform, "0.9.1-rc9");
     SwarmRecorder live;
     live.SetReceiverAltitude(30);
-    for (int i = 0; i < 50; i++) live.RecordPosition(20000, 0, 30000, 100);
-    for (int i = 0; i < 10; i++) live.RecordPosition(300000, 0, 500, 1 + i);
+    for (int i = 0; i < 50; i++) live.RecordPosition(SwarmRecorder::kModeS, 20000, 0, 30000, 100);
+    for (int i = 0; i < 10; i++) live.RecordPosition(SwarmRecorder::kModeS, 300000, 0, 500, 1 + i);
     reporter.TakePeriod(live, 60000, FixedPosition());
     reporter.Send("https://adsbee.aero", kToken);
     const std::string& body = platform.bodies[0];
     EXPECT_NE(body.find("\"rx_position\":{"), std::string::npos);
     EXPECT_NE(body.find(",\"range_withheld\":\"implausible\",\"range_dropped\":10}"), std::string::npos) << body;
-    EXPECT_EQ(body.find("\"range\""), std::string::npos);
+    EXPECT_EQ(body.find("\"ranges\""), std::string::npos);
 
     // A clean period: the map, with its drop count.
-    for (int i = 0; i < 50; i++) live.RecordPosition(20000, 0, 30000, 100);
-    live.RecordPosition(300000, 0, 500, 1);
+    for (int i = 0; i < 50; i++) live.RecordPosition(SwarmRecorder::kModeS, 20000, 0, 30000, 100);
+    live.RecordPosition(SwarmRecorder::kModeS, 300000, 0, 500, 1);
     reporter.TakePeriod(live, 120000, FixedPosition());
     reporter.Send("https://adsbee.aero", kToken);
-    EXPECT_NE(platform.bodies[1].find(",\"range_dropped\":1,\"range\":{"), std::string::npos) << platform.bodies[1];
+    EXPECT_NE(platform.bodies[1].find(",\"range_dropped\":1,\"ranges\":{\"mode_s\":{"), std::string::npos) << platform.bodies[1];
     EXPECT_EQ(platform.bodies[1].find("range_withheld"), std::string::npos);
+}
+
+TEST(SwarmRange, DroneHeightBands) {
+    struct {
+        int32_t ft;
+        uint8_t band;
+    } cases[] = {{-300, 0}, {0, 0},     {99, 0},    {100, 1},   {199, 1},   {200, 2},   {299, 2},   {300, 3},
+                 {399, 3},  {400, 4},   {499, 4},   {500, 5},   {699, 5},   {700, 6},   {999, 6},   {1000, 7},
+                 {1499, 7}, {1500, 8},  {1999, 8},  {2000, 9},  {2999, 9},  {3000, 10}, {4999, 10}, {5000, 11},
+                 {9999, 11}, {INT32_MAX, 11}};
+    for (const auto& c : cases) EXPECT_EQ(RangeMap::HeightBand(c.ft), c.band) << c.ft << " ft";
+    // Band tops are the first height of the next band.
+    for (uint8_t band = 0; band + 1 < RangeMap::kNumBands; band++) {
+        EXPECT_EQ(RangeMap::HeightBand(SwarmRecorder::kDroneBandTopFt[band]), band + 1) << int(band);
+        EXPECT_EQ(RangeMap::HeightBand(SwarmRecorder::kDroneBandTopFt[band] - 1), band) << int(band);
+        EXPECT_EQ(RangeMap::AltitudeBand(SwarmRecorder::kBandTopFt[band]), band + 1) << int(band);
+    }
+}
+
+TEST(SwarmRange, DroneDistanceValuesIn50MeterSteps) {
+    EXPECT_EQ(RangeMap::DistanceValue(0, 50), 1);
+    EXPECT_EQ(RangeMap::DistanceValue(50, 50), 1);
+    EXPECT_EQ(RangeMap::DistanceValue(51, 50), 2);
+    EXPECT_EQ(RangeMap::DistanceValue(1234, 50), 25);
+    EXPECT_EQ(RangeMap::DistanceValue(12750, 50), 255);
+    EXPECT_EQ(RangeMap::DistanceValue(12751, 50), 255);  // Clamped: max 12.75 km.
+    EXPECT_EQ(RangeMap::DistanceValue(40000, 50), 255);
+}
+
+TEST(SwarmRecorder, DronesBinByHeightAboveTheReceiver) {
+    SwarmRecorder recorder;
+    recorder.SetReceiverAltitude(300);  // 984 ft.
+    recorder.RecordDrone(1234, DegToBam16(95.0f), 984 + 150, 7);    // 150 ft up: band 1, sector 9.
+    recorder.RecordDrone(800, DegToBam16(95.0f), 984 + 199, 7);     // Same bin, shorter: kept 25.
+    recorder.RecordDrone(300, DegToBam16(205.0f), 500, 8);          // Below the receiver: band 0.
+    recorder.RecordDrone(9000, DegToBam16(0.0f), 984 + 6000, 9);    // Band 11.
+    const RangeMap& map = recorder.ranges[SwarmRecorder::kRemoteID];
+    EXPECT_EQ(map.bins[1 * 36 + 9], 25);
+    EXPECT_EQ(map.bins[0 * 36 + 20], 6);
+    EXPECT_EQ(map.bins[11 * 36 + 0], 180);
+    int num_set = 0;
+    for (uint8_t b : map.bins) num_set += b != 0;
+    EXPECT_EQ(num_set, 3);
+    EXPECT_TRUE(recorder.ranges[SwarmRecorder::kModeS].Empty());
+    EXPECT_TRUE(recorder.ranges[SwarmRecorder::kUAT].Empty());
+    EXPECT_EQ(recorder.guard.num_positions, 4u);
+
+    // Not while the receiver position isn't fixed or GNSS.
+    recorder.Clear();
+    recorder.record_range = false;
+    recorder.RecordDrone(1234, 0, 1000, 7);
+    EXPECT_TRUE(recorder.RangeEmpty());
+    EXPECT_EQ(recorder.guard.num_positions, 0u);
+}
+
+TEST(SwarmRecorder, ProtocolsKeepTheirOwnMaps) {
+    SwarmRecorder recorder;
+    recorder.RecordPosition(SwarmRecorder::kModeS, 50000, DegToBam16(45.0f), 12000, 1);
+    recorder.RecordPosition(SwarmRecorder::kUAT, 30000, DegToBam16(45.0f), 12000, 2);
+    EXPECT_EQ(recorder.ranges[SwarmRecorder::kModeS].bins[5 * 36 + 4], 25);
+    EXPECT_EQ(recorder.ranges[SwarmRecorder::kUAT].bins[5 * 36 + 4], 15);
+    EXPECT_TRUE(recorder.ranges[SwarmRecorder::kRemoteID].Empty());
+
+    SwarmRecorder later;
+    later.RecordPosition(SwarmRecorder::kUAT, 40000, DegToBam16(45.0f), 12000, 2);
+    later.RecordDrone(500, 0, 50, 3);
+    recorder.Merge(later);
+    EXPECT_EQ(recorder.ranges[SwarmRecorder::kModeS].bins[5 * 36 + 4], 25);
+    EXPECT_EQ(recorder.ranges[SwarmRecorder::kUAT].bins[5 * 36 + 4], 20);
+    EXPECT_EQ(recorder.ranges[SwarmRecorder::kRemoteID].bins[0], 10);
+    EXPECT_FALSE(recorder.RangeEmpty());
+    recorder.Clear();
+    EXPECT_TRUE(recorder.RangeEmpty());
+}
+
+TEST(SwarmRecorder, DroneHorizonLimitPerBand) {
+    for (int32_t rx_m : {-50, 0, 30, 1000}) {
+        SwarmRecorder recorder;
+        recorder.SetReceiverAltitude(rx_m);
+        int32_t rx_ft = static_cast<int32_t>(lround(rx_m / 0.3048));
+        for (uint8_t band = 0; band < RangeMap::kNumBands; band++) {
+            uint32_t limit_m = static_cast<uint32_t>(HorizonKm(rx_m, SwarmRecorder::kDroneBandTopFt[band]) * 1000);
+            int32_t height_ft = band == 0 ? 0 : SwarmRecorder::kDroneBandTopFt[band - 1];  // Bottom of the band.
+            recorder.guard = SwarmRecorder::Guard();
+            recorder.RecordDrone(limit_m - 100, 0, rx_ft + height_ft, 1);
+            recorder.RecordDrone(limit_m + 100, 0, rx_ft + height_ft, 2);
+            EXPECT_EQ(recorder.guard.num_positions, 2u) << rx_m << " m, band " << int(band);
+            EXPECT_EQ(recorder.guard.num_dropped, 1u) << rx_m << " m, band " << int(band);
+        }
+    }
+    // 30 m antenna, drone 100-200 ft up: 1.15 * 4.12 * (sqrt(30) + sqrt(61)) + 20 = 83 km.
+    SwarmRecorder recorder;
+    recorder.SetReceiverAltitude(30);
+    recorder.RecordDrone(82000, 0, 98 + 150, 1);
+    recorder.RecordDrone(84000, 0, 98 + 150, 2);
+    EXPECT_EQ(recorder.guard.num_dropped, 1u);
+    EXPECT_EQ(recorder.ranges[SwarmRecorder::kRemoteID].bins[36], 255);  // Kept, clamped to 12.75 km.
+}
+
+TEST(SwarmRecorder, DroneDropsCountTowardsWithholding) {
+    // The guard is shared: 4 aircraft and 1 drone dropped make the 5 that withhold the map.
+    SwarmRecorder recorder;
+    recorder.SetReceiverAltitude(0);
+    for (int i = 0; i < 4; i++) recorder.RecordPosition(SwarmRecorder::kModeS, 400000, 0, 500, 1 + i);
+    for (int i = 0; i < 20; i++) recorder.RecordPosition(SwarmRecorder::kUAT, 10000, 0, 30000, 100);
+    EXPECT_FALSE(recorder.RangeImplausible());
+    recorder.RecordDrone(200000, 0, 100, Aircraft::ICAOToUID(5, Aircraft::kAircraftTypeRemoteID));
+    EXPECT_EQ(recorder.guard.num_dropped, 5u);
+    EXPECT_EQ(recorder.guard.num_dropped_aircraft, 5);
+    EXPECT_TRUE(recorder.RangeImplausible());
+}
+
+TEST(SwarmReporter, RangesPerProtocolInOrderWithTheirUnits) {
+    FakeSwarmPlatform platform;
+    SwarmReporter reporter(platform, "0.9.1-rc10");
+    SwarmRecorder live;
+    live.SetReceiverAltitude(30);
+    live.RecordPosition(SwarmRecorder::kModeS, 50000, DegToBam16(45.0f), 12000, 1);  // Bin 184: 25.
+    live.RecordDrone(1234, DegToBam16(95.0f), 98 + 150, 3);                           // Bin 45: 25.
+    live.RecordDrone(60, DegToBam16(5.0f), 98, 3);                                    // Bin 0: 2.
+    reporter.TakePeriod(live, 3600 * 1000, FixedPosition());
+    reporter.Send("https://adsbee.aero", kToken);
+    std::string body = platform.bodies.back();
+    size_t ranges = body.find(",\"range_dropped\":0,\"ranges\":{\"mode_s\":{\"sectors\":36,\"bands\":12,\"unit_m\":2000,");
+    ASSERT_NE(ranges, std::string::npos) << body;
+    size_t remote_id = body.find("},\"remote_id\":{\"sectors\":36,\"bands\":12,\"unit_m\":50,\"changed\":\"");
+    ASSERT_NE(remote_id, std::string::npos) << body;
+    EXPECT_EQ(body.find("\"uat\""), std::string::npos);
+    EXPECT_EQ(body.find("\"range\":"), std::string::npos);
+    EXPECT_EQ(body.compare(body.size() - 4, 4, "\"}}}"), 0) << body;  // ranges is the last field.
+
+    std::string mode_s = body.substr(ranges, remote_id - ranges);
+    std::vector<uint8_t> values = Base64Decode(JsonString(mode_s, "max"));
+    ASSERT_EQ(values, std::vector<uint8_t>({25}));
+    std::string drones = body.substr(remote_id);
+    std::vector<uint8_t> bitmap = Base64Decode(JsonString(drones, "changed"));
+    values = Base64Decode(JsonString(drones, "max"));
+    ASSERT_EQ(bitmap.size(), 54u);
+    EXPECT_EQ(bitmap[0], 0x01);
+    EXPECT_EQ(bitmap[45 / 8], 1 << (45 % 8));
+    EXPECT_EQ(values, std::vector<uint8_t>({2, 25}));
+
+    // UAT only.
+    live.RecordPosition(SwarmRecorder::kUAT, 2001, 0, 0, 2);
+    reporter.TakePeriod(live, 7200 * 1000, FixedPosition());
+    reporter.Send("https://adsbee.aero", kToken);
+    body = platform.bodies.back();
+    EXPECT_NE(body.find(",\"ranges\":{\"uat\":{\"sectors\":36,\"bands\":12,\"unit_m\":2000,\"changed\":\"AQAA"),
+              std::string::npos)
+        << body;
+    EXPECT_EQ(body.find("mode_s"), std::string::npos);
+}
+
+TEST(SwarmReporter, FailedReportMergesEveryProtocol) {
+    FakeSwarmPlatform platform;
+    platform.answer = false;
+    SwarmReporter reporter(platform, "0.9.1-rc10");
+    SwarmRecorder live;
+    live.RecordPosition(SwarmRecorder::kModeS, 10000, 0, 500, 1);
+    live.RecordDrone(100, 0, 0, 2);
+    reporter.TakePeriod(live, 60000, FixedPosition());
+    reporter.Send("https://adsbee.aero", kToken);
+    live.RecordPosition(SwarmRecorder::kUAT, 20000, 0, 500, 3);
+    live.RecordDrone(300, 0, 0, 2);
+    reporter.TakePeriod(live, 120000, FixedPosition());
+    EXPECT_EQ(reporter.pending().ranges[SwarmRecorder::kModeS].bins[0], 5);
+    EXPECT_EQ(reporter.pending().ranges[SwarmRecorder::kUAT].bins[0], 10);
+    EXPECT_EQ(reporter.pending().ranges[SwarmRecorder::kRemoteID].bins[0], 6);
+    platform.answer = true;
+    reporter.Send("https://adsbee.aero", kToken);
+    const std::string& body = platform.bodies.back();
+    EXPECT_NE(body.find("\"mode_s\":{"), std::string::npos);
+    EXPECT_NE(body.find("\"uat\":{"), std::string::npos);
+    EXPECT_NE(body.find("\"remote_id\":{"), std::string::npos);
+    EXPECT_EQ(JsonNumber(body, "seq"), 0);
+}
+
+namespace {
+
+// A basic UAT ADS-B message (UAT Tech Manual Table 2-11) from an ICAO-addressed aircraft at a baro altitude.
+DecodedUATADSBPacket UATPosition(uint32_t address, double lat, double lon, int32_t altitude_ft) {
+    uint8_t buf[RawUATADSBPacket::kShortADSBMessageNumBytes] = {0};
+    auto set_bits = [&](uint32_t first_bit, uint16_t n, uint32_t value) {
+        for (uint16_t i = 0; i < n; i++) {
+            uint32_t bit = first_bit + i;
+            if ((value >> (n - 1 - i)) & 1) buf[bit / 8] |= 0x80 >> (bit % 8);
+        }
+    };
+    set_bits(8, 24, address);
+    set_bits(32, 23, static_cast<uint32_t>(llround(lat * 16777216.0 / 360.0)) & 0x7FFFFF);
+    set_bits(55, 24, static_cast<uint32_t>(llround(lon * 16777216.0 / 360.0)) & 0xFFFFFF);
+    set_bits(80, 12, (altitude_ft + 1000) / 25 + 1);
+    set_bits(92, 4, 8);  // NIC.
+    uat_rs.EncodeShortADSBMessage(buf);
+    return DecodedUATADSBPacket(RawUATADSBPacket(buf, sizeof(buf)));
+}
+
+// One Open Drone ID Location message, as a Bluetooth 4 advertisement from mac.
+RawRemoteIDPacket DroneLocation(uint8_t mac_last, double lat, double lon, float geodetic_altitude_m) {
+    ODID_Location_data location;
+    odid_initLocationData(&location);
+    location.Status = ODID_STATUS_AIRBORNE;
+    location.Latitude = lat;
+    location.Longitude = lon;
+    location.AltitudeGeo = geodetic_altitude_m;
+    RawRemoteIDPacket packet;
+    const uint8_t mac[6] = {0x02, 0x11, 0x22, 0x33, 0x44, mac_last};
+    memcpy(packet.source_mac, mac, sizeof(mac));
+    packet.transport = RawRemoteIDPacket::kTransportBT4Legacy;
+    packet.rssi_dbm = -60;
+    EXPECT_EQ(encodeLocationMessage(reinterpret_cast<ODID_Location_encoded*>(packet.payload), &location), ODID_SUCCESS);
+    packet.payload_len_bytes = RawRemoteIDPacket::kSingleMessageLenBytes;
+    return packet;
+}
+
+int NumBins(const RangeMap& map) {
+    int n = 0;
+    for (uint8_t b : map.bins) n += b != 0;
+    return n;
+}
+
+}  // namespace
+
+TEST(SwarmRecorder, DictionaryRecordsUATPositions) {
+    AircraftDictionary dictionary;
+    SwarmRecorder recorder;
+    dictionary.SetSwarmRecorder(&recorder);
+    dictionary.SetReferencePosition(37.0f, -122.0f);
+    inc_time_since_boot_ms(1000);
+    ASSERT_TRUE(dictionary.IngestDecodedUATADSBPacket(UATPosition(0xA12345, 37.3, -122.0, 12000)));
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_TRUE(recorder.RangeEmpty());  // One decode.
+    inc_time_since_boot_ms(1000);
+    ASSERT_TRUE(dictionary.IngestDecodedUATADSBPacket(UATPosition(0xA12345, 37.31, -122.0, 12000)));
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_TRUE(recorder.ranges[SwarmRecorder::kModeS].Empty());
+    EXPECT_TRUE(recorder.ranges[SwarmRecorder::kRemoteID].Empty());
+    ASSERT_EQ(NumBins(recorder.ranges[SwarmRecorder::kUAT]), 1);
+    EXPECT_EQ(recorder.ranges[SwarmRecorder::kUAT].bins[5 * 36 + 0], 18);  // 34.5 km north at 12,000 ft.
+    dictionary.SetSwarmRecorder(nullptr);
+}
+
+TEST(SwarmRecorder, DictionaryRecordsDronesAfterTwoLocationMessages) {
+    AircraftDictionary dictionary;
+    SwarmRecorder recorder;
+    recorder.SetReceiverAltitude(30);  // 98 ft.
+    dictionary.SetSwarmRecorder(&recorder);
+    dictionary.SetReferencePosition(37.0f, -122.0f);
+
+    // Hovering 1.11 km north, 120 m geodetic (= 296 ft above the receiver): band 2.
+    inc_time_since_boot_ms(100);
+    ASSERT_TRUE(dictionary.IngestRawRemoteIDPacket(DroneLocation(1, 37.01, -122.0, 120)));
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_TRUE(recorder.RangeEmpty());  // One decode.
+    inc_time_since_boot_ms(100);
+    ASSERT_TRUE(dictionary.IngestRawRemoteIDPacket(DroneLocation(1, 37.01, -122.0, 120)));  // Same position.
+    const RangeMap& drones = recorder.ranges[SwarmRecorder::kRemoteID];
+    ASSERT_EQ(NumBins(drones), 1);
+    EXPECT_EQ(drones.bins[2 * 36 + 0], 23);  // 1112 m.
+    EXPECT_TRUE(recorder.ranges[SwarmRecorder::kModeS].Empty());
+    EXPECT_TRUE(recorder.ranges[SwarmRecorder::kUAT].Empty());
+
+    // Next period: still hovering, recorded again from its next message.
+    recorder.Clear();
+    inc_time_since_boot_ms(100);
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_TRUE(recorder.RangeEmpty());
+    ASSERT_TRUE(dictionary.IngestRawRemoteIDPacket(DroneLocation(1, 37.01, -122.0, 120)));
+    ASSERT_EQ(NumBins(drones), 1);
+    EXPECT_EQ(drones.bins[2 * 36 + 0], 23);
+
+    // Flies on: the distance is recomputed once a second and recorded.
+    inc_time_since_boot_ms(100);
+    ASSERT_TRUE(dictionary.IngestRawRemoteIDPacket(DroneLocation(1, 37.02, -122.0, 120)));
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_EQ(drones.bins[2 * 36 + 0], 45);  // 2224 m.
+
+    // Without a geodetic altitude: left out.
+    for (int i = 0; i < 3; i++) {
+        inc_time_since_boot_ms(100);
+        ASSERT_TRUE(dictionary.IngestRawRemoteIDPacket(DroneLocation(2, 37.0, -121.99, INV_ALT)));
+    }
+    dictionary.Update(get_time_since_boot_ms());
+    EXPECT_EQ(NumBins(drones), 1);
+
+    // Drones don't count as aircraft in the stats.
+    EXPECT_EQ(recorder.stats.aircraft_max, 0);
+    EXPECT_EQ(recorder.UniqueAircraft(), 0);
+    dictionary.SetSwarmRecorder(nullptr);
 }
