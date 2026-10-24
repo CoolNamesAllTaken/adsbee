@@ -134,3 +134,78 @@ TEST(AircraftDictionaryAllocator, OverwriteDoesNotExhaustPool) {
     }
     EXPECT_EQ(dict.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
 }
+
+// host_test builds with the RP2040's dictionary size, host_test_fpu with the ESP32's.
+TEST(AircraftDictionaryAllocator, SizeMatchesProcessor) {
+#ifdef HAS_FPU
+    EXPECT_EQ(AircraftDictionary::kMaxNumAircraft, 200);
+#else
+    EXPECT_EQ(AircraftDictionary::kMaxNumAircraft, 400);
+#endif
+}
+
+// Offered three times its size in Mode S and UAT aircraft, a full dictionary keeps the newest ones and never rehashes.
+TEST(AircraftDictionaryAllocator, FullDictionaryKeepsNewest) {
+    for (int use_config = 0; use_config < 2; use_config++) {
+        AircraftDictionary::AircraftDictionaryConfig config;
+        AircraftDictionary dict_default;
+        AircraftDictionary dict_config(config);
+        AircraftDictionary& dict = use_config ? dict_config : dict_default;
+        const size_t buckets = dict.dict.bucket_count();
+        EXPECT_GE(buckets, AircraftDictionary::kMaxNumAircraft);
+
+        const uint32_t kNumOffered = 3 * AircraftDictionary::kMaxNumAircraft;
+        for (uint32_t i = 0; i < kNumOffered; i++) {
+            uint32_t address = 0xBEE000 + i / 2;
+            if (i % 2 == 0) {
+                ModeSAircraft aircraft(address);
+                aircraft.last_message_timestamp_ms = i + 1;
+                ASSERT_NE(dict.InsertAircraft(aircraft), nullptr) << "Mode S insert " << i;
+            } else {
+                UATAircraft aircraft(address);
+                aircraft.last_message_timestamp_ms = i + 1;
+                ASSERT_NE(dict.InsertAircraft(aircraft), nullptr) << "UAT insert " << i;
+            }
+            ASSERT_LE(dict.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
+        }
+        EXPECT_EQ(dict.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
+        EXPECT_EQ(dict.dict.bucket_count(), buckets);
+
+        // Only the newest kMaxNumAircraft remain.
+        for (const auto& [uid, entry] : dict.dict) {
+            uint32_t t = std::visit([](const Aircraft& a) { return a.last_message_timestamp_ms; }, entry);
+            EXPECT_GT(t, kNumOffered - AircraftDictionary::kMaxNumAircraft);
+        }
+    }
+}
+
+// Overflow warnings: at most one per interval, each with the evictions since the last one.
+TEST(AircraftDictionaryAllocator, OverflowWarningRateLimited) {
+    AircraftDictionary dict;
+    ASSERT_TRUE(FillDictionary(dict));
+    EXPECT_EQ(dict.TakeOverflowEvictionsToLog(1000), 0u);  // Full but nothing removed yet.
+
+    uint32_t next_address = 0x100000;
+    auto overflow = [&](uint32_t n) {
+        for (uint32_t i = 0; i < n; i++) {
+            ModeSAircraft aircraft(next_address++);
+            ASSERT_NE(dict.InsertAircraft(aircraft), nullptr);
+        }
+    };
+    overflow(5);
+    EXPECT_EQ(dict.TakeOverflowEvictionsToLog(2000), 5u);
+    overflow(7);
+    EXPECT_EQ(dict.TakeOverflowEvictionsToLog(2001), 0u);
+    EXPECT_EQ(dict.TakeOverflowEvictionsToLog(2000 + AircraftDictionary::kOverflowLogIntervalMs - 1), 0u);
+    overflow(3);
+    EXPECT_EQ(dict.TakeOverflowEvictionsToLog(2000 + AircraftDictionary::kOverflowLogIntervalMs), 10u);
+    // Nothing removed since: no warning even after the interval.
+    EXPECT_EQ(dict.TakeOverflowEvictionsToLog(2000 + 3 * AircraftDictionary::kOverflowLogIntervalMs), 0u);
+    overflow(1);
+    EXPECT_EQ(dict.TakeOverflowEvictionsToLog(2000 + 3 * AircraftDictionary::kOverflowLogIntervalMs + 1), 1u);
+
+    // Update() takes the count and logs it.
+    overflow(2);
+    dict.Update(2000 + 5 * AircraftDictionary::kOverflowLogIntervalMs);
+    EXPECT_EQ(dict.TakeOverflowEvictionsToLog(2000 + 7 * AircraftDictionary::kOverflowLogIntervalMs), 0u);
+}

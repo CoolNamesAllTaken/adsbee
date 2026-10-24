@@ -4,6 +4,7 @@
 #include "cpu_utils.hh"
 #include "mode_s_packet_decoder.hh"
 #include "pico/multicore.h"
+#include "ram_monitor.hh"
 
 extern CPUMonitor core_1_monitor;
 
@@ -45,6 +46,7 @@ inline bool core1_launched = false;
 inline void LaunchCore1() {
     core1_launched = true;
     multicore_reset_core1();
+    RAMMonitor::PaintCore1Stack();
     multicore_launch_core1(main_core1);
 }
 
@@ -61,5 +63,6 @@ inline void StartCore1() {
     if (!core1_launched) {
         return;
     }
+    RAMMonitor::PaintCore1Stack();
     multicore_launch_core1(main_core1);
 }

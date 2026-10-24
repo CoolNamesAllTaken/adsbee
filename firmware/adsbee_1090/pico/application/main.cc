@@ -18,6 +18,7 @@
 #include "mode_s_packet_decoder.hh"
 #include "pico/binary_info.h"
 #include "pico/stdlib.h"
+#include "ram_monitor.hh"
 #include "spi_coprocessor.hh"
 #include "unit_conversions.hh"
 
@@ -65,6 +66,7 @@ static constexpr bool kEnable1090ErrorCorrection = true;
 ModeSPacketDecoder decoder = ModeSPacketDecoder({.enable_1090_error_correction = kEnable1090ErrorCorrection});
 
 int main() {
+    RAMMonitor::PaintCore0Stack();
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
     adsbee.aircraft_dictionary.SetAddressParityCorrection(kEnable1090ErrorCorrection);
     decoder.backlog_callback = [] { return adsbee.CaptureQueueLength(); };

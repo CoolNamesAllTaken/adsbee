@@ -111,6 +111,7 @@ if (ON_EMBEDDED_DEVICE)
         main.cc # Don't include main for testing.
         adsbee.cc
         mode_s_soft_demod.cc
+        ram_monitor.cc
         settings.cc
         tl_learner.cc
     )

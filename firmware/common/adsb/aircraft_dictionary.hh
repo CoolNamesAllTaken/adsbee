@@ -1127,17 +1127,17 @@ class AircraftDictionary {
     /**
      * Default constructor. Uses default config values.
      */
-    AircraftDictionary() {
+    AircraftDictionary() : AircraftDictionary(AircraftDictionaryConfig()) {};
+
+    /**
+     * Constructor with config values specified.
+     */
+    AircraftDictionary(AircraftDictionaryConfig config_in) : config_(config_in) {
         // Pre-allocate kMaxNumAircraft buckets so that no rehash (and no additional bucket-array
         // allocation from the monotonic region) occurs while we stay within capacity.
         dict.max_load_factor(1.0);
         dict.reserve(kMaxNumAircraft);
     };
-
-    /**
-     * Constructor with config values specified.
-     */
-    AircraftDictionary(AircraftDictionaryConfig config_in) : config_(config_in) {};
 
     inline void SetAddressParityCorrection(bool enable) { config_.enable_address_parity_correction = enable; }
     // While paused (e.g. a backlog of decoded packets), address parity searches are skipped.
@@ -1313,7 +1313,7 @@ class AircraftDictionary {
         }
 
         if (dict.size() >= kMaxNumAircraft) {
-            dictionary_overflowed = true;
+            overflow_evictions_++;
             RemoveOldestAircraft();
         }
 
@@ -1526,9 +1526,22 @@ class AircraftDictionary {
 
     AircraftEntry* lowest_aircraft_entry = nullptr;  // Pointer to the aircraft entry with the lowest valid GNSS
                                                      // altitude. Useful for approximating receiver position.
-    bool dictionary_overflowed = false;
+
+    // A full dictionary logs at most one warning per interval, with the number of aircraft it removed.
+    static constexpr uint32_t kOverflowLogIntervalMs = 60e3;
+
+    /**
+     * Number of aircraft removed to make room since the last overflow warning, if a warning is due now; else 0.
+     * Resets the count when it returns a non-zero value. Called by Update().
+     * @param[in] timestamp_ms Current time in milliseconds.
+     */
+    uint32_t TakeOverflowEvictionsToLog(uint32_t timestamp_ms);
 
    private:
+    uint32_t overflow_evictions_ = 0;
+    uint32_t last_overflow_log_timestamp_ms_ = 0;
+    bool overflow_logged_ = false;
+
     /**
      * Custom fixed-pool memory resource for AircraftDictionary.
      *
@@ -1555,9 +1568,9 @@ class AircraftDictionary {
         static constexpr size_t kNodeBlockSize =
             (kNodeBlockRaw + alignof(AircraftEntry) - 1) & ~(alignof(AircraftEntry) - 1);
 
-        // Bucket buffer sized to survive repeated doublings from 1 → kMaxNumAircraft buckets.
-        // The geometric series sums to at most 2*kMaxNumAircraft pointer-widths, plus a margin.
-        static constexpr size_t kBucketBufferSize = kMaxNumAircraft * sizeof(void*) * 2 + 512;
+        // Bucket buffer for the one bucket array reserve() allocates in the constructor: the next prime at or above
+        // kMaxNumAircraft buckets, plus a margin.
+        static constexpr size_t kBucketBufferSize = kMaxNumAircraft * sizeof(void*) + 512;
 
         FixedPoolResource() {
             // Link every block into the initial free list.

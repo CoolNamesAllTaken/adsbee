@@ -57,6 +57,8 @@ if (ON_EMBEDDED_DEVICE)
     # Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
     # "configurations" in c_cpp_properties.json.
     add_compile_definitions(ON_PICO)
+    # The ESP32 keeps the default of 200: it has no room for 400 without PSRAM. host_test sets 400 too.
+    add_compile_definitions(AIRCRAFT_DICTIONARY_MAX_NUM_AIRCRAFT=400)
     add_compile_definitions(
         # Can't pass in expression in parentheses or else it's a "functional" macro that isn't supported.
         PICO_FLASH_SIZE_BYTES=16777216 # 16MB = 16*1024*1024 Bytes of flash.

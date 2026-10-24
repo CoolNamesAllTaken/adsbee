@@ -20,6 +20,7 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"  // for getchar etc
 #include "pico/unique_id.h"
+#include "ram_monitor.hh"
 #include "feed_ram_budget.hh"
 #include "feed_receiver_id.hh"
 #include "settings.hh"
@@ -481,6 +482,12 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
 #else
             CPP_AT_PRINTF("RP2040 Firmware Build: Release\r\n");
 #endif
+            RAMMonitor::Usage ram = RAMMonitor::GetUsage();
+            CPP_AT_PRINTF("RP2040 RAM: %lu B heap, %lu B free, stack peak %lu B core 0, %lu B core 1\r\n",
+                          (unsigned long)ram.heap_in_use_bytes, (unsigned long)ram.free_bytes,
+                          (unsigned long)ram.core_0_stack_peak_bytes, (unsigned long)ram.core_1_stack_peak_bytes);
+            CPP_AT_PRINTF("RP2040 Aircraft Dictionary: %u aircraft max\r\n",
+                          (unsigned)AircraftDictionary::kMaxNumAircraft);
 
             for (uint16_t i = 0; i < SettingsManager::DeviceInfo::kNumOTAKeys; i++) {
                 CPP_AT_PRINTF("OTA Key %d: %s\r\n", i, device_info.ota_keys[i]);
@@ -2529,7 +2536,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "DEVICE_INFO",
      .min_args = 0,
      .max_args = 5,  // TODO: check this value.
-     .help_string = "AT+DEVICE_INFO?\r\n\tQuery device information.",
+     .help_string = "AT+DEVICE_INFO?\r\n\tQuery device information, including RP2040 RAM use and aircraft "
+                    "dictionary size.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATDeviceInfoCallback, comms_manager)},
     {.command = "ETHERNET",
      .min_args = 0,
