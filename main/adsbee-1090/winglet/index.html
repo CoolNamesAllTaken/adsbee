@@ -1340,7 +1340,7 @@
 <p>Winglet includes a multi-constellation WAAS GNSS receiver for precise position, plus an onboard magnetometer and IMU for heading and attitude. The IMU is intended to feed a backup attitude display (AHRS) on your tablet via GDL90. Pressure altitude and humidity sensors round out the sensor suite.</p>
 <p>A surface mount helical GNSS antenna on the Winglet PCBA is enough for most applications. If you want to build your own GNSS antenna system, there is an auxiliary U.FL connector on the PCB: move one ceramic capacitor to reroute the antenna trace from the internal antenna to the U.FL. A solder jumper powers a bias tee on the auxiliary input, in case you want to run an external active GNSS antenna directly from Winglet.</p>
 <h3 id="more-memory-more-aircraft">More memory, more aircraft<a class="headerlink" href="#more-memory-more-aircraft" title="Permanent link">&para;</a></h3>
-<p>The ESP32-S3 module on Winglet, which runs the network interfaces and the UI, has additional PSRAM. That extra room lets us grow the aircraft dictionary (the number of aircraft tracked simultaneously) from 200 aircraft on the ADSBee 1090U to 400 aircraft on Winglet, and lets Remote ID reception run alongside WiFi.</p>
+<p>The ESP32-S3 module on Winglet, which runs the network interfaces and the UI, has additional PSRAM. That extra room lets the network side track 400 aircraft at once, as many as the receiver itself (the ADSBee 1090U reports 400 over USB and UART but 200 over WiFi and Ethernet), and lets Remote ID reception run alongside WiFi.</p>
 <h3 id="mounting">Mounting<a class="headerlink" href="#mounting" title="Permanent link">&para;</a></h3>
 <p>Winglet uses a two-part mounting system. A removable holster snaps onto the back of the Winglet and can be quickly disconnected and reattached, so you can pull the receiver off for configuration or charging. The back of the holster has a latch that fits the standard Sentry-style RAM mount that’s already in thousands of cockpits and flight bags.</p>
 <p>The enclosure and holster are open source and 3D printed out of PETG, so you can adapt them with your own design.</p>
@@ -1380,7 +1380,7 @@
 </tr>
 <tr>
 <td>Aircraft dictionary</td>
-<td>200 aircraft</td>
+<td>400 aircraft over USB/UART, 200 over WiFi/Ethernet</td>
 <td>400 aircraft (ESP32-S3 with additional PSRAM)</td>
 </tr>
 <tr>
