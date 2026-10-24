@@ -219,7 +219,7 @@ if (ON_EMBEDDED_DEVICE)
         COMMAND ${CMAKE_COMMAND} -E copy adsbee_1090.ota ${ARTIFACT_BASE}.ota
         # Hashes AT+CONFIG_HASH? reports for a device running these images.
         COMMAND ${Python3_EXECUTABLE} ${ADSBEE_COMMON_DIR}/../scripts/firmware_hashes.py adsbee_1090
-                --uf2 combined.uf2 --check-uf2-header --ota adsbee_1090.ota
+                --uf2 combined.uf2 --check-uf2-header --elf $<TARGET_FILE:combined> --ota adsbee_1090.ota
                 --esp32 ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/adsbee_esp.bin
                 --cc1312 ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/sub_ghz_radio.bin
                 -o ${ARTIFACT_BASE}.hashes.txt
