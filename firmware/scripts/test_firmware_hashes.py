@@ -21,6 +21,19 @@ def hex_record(addr, record_type, data):
     return ":" + (raw + bytes([-sum(raw) & 0xFF])).hex().upper() + "\n"
 
 
+def elf_with_symbol(name, value):
+    """A 32-bit little-endian ELF file with only a symbol table."""
+    strtab = b"\0" + name.encode() + b"\0"
+    symtab = bytes(16) + struct.pack("<3I2BH", 1, value, 0, 0, 0, 0)
+    shoff = 52 + len(strtab) + len(symtab)
+    header = b"\x7fELF\x01\x01\x01".ljust(16, b"\0")
+    header += struct.pack("<2H5I6H", 2, 40, 1, 0, 0, shoff, 0, 52, 0, 0, 40, 3, 0)
+    sections = bytes(40)
+    sections += struct.pack("<10I", 0, 2, 0, 0, 52 + len(strtab), len(symtab), 2, 1, 4, 16)
+    sections += struct.pack("<10I", 0, 3, 0, 0, 52, len(strtab), 0, 0, 1, 0)
+    return header + strtab + symtab + sections
+
+
 class FirmwareHashesTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
@@ -58,6 +71,18 @@ class FirmwareHashesTest(unittest.TestCase):
             bad = self.write(name, uf2(size, crc))
             with self.assertRaises(ValueError):
                 fh.check_uf2_header(bad, fh.uf2_rp2040_image(bad))
+
+    def test_uf2_length_is_what_the_device_hashes(self):
+        image = b"\x01" * 512  # Two pages; the image ends 8 Bytes before the second ends.
+        elf = self.write("good.elf", elf_with_symbol("__flash_binary_end", 0x1002D000 + 504))
+        self.assertEqual(fh.elf_symbol(elf, "__flash_binary_end"), 0x1002D000 + 504)
+        fh.check_uf2_length(elf, image)
+        # Flash the .uf2 never writes, past a page boundary: the device hashes one page more.
+        bad = self.write("bad.elf", elf_with_symbol("__flash_binary_end", 0x1002D000 + 536))
+        with self.assertRaisesRegex(ValueError, "hashes 768 Bytes and the .uf2 writes 512"):
+            fh.check_uf2_length(bad, image)
+        with self.assertRaises(ValueError):
+            fh.elf_symbol(elf, "__etext")
 
     def test_ota_images_by_partition(self):
         images = [b"zero" * 10, b"one" * 7]
