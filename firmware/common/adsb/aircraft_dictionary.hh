@@ -898,6 +898,10 @@ class RemoteIDAircraft : public Aircraft {
     int8_t last_message_signal_strength_dbm = 0;  // RSSI of the most recent advertisement, in dBm.
     RawRemoteIDPacket::Transport transport = RawRemoteIDPacket::kTransportInvalid;  // Last transport the UA was heard on.
     uint8_t source_mac[6] = {0};  // Transmitter MAC / BLE address the UID was derived from.
+#ifdef SWARM_RECORDING
+    // Location messages with a position in a row, up to 2. Sits in padding; swarm builds only, so others are unchanged.
+    uint8_t num_position_decodes = 0;
+#endif
 
     int32_t height_above_takeoff_ft = 0;  // UA height above takeoff or ground per height_type. Valid iff flag set.
 
@@ -1694,14 +1698,21 @@ class AircraftDictionary {
      * second: the cost follows the number of aircraft, not the position message rate.
      */
     template <typename T>
-    void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before) {
+    void UpdateDistanceAndBearingIfMoved(T &aircraft, const PositionSnapshot &before, bool position_message = false) {
         PositionSnapshot after = PositionSnapshot::Of(aircraft);
+        bool record_in_place = false;
         if constexpr (kRecordsRange<T>) {
             bool moved = after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg;
+            // Remote ID repeats a hovering drone's position unchanged, so every Location message with one counts.
+            bool decoded = std::is_same_v<T, RemoteIDAircraft> ? position_message : !before.valid || moved;
             if (!after.valid) {
                 aircraft.num_position_decodes = 0;
-            } else if ((!before.valid || moved) && aircraft.num_position_decodes < 2) {
-                aircraft.num_position_decodes++;
+            } else if (decoded && aircraft.num_position_decodes < 2) {
+                record_in_place = ++aircraft.num_position_decodes == 2;
+            }
+            // A confirmed drone counts in every period it is heard, hovering or not.
+            if constexpr (std::is_same_v<T, RemoteIDAircraft>) {
+                record_in_place = decoded && aircraft.num_position_decodes == 2;
             }
         }
         if (after.valid != before.valid || (after.valid && aircraft.distance_m == Aircraft::kDistanceUnknown)) {
@@ -1709,11 +1720,13 @@ class AircraftDictionary {
             RecordRange(aircraft);
         } else if (after.latitude_deg != before.latitude_deg || after.longitude_deg != before.longitude_deg) {
             aircraft.distance_reference_epoch = kDistanceEpochStale;
+        } else if (record_in_place && aircraft.distance_reference_epoch == reference_epoch_) {
+            RecordRange(aircraft);  // Confirmed or heard again in place: the distance won't be recomputed.
         }
     }
 
-    // Mode S and UAT positions go into swarm range maps; Remote ID drones don't. Only builds that report swarm
-    // metrics (the ESP32, host tests) define SWARM_RECORDING: elsewhere this compiles to nothing.
+    // Mode S, UAT and Remote ID positions go into one swarm range map each. Only builds that report swarm metrics (the
+    // ESP32, host tests) define SWARM_RECORDING: elsewhere this compiles to nothing.
 #ifdef SWARM_RECORDING
     static constexpr bool kSwarmRecording = true;
 #else
@@ -1721,29 +1734,40 @@ class AircraftDictionary {
 #endif
     template <typename T>
     static constexpr bool kRecordsRange =
-        kSwarmRecording && (std::is_same_v<T, ModeSAircraft> || std::is_same_v<T, UATAircraft>);
+        kSwarmRecording && (std::is_same_v<T, ModeSAircraft> || std::is_same_v<T, UATAircraft> ||
+                            std::is_same_v<T, RemoteIDAircraft>);
 
     /**
-     * Adds a freshly computed distance to the swarm range map, once the position is confirmed by a second decode (the
-     * first can be a CPR outlier). Only positions heard directly; altitude is barometric, else GNSS, and aircraft
-     * without one are left out.
+     * Adds a freshly computed distance to the protocol's swarm range map, once the position is confirmed by a second
+     * decode (the first can be a CPR outlier). Only positions heard directly. Aircraft altitude is barometric, else
+     * GNSS; drones need a geodetic altitude. Those without one are left out.
      */
     template <typename T>
     inline void RecordRange(const T &aircraft) {
         if constexpr (kRecordsRange<T>) {
             if (swarm_recorder_ == nullptr || aircraft.num_position_decodes < 2 ||
-                aircraft.distance_m == Aircraft::kDistanceUnknown || !IsDirectPosition(aircraft)) {
+                aircraft.distance_m == Aircraft::kDistanceUnknown) {
                 return;
             }
-            int32_t altitude_ft;
-            if (aircraft.HasBitFlag(T::kBitFlagBaroAltitudeValid)) {
-                altitude_ft = aircraft.baro_altitude_ft;
-            } else if (aircraft.HasBitFlag(T::kBitFlagGNSSAltitudeValid)) {
-                altitude_ft = aircraft.gnss_altitude_ft;
+            if constexpr (std::is_same_v<T, RemoteIDAircraft>) {
+                if (aircraft.HasBitFlag(T::kBitFlagGNSSAltitudeValid)) {
+                    swarm_recorder_->RecordDrone(aircraft.distance_m, aircraft.bearing_bam16, aircraft.gnss_altitude_ft,
+                                                 aircraft.GetUID());
+                }
             } else {
-                return;
+                if (!IsDirectPosition(aircraft)) return;
+                int32_t altitude_ft;
+                if (aircraft.HasBitFlag(T::kBitFlagBaroAltitudeValid)) {
+                    altitude_ft = aircraft.baro_altitude_ft;
+                } else if (aircraft.HasBitFlag(T::kBitFlagGNSSAltitudeValid)) {
+                    altitude_ft = aircraft.gnss_altitude_ft;
+                } else {
+                    return;
+                }
+                swarm_recorder_->RecordPosition(
+                    std::is_same_v<T, ModeSAircraft> ? SwarmRecorder::kModeS : SwarmRecorder::kUAT,
+                    aircraft.distance_m, aircraft.bearing_bam16, altitude_ft, aircraft.GetUID());
             }
-            swarm_recorder_->RecordPosition(aircraft.distance_m, aircraft.bearing_bam16, altitude_ft, aircraft.GetUID());
         }
     }
 

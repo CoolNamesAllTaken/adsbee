@@ -15,17 +15,19 @@ void CopyStr(char* dest, size_t dest_size, const char* src) {
     dest[dest_size - 1] = '\0';
 }
 
-// Bounded JSON text writer. len() is 0 once something didn't fit.
+// Bounded JSON text writer. len() is 0 once something didn't fit. With a null buffer it only counts.
 class Writer {
    public:
-    Writer(char* buf, size_t size) : buf_(buf), size_(size) { buf_[0] = '\0'; }
+    Writer(char* buf, size_t size) : buf_(buf), size_(size) {
+        if (buf_) buf_[0] = '\0';
+    }
     void Printf(const char* format, ...) __attribute__((format(printf, 2, 3))) {
         if (!ok_) return;
         va_list args;
         va_start(args, format);
-        int n = vsnprintf(buf_ + len_, size_ - len_, format, args);
+        int n = buf_ ? vsnprintf(buf_ + len_, size_ - len_, format, args) : vsnprintf(nullptr, 0, format, args);
         va_end(args);
-        if (n < 0 || static_cast<size_t>(n) >= size_ - len_) {
+        if (n < 0 || (buf_ && static_cast<size_t>(n) >= size_ - len_)) {
             ok_ = false;
             return;
         }
@@ -34,22 +36,26 @@ class Writer {
     void Safe(const char* text) {
         for (; ok_ && *text; text++) {
             if ((unsigned char)*text < 0x20 || *text == '"' || *text == '\\') continue;
+            if (!buf_) {
+                len_++;
+                continue;
+            }
             if (len_ + 1 >= size_) {
                 ok_ = false;
                 return;
             }
             buf_[len_++] = *text;
         }
-        buf_[len_] = '\0';
+        if (buf_) buf_[len_] = '\0';
     }
-    char* Tail(size_t need) {
-        if (!ok_ || len_ + need >= size_) {
+    void Base64(const uint8_t* data, size_t n) {
+        size_t need = 4 * ((n + 2) / 3);
+        if (!ok_ || (buf_ && len_ + need >= size_)) {
             ok_ = false;
-            return nullptr;
+            return;
         }
-        return buf_ + len_;
+        len_ += buf_ ? SwarmReporter::Base64Encode(data, n, buf_ + len_) : need;
     }
-    void Advance(size_t n) { len_ += n; }
     size_t len() const { return ok_ ? len_ : 0; }
 
    private:
@@ -218,16 +224,24 @@ size_t SwarmReporter::BuildBody(char* buf, size_t buf_size, const AutoUpdatePlat
     } else if (pending_.RangeImplausible()) {
         w.Printf(",\"range_withheld\":\"implausible\",\"range_dropped\":%lu", (unsigned long)pending_.guard.num_dropped);
     } else {
-        w.Printf(",\"range_dropped\":%lu", (unsigned long)pending_.guard.num_dropped);
+        w.Printf(",\"range_dropped\":%lu,\"ranges\":{", (unsigned long)pending_.guard.num_dropped);
+        // One map per protocol with data; none at all gives an empty object.
         uint8_t bitmap[RangeMap::kBitmapLenBytes];
         uint8_t values[RangeMap::kNumBins];
-        uint16_t num_values = pending_.range.Encode(bitmap, values);
-        w.Printf(",\"range\":{\"sectors\":%u,\"bands\":%u,\"unit_m\":%lu,\"changed\":\"", RangeMap::kNumSectors,
-                 RangeMap::kNumBands, (unsigned long)RangeMap::kUnitMeters);
-        if (char* tail = w.Tail(4 * ((sizeof(bitmap) + 2) / 3))) w.Advance(Base64Encode(bitmap, sizeof(bitmap), tail));
-        w.Printf("\",\"max\":\"");
-        if (char* tail = w.Tail(4 * ((num_values + 2) / 3))) w.Advance(Base64Encode(values, num_values, tail));
-        w.Printf("\"}");
+        bool first = true;
+        for (uint8_t p = 0; p < SwarmRecorder::kNumProtocols; p++) {
+            uint16_t num_values = pending_.ranges[p].Encode(bitmap, values);
+            if (num_values == 0) continue;
+            w.Printf("%s\"%s\":{\"sectors\":%u,\"bands\":%u,\"unit_m\":%lu,\"changed\":\"", first ? "" : ",",
+                     SwarmRecorder::kProtocolNames[p], RangeMap::kNumSectors, RangeMap::kNumBands,
+                     (unsigned long)SwarmRecorder::kProtocolUnitMeters[p]);
+            first = false;
+            w.Base64(bitmap, sizeof(bitmap));
+            w.Printf("\",\"max\":\"");
+            w.Base64(values, num_values);
+            w.Printf("\"}");
+        }
+        w.Printf("}");
     }
     w.Printf("}");
     return w.len();
@@ -255,13 +269,19 @@ uint32_t SwarmReporter::Send(const char* server, const char* token) {
     }
 
     AutoUpdatePlatform::Identity* identity = new (std::nothrow) AutoUpdatePlatform::Identity();
-    char* body = new (std::nothrow) char[kBodyMaxLen];
+    char* body = nullptr;
     ResponseReader* reader = new (std::nothrow) ResponseReader();
     char* url = new (std::nothrow) char[strlen(server) + 32];
     Result result = kNoIdentity;
     AutoUpdatePlatform::HttpResult http;
-    if (identity && body && reader && url && platform_.GetIdentity(*identity)) {
-        size_t len = BuildBody(body, kBodyMaxLen, *identity, IsDefaultServer(server), platform_.NowMs() / 1000);
+    if (identity && reader && url && platform_.GetIdentity(*identity)) {
+        // Counts first, then takes only what this report needs (often under 1 kB): keeps heap free for Remote ID.
+        const bool ota_keys = IsDefaultServer(server);
+        const uint32_t uptime_s = platform_.NowMs() / 1000;
+        size_t body_size = BuildBody(nullptr, 0, *identity, ota_keys, uptime_s) + 1;
+        if (body_size > kBodyMaxLen) body_size = kBodyMaxLen;
+        body = new (std::nothrow) char[body_size];
+        size_t len = body ? BuildBody(body, body_size, *identity, ota_keys, uptime_s) : 0;
         status_.last_body_len = static_cast<uint16_t>(len);
         size_t server_len = strlen(server);
         while (server_len > 0 && server[server_len - 1] == '/') server_len--;
@@ -271,7 +291,9 @@ uint32_t SwarmReporter::Send(const char* server, const char* token) {
         request.path = url;
         request.token = token;
         request.body = body;
-        if (len == 0) {
+        if (!body) {
+            result = kNoIdentity;  // Out of RAM: kept for the next try, like a failed identity.
+        } else if (len == 0) {
             result = kBadRequest;
         } else if (!platform_.Http(request, http, reader)) {
             result = kNoAnswer;

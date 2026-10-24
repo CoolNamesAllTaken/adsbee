@@ -195,7 +195,8 @@ SECTIONS
         __data_end__ = .;
     } > RAM AT> FLASH_APP0
 
-    .uninitialized_data (COPY): {
+    /* NOLOAD takes no flash, so __flash_binary_end is the end of what the .uf2 writes (AT+CONFIG_HASH). */
+    .uninitialized_data (NOLOAD): {
         . = ALIGN(4);
         *(.uninitialized_data*)
     } > RAM

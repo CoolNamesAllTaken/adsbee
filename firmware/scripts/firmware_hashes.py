@@ -16,6 +16,7 @@ RP2040_HDR0_ADDR = 0x1002C000  # Partition 0 header.
 RP2040_APP0_ADDR = 0x1002D000  # Application 0, the partition a .uf2 fills.
 RP2040_APP_LEN = 8096 * 1024
 UF2_BLOCK_LEN = 512
+UF2_PAYLOAD_LEN = 256
 UF2_MAGICS = (0x0A324655, 0x9E5D5157, 0x0AB16F30)
 
 ESP32_IMAGE_MAGIC = 0xE9
@@ -45,7 +46,7 @@ def read(path):
 
 
 def uf2_rp2040_image(path):
-    """Application 0 as a .uf2 writes it: whole 256 Byte blocks."""
+    """Application 0 as a .uf2 writes it: whole 256 Byte pages."""
     contents = read(path)
     if len(contents) == 0 or len(contents) % UF2_BLOCK_LEN:
         raise ValueError("{} is not a UF2 file".format(path))
@@ -64,6 +65,36 @@ def uf2_rp2040_image(path):
     if not image:
         raise ValueError("{} has no application image".format(path))
     return image
+
+
+def elf_symbol(path, name):
+    """Value of a symbol in a 32-bit little-endian ELF file."""
+    contents = read(path)
+    if contents[:6] != b"\x7fELF\x01\x01":
+        raise ValueError("{} is not a 32-bit little-endian ELF file".format(path))
+    shoff = struct.unpack_from("<I", contents, 32)[0]
+    shentsize, shnum = struct.unpack_from("<HH", contents, 46)
+    sections = [struct.unpack_from("<10I", contents, shoff + i * shentsize) for i in range(shnum)]
+    for _, sh_type, _, _, offset, size, link, _, _, _ in sections:
+        if sh_type != 2:  # SHT_SYMTAB
+            continue
+        strtab = sections[link][4]
+        for symbol in range(offset, offset + size, 16):
+            st_name, st_value = struct.unpack_from("<II", contents, symbol)
+            start = strtab + st_name
+            if contents[start : contents.index(b"\0", start)] == name.encode():
+                return st_value
+    raise ValueError("{} has no symbol {}".format(path, name))
+
+
+def check_uf2_length(path, image):
+    """Checks that the device hashes the Bytes the .uf2 writes (CalculateOwnImageCRC32() on a COMBINED_IMAGE)."""
+    end = elf_symbol(path, "__flash_binary_end") - RP2040_APP0_ADDR
+    device_len = -(-end // UF2_PAYLOAD_LEN) * UF2_PAYLOAD_LEN
+    if device_len != len(image):
+        raise ValueError(
+            "{}: the device hashes {} Bytes and the .uf2 writes {}".format(path, device_len, len(image))
+        )
 
 
 def check_uf2_header(path, image):
@@ -135,6 +166,8 @@ def hashes_1090(args):
         images.append(("UF2 image, partition 0", uf2_rp2040_image(args.uf2)))
         if args.check_uf2_header:
             check_uf2_header(args.uf2, images[-1][1])
+        if args.elf:
+            check_uf2_length(args.elf, images[-1][1])
     if args.ota:
         for partition, image in enumerate(ota_rp2040_images(args.ota)):
             images.append(("OTA image, partition {}".format(partition), image))
@@ -184,6 +217,7 @@ def main():
     p1090.add_argument("--ota", help="adsbee_1090-<version>.ota")
     p1090.add_argument("--check-uf2-header", action="store_true",
                        help="fail if the .uf2's partition 0 header does not describe its application")
+    p1090.add_argument("--elf", help="combined.elf the .uf2 was made from: fail if the device would hash another length")
     p1090.add_argument("--esp32", required=True, help="ESP32 application image (adsbee_esp.bin)")
     p1090.add_argument("--cc1312", required=True, help="CC1312 image (sub_ghz_radio.bin)")
     p1090.set_defaults(func=hashes_1090)
