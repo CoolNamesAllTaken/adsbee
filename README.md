@@ -83,7 +83,7 @@ There are two devices connected to the RP2040 via a common SPI bus: a CC1312 for
 
 The CC1312 can be tuned to a variety of sub-GHz frequencies to decode UAT messages (and potentially more protocols in the future). These messages are forwarded to the RP2040 over SPI and reported through a unified interface along with the Mode S packets received by the RP2040.
 
-The ESP32-S3 ingests raw packets from the RP2040 and maintains a separate, identical aircraft dictionary for use in reporting over network interfaces (WiFi, Ethernet).
+The ESP32-S3 ingests raw packets from the RP2040 and maintains its own aircraft dictionary for reporting over network interfaces (WiFi, Ethernet). The RP2040's dictionary holds 400 aircraft for its USB and UART outputs; the ESP32-S3's holds 200.
 
 All three microcontrollers utilize code stored on the RP2040's external flash chip, so firmware updates are conducted by flashing a single firmware image to the RP2040, which in turn flashes updated firmware images to the CC1312 and ESP32-S3.
 

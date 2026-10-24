@@ -55,6 +55,7 @@ measured; the release notes' Testing section comes from this report.
 | 15 | Live sky, bracketed | Live unit old / new / old, ≥ 1 h of new at a busy hour: Mode S frames per aircraft-second, aircraft per minute vs a public reference, RSSI percentiles, UAT, resets, ESP32 heap, console errors, feeds sending as found | Per-aircraft numbers within the old brackets; no resets |
 | 16 | Web UI | Aircraft table, Live Map (tiles, 3 viewers, no "stalled for N ms" drops), Settings, console, version chip | Works, no page errors |
 | 17 | Soak | New image ≥ 2 h on one unit (overnight is fine) | No reboot of any chip; heap flat |
+| 18 | Full aircraft dictionary | Bee Waggler, -60 dBm: DF17 from all 256 bench ICAOs plus UAT long ADS-B from 144 of them (separate aircraft), each refreshed within 15 s; then 256 + 256; DF17 bursts at 2,000-7,000/s over 64 of them; count `AIRCRAFT_JSON` entries by hex and type | RP2040 holds 400, then drops the oldest; bursts decoded as on the previous release; at most one ESP32 "dictionary full" line per minute; no resets or queue overflows; `RP2040 RAM:` line of `AT+DEVICE_INFO?` recorded, free ≥ 8 kB |
 
 ### Remote ID (ADSBee 1090)
 

@@ -60,7 +60,7 @@ A surface mount helical GNSS antenna on the Winglet PCBA is enough for most appl
 
 ### More memory, more aircraft
 
-The ESP32-S3 module on Winglet, which runs the network interfaces and the UI, has additional PSRAM. That extra room lets us grow the aircraft dictionary (the number of aircraft tracked simultaneously) from 200 aircraft on the ADSBee 1090U to 400 aircraft on Winglet, and lets Remote ID reception run alongside WiFi.
+The ESP32-S3 module on Winglet, which runs the network interfaces and the UI, has additional PSRAM. That extra room lets the network side track 400 aircraft at once, as many as the receiver itself (the ADSBee 1090U reports 400 over USB and UART but 200 over WiFi and Ethernet), and lets Remote ID reception run alongside WiFi.
 
 ### Mounting
 
@@ -84,7 +84,7 @@ Winglet and the [ADSBee 1090U](index.md#1090u) share the same receiver architect
 | 1090MHz receiver | RP2040 + custom RF frontend on the main board | ADSBee m1090 module (RP2040 + RF frontend) |
 | 978MHz UAT | Yes | Yes |
 | 2.4GHz antenna | Internal (ESP32-S3 module) | External, used for WiFi and Remote ID |
-| Aircraft dictionary | 200 aircraft | 400 aircraft (ESP32-S3 with additional PSRAM) |
+| Aircraft dictionary | 400 aircraft over USB/UART, 200 over WiFi/Ethernet | 400 aircraft (ESP32-S3 with additional PSRAM) |
 | GNSS | Optional, via GNSS module connector | Built in (u-blox MAX-M10), helical antenna + auxiliary U.FL |
 | Power | External power, ~1W | Internal replaceable battery (12+ hrs), USB-C charging |
 | User interface | USB console, web interface | ePaper screen, backlit keypad, 5 status LEDs, web interface |
