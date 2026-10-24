@@ -240,6 +240,29 @@ class SparklineChart {
     }
 }
 
+// BEGIN RECEIVER_METRICS
+// Error correction kinds that drop a frame instead of fixing it.
+const UNCORRECTED_KINDS = new Set(['rejected', 'skipped']);
+
+/**
+ * Maps aircraft_dictionary_metrics to receiver cards, {label: {value, tip}}. corrected_frames ({kind: count}) becomes
+ * one card with the corrected total and every count in its tooltip. Other non-numeric values are skipped.
+ */
+function receiverMetricCards(metrics) {
+    const cards = {};
+    for (const [label, value] of Object.entries(metrics || {})) {
+        if (typeof value === 'number') {
+            cards[label] = { value, tip: null };
+        } else if (label === 'corrected_frames' && value && typeof value === 'object' && !Array.isArray(value)) {
+            const counts = Object.entries(value).filter(([, n]) => typeof n === 'number');
+            const total = counts.filter(([kind]) => !UNCORRECTED_KINDS.has(kind)).reduce((sum, [, n]) => sum + n, 0);
+            cards[label] = { value: total, tip: counts.map(([kind, n]) => `${kind}: ${n}`).join('\n') };
+        }
+    }
+    return cards;
+}
+// END RECEIVER_METRICS
+
 class MetricCard {
     constructor(container, label, unit = 'msg/s', feedSlot = null, chartOptions = {}, title = label) {
         this.container = container;
@@ -290,6 +313,14 @@ class MetricCard {
     update(value, displayText = null) {
         this.chart.push(value, this.unit, displayText);
     }
+
+    // Hover text for the whole card.
+    setTip(tip) {
+        if (tip === this.tip) return;
+        this.tip = tip;
+        this.card.title = tip || '';
+        this.card.querySelector('.metric-title').title = tip || this.label;
+    }
 }
 
 class MetricsWebSocket {
@@ -315,12 +346,13 @@ class MetricsWebSocket {
         Object.keys(this.cards[parentLabel]).forEach(label => {
             if (!data.hasOwnProperty(label)) this.cards[parentLabel][label].destroy();
         });
-        Object.entries(data).forEach(([label, value]) => {
+        Object.entries(data).forEach(([label, { value, tip }]) => {
             if (!this.cards[parentLabel][label]) {
                 const unit = METRIC_UNITS[label] || 'msg/s';
                 this.cards[parentLabel][label] = new MetricCard(container, label, unit);
             }
             this.cards[parentLabel][label].update(value);
+            this.cards[parentLabel][label].setTip(tip);
         });
     }
 
@@ -475,10 +507,7 @@ class MetricsWebSocket {
                 const data = JSON.parse(event.data);
 
                 if (data.hasOwnProperty('aircraft_dictionary_metrics')) {
-                    const dictionaryMetrics = Object.fromEntries(
-                        Object.entries(data['aircraft_dictionary_metrics']).filter(([key, value]) => !Array.isArray(value))
-                    );
-                    this.updateReceiverCards(dictionaryMetrics);
+                    this.updateReceiverCards(receiverMetricCards(data['aircraft_dictionary_metrics']));
                 }
                 if (data.hasOwnProperty('server_metrics')) {
                     const serverMetrics = data['server_metrics'];
@@ -2174,5 +2203,5 @@ class AircraftTable {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { isOtherTextEntry, whereplaneMapUrl, webSocketRefused, AircraftWebSocket, UplinkWebSocket, MapWeather,
-        receiverIdUuid, parseFeedReceiverIdLine, AircraftStore };
+        receiverIdUuid, parseFeedReceiverIdLine, AircraftStore, receiverMetricCards };
 }
