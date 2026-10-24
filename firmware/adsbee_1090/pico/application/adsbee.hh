@@ -90,8 +90,9 @@ class ADSBee {
     static constexpr uint kCaptureEventInterruptPriority = 0x40;
     static constexpr uint kCaptureCompleteInterruptPriority = 0x80;
 
-    // Captures waiting for demodulation: room for a burst that arrives faster than the loop demodulates.
-    static constexpr uint16_t kCaptureQueueDepth = 16;
+    // Captures waiting for demodulation. Core 1 decodes its whole decoder input queue before it demodulates again, so
+    // this must hold every capture that arrives during one decode batch.
+    static constexpr uint16_t kCaptureQueueDepth = 64;
     // Decoded packets waiting for ingestion at which address parity searches are skipped.
     static constexpr uint16_t kMaxBacklogForAddressParityCorrection = 64;
 
