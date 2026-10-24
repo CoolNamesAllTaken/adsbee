@@ -1523,12 +1523,23 @@ void AircraftDictionary::Init() {
     dict.clear();  // Remove all aircraft from the unordered map.
 }
 
+uint32_t AircraftDictionary::TakeOverflowEvictionsToLog(uint32_t timestamp_ms) {
+    if (overflow_evictions_ == 0 ||
+        (overflow_logged_ && timestamp_ms - last_overflow_log_timestamp_ms_ < kOverflowLogIntervalMs)) {
+        return 0;
+    }
+    uint32_t evictions = overflow_evictions_;
+    overflow_evictions_ = 0;
+    last_overflow_log_timestamp_ms_ = timestamp_ms;
+    overflow_logged_ = true;
+    return evictions;
+}
+
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
-    // Check for overflow
-    if (dictionary_overflowed) {
-        CONSOLE_ERROR("AircraftDictionary",
-                      "Aircraft dictionary overflowed. Had to remove one or more oldest aircraft to make room.");
-        dictionary_overflowed = false;
+    uint32_t evictions = TakeOverflowEvictionsToLog(timestamp_ms);
+    if (evictions > 0) {
+        CONSOLE_ERROR("AircraftDictionary", "Aircraft dictionary full (%u aircraft): removed %u oldest to make room.",
+                      (unsigned)kMaxNumAircraft, (unsigned)evictions);
     }
 
     // Iterate over each key-value pair in the unordered_map. Prune if stale, update metrics if still fresh.
